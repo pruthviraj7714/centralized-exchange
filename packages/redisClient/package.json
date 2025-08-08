@@ -1,0 +1,19 @@
+{
+  "name": "@repo/redisclient",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "exports" : {
+    "." : "./index.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@types/ioredis": "^5.0.0",
+    "ioredis": "^5.7.0"
+  }
+}
