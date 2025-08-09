@@ -9,6 +9,25 @@
         "typescript": "5.8.3",
       },
     },
+    "apps/frontend": {
+      "name": "web",
+      "version": "0.1.0",
+      "dependencies": {
+        "@repo/ui": "*",
+        "next": "^15.4.2",
+        "react": "^19.1.0",
+        "react-dom": "^19.1.0",
+      },
+      "devDependencies": {
+        "@repo/eslint-config": "*",
+        "@repo/typescript-config": "*",
+        "@types/node": "^22.15.3",
+        "@types/react": "19.1.0",
+        "@types/react-dom": "19.1.1",
+        "eslint": "^9.31.0",
+        "typescript": "5.8.2",
+      },
+    },
     "apps/server": {
       "name": "server",
       "dependencies": {
@@ -18,8 +37,10 @@
         "cors": "^2.8.5",
         "express": "^5.1.0",
         "jsonwebtoken": "^9.0.2",
+        "zod": "^4.0.15",
       },
       "devDependencies": {
+        "@repo/common": "*",
         "@repo/db": "*",
         "@repo/redisclient": "*",
         "@types/bun": "latest",
@@ -43,23 +64,16 @@
         "typescript": "^5",
       },
     },
-    "apps/web": {
-      "name": "web",
-      "version": "0.1.0",
+    "packages/common": {
+      "name": "@repo/common",
       "dependencies": {
-        "@repo/ui": "*",
-        "next": "^15.4.2",
-        "react": "^19.1.0",
-        "react-dom": "^19.1.0",
+        "zod": "^4.0.15",
       },
       "devDependencies": {
-        "@repo/eslint-config": "*",
-        "@repo/typescript-config": "*",
-        "@types/node": "^22.15.3",
-        "@types/react": "19.1.0",
-        "@types/react-dom": "19.1.1",
-        "eslint": "^9.31.0",
-        "typescript": "5.8.2",
+        "@types/bun": "latest",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
       },
     },
     "packages/db": {
@@ -249,6 +263,8 @@
     "@prisma/fetch-engine": ["@prisma/fetch-engine@6.13.0", "", { "dependencies": { "@prisma/debug": "6.13.0", "@prisma/engines-version": "6.13.0-35.361e86d0ea4987e9f53a565309b3eed797a6bcbd", "@prisma/get-platform": "6.13.0" } }, "sha512-grmmq+4FeFKmaaytA8Ozc2+Tf3BC8xn/DVJos6LL022mfRlMZYjT3hZM0/xG7+5fO95zFG9CkDUs0m1S2rXs5Q=="],
 
     "@prisma/get-platform": ["@prisma/get-platform@6.13.0", "", { "dependencies": { "@prisma/debug": "6.13.0" } }, "sha512-Nii2pX50fY4QKKxQwm7/vvqT6Ku8yYJLZAFX4e2vzHwRdMqjugcOG5hOSLjxqoXb0cvOspV70TOhMzrw8kqAnw=="],
+
+    "@repo/common": ["@repo/common@workspace:packages/common"],
 
     "@repo/db": ["@repo/db@workspace:packages/db"],
 
@@ -1028,7 +1044,7 @@
 
     "vary": ["vary@1.1.2", "", {}, "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg=="],
 
-    "web": ["web@workspace:apps/web"],
+    "web": ["web@workspace:apps/frontend"],
 
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 
@@ -1045,6 +1061,8 @@
     "wrappy": ["wrappy@1.0.2", "", {}, "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ=="],
 
     "yocto-queue": ["yocto-queue@0.1.0", "", {}, "sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q=="],
+
+    "zod": ["zod@4.0.15", "", {}, "sha512-2IVHb9h4Mt6+UXkyMs0XbfICUh1eUrlJJAOupBHUhLRnKkruawyDddYRCs0Eizt900ntIMk9/4RksYl+FgSpcQ=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
 

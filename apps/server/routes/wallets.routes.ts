@@ -14,12 +14,15 @@ walletsRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
       },
       select : {
         asset : true,
-        balance : true,
+        available : true,
       }
     });
 
     res.status(200).json({
-      wallets,
+      wallets : wallets.map(w => ({
+        asset : w.asset,
+        balance : w.available
+      })),
     });
   } catch (error) {
     res.status(500).json({
@@ -52,11 +55,11 @@ walletsRouter.post(
         },
         create : {
             asset,
-            balance : amount,
+            available : amount,
             userId
         },
         update : {
-            balance : {
+          available : {
                 increment : amount
             }
         }

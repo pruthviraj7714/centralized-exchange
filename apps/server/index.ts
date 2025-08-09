@@ -1,6 +1,7 @@
 import express from 'express'
 import authRouter from './routes/auth.routes';
 import walletsRouter from './routes/wallets.routes';
+import orderRouter from './routes/order.routes';
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.get('/', (req,res) => {
 
 app.use('/auth', authRouter);
 app.use('/wallets', walletsRouter);
+app.use('/orders', orderRouter);
 
 
 app.listen(3001, () => {

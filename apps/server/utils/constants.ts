@@ -2,3 +2,11 @@
 export const DefaultAssets = [
     "BTC", "SOL", "USDT" , "USDC", "ETH" 
 ]
+
+export const SUPPORTED_PAIRS = [
+    "BTC-SOL", "BTC-USDT", "BTC-USDC", "BTC-ETH",
+    "SOL-BTC", "SOL-USDT", "SOL-USDC", "SOL-ETH",
+    "USDT-BTC", "USDT-SOL", "USDT-USDC", "USDT-ETH",
+    "USDC-BTC", "USDC-SOL", "USDC-USDT", "USDC-ETH",
+    "ETH-BTC", "ETH-SOL", "ETH-USDT", "ETH-USDC"
+  ];

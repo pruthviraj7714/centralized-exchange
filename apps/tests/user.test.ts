@@ -2,10 +2,10 @@ import request from "supertest";
 import { beforeEach, describe, expect, test } from "bun:test";
 import prisma from "@repo/db";
 import redisClient from "@repo/redisclient";
-
-const BACKEND_URL = "http://localhost:3001";
+import { BACKEND_URL } from "./utils";
 
 beforeEach(async () => {
+  await prisma.order.deleteMany();
   await prisma.wallet.deleteMany();
   await prisma.user.deleteMany();
 });

@@ -18,15 +18,64 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+  orders    Order[]
   wallets   Wallet[]
 }
 
 model Wallet {
-  id      String @id @default(uuid())
-  userId  String
-  user    User   @relation(fields: [userId], references: [id])
-  asset   String
-  balance Float
+  id        String @id @default(uuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id])
+  asset     String
+  available Float  @default(0)
+  locked    Float  @default(0)
 
   @@unique([userId, asset])
+}
+
+model Order {
+  id         String       @id @default(uuid())
+  userId     String
+  side       SIDE
+  pair       String
+  price      Float        @default(0)
+  quantity   Float
+  filledQuantity  Float     @default(0)
+  createdAt  DateTime     @default(now())
+  updatedAt   DateTime    @updatedAt
+  type       ORDER_TYPE
+  status     ORDER_STATUS
+  buyTrades  Trade[]      @relation("BuyTrades")
+  sellTrades Trade[]      @relation("SellTrades")
+  user       User         @relation(fields: [userId], references: [id])
+}
+
+model Trade {
+  id          String   @id @default(uuid())
+  buyOrderId  String
+  sellOrderId String
+  price       Float
+  quantity    Float
+  pair        String
+  executedAt  DateTime @default(now())
+
+  buyOrder  Order @relation("BuyTrades", fields: [buyOrderId], references: [id])
+  sellOrder Order @relation("SellTrades", fields: [sellOrderId], references: [id])
+}
+
+enum SIDE {
+  BUY
+  SELL
+}
+
+enum ORDER_STATUS {
+  OPEN
+  PARTIAL
+  FILLED
+  CANCELLED
+}
+
+enum ORDER_TYPE {
+  LIMIT
+  MARKET
 }

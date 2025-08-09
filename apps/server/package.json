@@ -5,8 +5,9 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "@repo/redisclient" : "*",
-    "@repo/db" : "*"
+    "@repo/redisclient": "*",
+    "@repo/db": "*",
+    "@repo/common" : "*"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -17,6 +18,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "zod": "^4.0.15"
   }
 }

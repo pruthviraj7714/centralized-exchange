@@ -1,33 +1,15 @@
 import request from "supertest";
 import { beforeEach, describe, expect, test } from "bun:test";
 import prisma from "@repo/db";
-import redisClient from "@repo/redisclient";
+import { BACKEND_URL, generateRandomUser } from "./utils";
 
-const BACKEND_URL = "http://localhost:3001";
 
 beforeEach(async () => {
+    await prisma.order.deleteMany();
     await prisma.wallet.deleteMany();
     await prisma.user.deleteMany();
 });
 
-
-const generateRandomUser = async () => {
-    const response = await request(BACKEND_URL).post('/auth/request-otp').send({
-        email : 'tony@gmail.com'
-    })
-
-    const otp = await redisClient.get(`OTP:${response.body.id}`);
-
-    const response1 = await request(BACKEND_URL).post('/auth/verify-otp').send({
-        email : 'tony@gmail.com',
-        otp : parseInt(otp!)
-    })
-
-    return {
-        userId : response.body.id,
-        jwt : response1.body.jwt
-    }
-}
 
 describe("depositing assets", () => {
     test("deposit 1 SOL", async () => {
