@@ -3,6 +3,8 @@ import authMiddleware from "../middlewares/authMiddleware";
 import { OrderSchema } from "@repo/common";
 import prisma from "@repo/db";
 import { SUPPORTED_PAIRS } from "../utils/constants";
+import redisClient from "@repo/redisclient";
+import { ORDER_CANCEL_STREAM, ORDER_REQUEST_STREAM } from "../utils/config";
 
 const orderRouter: Router = Router();
 
@@ -48,123 +50,45 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       return;
     }
 
-    if (type === "LIMIT") {
-      if (price <= 0 || quantity <= 0) {
+    if (type === "LIMIT" && (price <= 0 || quantity <= 0)) {
         res.status(400).json({
           message:
             "Please Check Amount or Quantity it should be greater than 0",
         });
         return;
-      }
     }
-    const wallets = await prisma.wallet.findMany({
-      where: {
-        userId,
-      },
-    });
 
-    const [baseAsset, quoteAsset] = pair.split("-");
-    const amount = price * quantity;
-
-    if (side === "BUY") {
-      const quoteWallet = wallets.find((w) => w.asset === quoteAsset);
-
-      if (!quoteWallet) {
+    if (type === "MARKET" && quantity <= 0) {
         res.status(400).json({
-          message: "No Wallet found!",
+          message: "Quantity should be greater than 0",
         });
         return;
-      }
-
-      if (quoteWallet.available < amount) {
-        res.status(400).json({
-          message: "Insufficient balance",
-        });
-        return;
-      }
-      const order = await prisma.$transaction(async (tx) => {
-        await tx.wallet.update({
-          where: {
-            id: quoteWallet.id,
-          },
-          data: {
-            available: {
-              decrement: amount,
-            },
-            locked: {
-              increment: amount,
-            },
-          },
-        });
-        const order = await tx.order.create({
-          data: {
-            userId,
-            pair,
-            price,
-            type,
-            quantity,
-            side,
-            status: "OPEN",
-          },
-        });
-        return order;
-      });
-      res.status(200).json({
-        message: "Order successfully Placed",
-        id: order.id,
-      });
-    } else {
-      const baseWallet = wallets.find((w) => w.asset === baseAsset);
-
-      if (!baseWallet) {
-        res.status(400).json({
-          message: "No Wallet found!",
-        });
-        return;
-      }
-
-      if (baseWallet.available < amount) {
-        res.status(400).json({
-          message: "Insufficient balance",
-        });
-        return;
-      }
-
-      const order = await prisma.$transaction(async (tx) => {
-        await tx.wallet.update({
-          where: {
-            id: baseWallet.id,
-          },
-          data: {
-            available: {
-              decrement: quantity,
-            },
-            locked: {
-              increment: quantity,
-            },
-          },
-        });
-        const order = await tx.order.create({
-          data: {
-            userId,
-            pair,
-            price,
-            quantity,
-            side,
-            type,
-            status: "OPEN",
-          },
-        });
-        return order;
-      });
-      res.status(200).json({
-        message: "Order successfully Placed",
-        id: order.id,
-      });
     }
+
+    const requestId = crypto.randomUUID();
+
+
+    let orderData = {
+      requestId,
+      side,
+      type,
+      userId,
+      quantity,
+      price,
+      pair,
+      createdAt : Date.now()
+    }
+
+    await redisClient.xadd(ORDER_REQUEST_STREAM, "*", ...Object.entries(orderData).flat());
+
+    res.status(200).json({
+      success : true,
+      requestId
+    })
   } catch (error) {
     res.status(500).json({
       message: "Internal Server Error",
+      success : false
     });
   }
 });
@@ -212,7 +136,7 @@ orderRouter.delete(
     try {
       const userId = req.userId!;
 
-      const orderId = req.params.orderId;
+      const orderId = req.params.orderId!;
 
       const order = await prisma.order.findFirst({
         where: {
@@ -228,62 +152,16 @@ orderRouter.delete(
         return;
       }
 
-      if (order.status === "CANCELLED") {
-        res.status(409).json({
-          message: "Order is already cancelled",
-        });
-        return;
+      const cancelRequestId = crypto.randomUUID();
+
+      const cancelRequest = {
+        requestId : cancelRequestId,
+        userId,
+        orderId,
+        timestamp : Date.now()
       }
 
-      if (order.status === "FILLED" || order.status === "PARTIAL") {
-        res.status(400).json({
-          message: "order cannot be cancelled now!",
-        });
-        return;
-      }
-
-      const [baseAsset, quoteAsset] = order.pair.split("-");
-      const amount = order.price * order.quantity;
-
-      await prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `SELECT * FROM "Order" WHERE id = $1 FOR UPDATE`,
-          order.id
-        );
-
-        await tx.$executeRawUnsafe(
-          `
-          SELECT * FROM "Wallet" 
-          WHERE asset = $1 AND "userId" = $2 FOR UPDATE
-        `,
-          order.side === "BUY" ? quoteAsset : baseAsset,
-          userId
-        );
-
-        await tx.wallet.updateMany({
-          where: {
-            asset: order.side === "BUY" ? quoteAsset : baseAsset,
-            userId,
-          },
-          data: {
-            locked: {
-              decrement: order.side === "BUY" ? amount : order.quantity,
-            },
-            available: {
-              increment: order.side === "BUY" ? amount : order.quantity,
-            },
-          },
-        });
-
-        await tx.order.update({
-          where: {
-            id: order.id,
-          },
-          data: {
-            status: "CANCELLED",
-          },
-        });
-      });
+      await redisClient.xadd(ORDER_CANCEL_STREAM, "*", ...Object.entries(cancelRequest).flat())
 
       res.status(200).json({
         message: "Order successfully cancelled",

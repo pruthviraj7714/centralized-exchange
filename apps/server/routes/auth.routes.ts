@@ -50,7 +50,7 @@ authRouter.post(
         await prisma.wallet.createMany({
           data: DefaultAssets.map((a) => ({
             asset: a,
-            balance: 0,
+            available: 0,
             userId: user.id,
           })),
         });

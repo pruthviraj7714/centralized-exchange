@@ -71,3 +71,10 @@ export const placeRandomOrder = async (jwt: string, pair?: string | null) => {
     side,
   };
 };
+
+export const addBalanceToUserWallet = async (asset : string, amount : number, jwt : string) => {
+  await request(BACKEND_URL).post('/wallets/deposit').set("authorization", `Bearer ${jwt}`).send({
+    asset,
+    amount
+  });
+}
