@@ -27,16 +27,19 @@ const SUPPORTED_PAIRS = [
 ];
 
 export const generateRandomUser = async () => {
-  const response = await request(BACKEND_URL).post("/auth/request-otp").send({
-    email: "tony@gmail.com",
-  });
+  const randomNumber = Math.floor(Math.random() * 100 + 1);
+  const response = await request(BACKEND_URL)
+    .post("/auth/request-otp")
+    .send({
+      email: `tony${randomNumber}@gmail.com`,
+    });
 
   const otp = await redisClient.get(`OTP:${response.body.id}`);
 
   const response1 = await request(BACKEND_URL)
     .post("/auth/verify-otp")
     .send({
-      email: "tony@gmail.com",
+      email: `tony${randomNumber}@gmail.com`,
       otp: parseInt(otp!),
     });
 
@@ -56,12 +59,15 @@ export const placeRandomOrder = async (jwt: string, pair?: string | null) => {
     : SUPPORTED_PAIRS[Math.floor(Math.random() * SUPPORTED_PAIRS.length)];
   const price = randomInt(1, 1000);
   const quantity = randomInt(1, 1000);
+  const types = ["LIMIT", "MARKET"];
+  const type = types[Math.floor(Math.random() * types.length)];
   const response = await request(BACKEND_URL)
     .post("/orders")
     .set("authorization", `Bearer ${jwt}`)
     .send({
       side,
       price,
+      type,
       quantity,
       pair: randomPair,
     });
@@ -72,9 +78,16 @@ export const placeRandomOrder = async (jwt: string, pair?: string | null) => {
   };
 };
 
-export const addBalanceToUserWallet = async (asset : string, amount : number, jwt : string) => {
-  await request(BACKEND_URL).post('/wallets/deposit').set("authorization", `Bearer ${jwt}`).send({
-    asset,
-    amount
-  });
-}
+export const addBalanceToUserWallet = async (
+  asset: string,
+  amount: number,
+  jwt: string
+) => {
+  await request(BACKEND_URL)
+    .post("/wallets/deposit")
+    .set("authorization", `Bearer ${jwt}`)
+    .send({
+      asset,
+      amount,
+    });
+};

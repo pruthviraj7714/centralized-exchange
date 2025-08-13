@@ -1,13 +1,6 @@
 import request from "supertest";
-import { beforeEach, describe, expect, test } from "bun:test";
-import prisma from "@repo/db";
-import { addBalanceToUserWallet, BACKEND_URL, generateRandomUser } from "./utils";
-
-beforeEach(async () => {
-  await prisma.order.deleteMany();
-  await prisma.wallet.deleteMany();
-  await prisma.user.deleteMany();
-});
+import { describe, expect, test } from "bun:test";
+import { addBalanceToUserWallet, BACKEND_URL, generateRandomUser, placeRandomOrder } from "./utils";
 
 describe("adding order", () => {
   test("It should fail for invalid inputs", async () => {
@@ -126,3 +119,20 @@ describe("adding order", () => {
     expect(response.body.requestId).toBeDefined();
   });
 });
+
+// describe("fetching user open orders", () => {
+//   test("It should successed if right data passed", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 1200, jwt)
+//     const { id, side } = await placeRandomOrder(jwt, "SOL-USDC");
+//     await new Promise(r => setTimeout(r, 400)); //short delay for worker to create order in db
+//     const response = await request(BACKEND_URL).get(`/orders?pair=SOL-USDC`).set('authorization', `Bearer ${jwt}`)
+//     console.log(response.body);
+//     expect(response.statusCode).toBe(200);
+
+//   });
+// })
+
+// describe("cancelling user orders", () => {
+
+// })

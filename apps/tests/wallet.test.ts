@@ -1,15 +1,6 @@
 import request from "supertest";
-import { beforeEach, describe, expect, test } from "bun:test";
-import prisma from "@repo/db";
+import { describe, expect, test } from "bun:test";
 import { BACKEND_URL, generateRandomUser } from "./utils";
-
-
-beforeEach(async () => {
-    await prisma.order.deleteMany();
-    await prisma.wallet.deleteMany();
-    await prisma.user.deleteMany();
-});
-
 
 describe("depositing assets", () => {
     test("deposit 1 SOL", async () => {

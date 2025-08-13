@@ -1,14 +1,7 @@
 import request from "supertest";
-import { beforeEach, describe, expect, test } from "bun:test";
-import prisma from "@repo/db";
+import { describe, expect, test } from "bun:test";
 import redisClient from "@repo/redisclient";
 import { BACKEND_URL } from "./utils";
-
-beforeEach(async () => {
-  await prisma.order.deleteMany();
-  await prisma.wallet.deleteMany();
-  await prisma.user.deleteMany();
-});
 
 describe("request otp endpoints", () => {
   test("failure test", async () => {
@@ -19,7 +12,7 @@ describe("request otp endpoints", () => {
   });
   test("success", async () => {
     const response = await request(BACKEND_URL).post("/auth/request-otp").send({
-      email: "test@gmail.com",
+      email: "noexistsemail@gmail.com",
     });
     expect(response.statusCode).toBe(200);
     expect(response.body.id).toBeDefined();
