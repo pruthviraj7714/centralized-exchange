@@ -282,6 +282,7 @@ const processOrders = async (orders: IOrder[]) => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           const orderData = await lockFundsInDbAndCreateOrder(order);
+          
           if (!orderData) {
             console.log("no order data found");
             await redisClient.xack(ORDER_STREAM, GROUP_NAME, order.id);

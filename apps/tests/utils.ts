@@ -1,7 +1,10 @@
+import prisma from "@repo/db";
 import redisClient from "@repo/redisclient";
-import request from "supertest";
+import request, { type Response } from "supertest";
 
 export const BACKEND_URL = "http://localhost:3001";
+
+type ORDER_STATUS = "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
 
 const SUPPORTED_PAIRS = [
   "BTC-SOL",
@@ -27,19 +30,20 @@ const SUPPORTED_PAIRS = [
 ];
 
 export const generateRandomUser = async () => {
-  const randomNumber = Math.floor(Math.random() * 100 + 1);
-  const response = await request(BACKEND_URL)
-    .post("/auth/request-otp")
-    .send({
-      email: `tony${randomNumber}@gmail.com`,
-    });
+  const uniqueId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
+
+  const email = `tony${uniqueId}@gmail.com`;
+
+  const response = await request(BACKEND_URL).post("/auth/request-otp").send({
+    email,
+  });
 
   const otp = await redisClient.get(`OTP:${response.body.id}`);
 
   const response1 = await request(BACKEND_URL)
     .post("/auth/verify-otp")
     .send({
-      email: `tony${randomNumber}@gmail.com`,
+      email,
       otp: parseInt(otp!),
     });
 
@@ -49,18 +53,23 @@ export const generateRandomUser = async () => {
   };
 };
 
-export const placeRandomOrder = async (jwt: string, pair?: string | null) => {
+export const placeRandomOrder = async (
+  jwt: string,
+  pair?: string | null,
+  iSide?: "BUY" | "SELL",
+  iType?: "LIMIT" | "MARKET"
+) => {
   const randomInt = (min: number, max: number) =>
     Math.floor(Math.random() * (max - min + 1)) + min;
   const sides = ["BUY", "SELL"];
-  const side = sides[Math.floor(Math.random() * sides.length)];
+  const side = iSide ? iSide : sides[Math.floor(Math.random() * sides.length)];
   const randomPair = pair
     ? pair
     : SUPPORTED_PAIRS[Math.floor(Math.random() * SUPPORTED_PAIRS.length)];
-  const price = randomInt(1, 1000);
-  const quantity = randomInt(1, 1000);
+  const price = randomInt(1, 10);
+  const quantity = randomInt(1, 10);
   const types = ["LIMIT", "MARKET"];
-  const type = types[Math.floor(Math.random() * types.length)];
+  const type = iType ? iType : types[Math.floor(Math.random() * types.length)];
   const response = await request(BACKEND_URL)
     .post("/orders")
     .set("authorization", `Bearer ${jwt}`)
@@ -91,3 +100,72 @@ export const addBalanceToUserWallet = async (
       amount,
     });
 };
+
+export async function waitForOrderUpdate(
+  jwt: string,
+  timeoutMs = 5000,
+  intervalMs = 200,
+  side: "BUY" | "SELL",
+  numOrders: number = 1,
+  pair?: string
+): Promise<void> {
+  const start = Date.now();
+
+  while (Date.now() - start < timeoutMs) {
+    const response = await request(BACKEND_URL)
+      .get(`/orders${pair ? `?pair=${pair}` : ""}`)
+      .set("authorization", `Bearer ${jwt}`);
+
+    if (
+      response.statusCode === 200 &&
+      (side === "BUY"
+        ? Array.isArray(response.body.buyOrders) &&
+          response.body.buyOrders.length === numOrders
+        : Array.isArray(response.body.sellOrders) &&
+          response.body.sellOrders.length === numOrders)
+    ) {
+      return;
+    }
+
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+
+  throw new Error("Timed out waiting for order to be updated in DB");
+}
+
+export async function waitForOrderCancelUpdate(
+  jwt: string,
+  timeoutMs = 5000,
+  intervalMs = 200,
+  orderId: string
+): Promise<Response> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const response = await request(BACKEND_URL)
+      .delete(`/orders/${orderId}`)
+      .set("authorization", `Bearer ${jwt}`);
+
+    if (response.statusCode === 200) {
+      return response;
+    }
+
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+
+  throw new Error("Timed out waiting for order to be updated in DB");
+}
+
+export async function waitForStatus(
+  orderId: string,
+  status: ORDER_STATUS,
+  timeout = 5000,
+  interval = 200
+) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (order?.status === status) return;
+    await new Promise((r) => setTimeout(r, interval));
+  }
+  throw new Error(`Order did not reach status ${status} in time`);
+}

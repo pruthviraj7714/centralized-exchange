@@ -112,6 +112,7 @@ orderRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
         pair: true,
         type: true,
         createdAt: true,
+        id : true
       },
     });
 

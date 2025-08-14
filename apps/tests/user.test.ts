@@ -1,16 +1,17 @@
+import "./test-setup";
 import request from "supertest";
 import { describe, expect, test } from "bun:test";
 import redisClient from "@repo/redisclient";
 import { BACKEND_URL } from "./utils";
 
-describe("request otp endpoints", () => {
-  test("failure test", async () => {
+describe("POST /auth/request-otp", () => {
+  test("should return 400 when email is missing", async () => {
     const response = await request(BACKEND_URL)
       .post("/auth/request-otp")
       .send({});
     expect(response.statusCode).toBe(400);
   });
-  test("success", async () => {
+  test("should return 200 and OTP request ID for valid email", async () => {
     const response = await request(BACKEND_URL).post("/auth/request-otp").send({
       email: "noexistsemail@gmail.com",
     });
@@ -19,15 +20,15 @@ describe("request otp endpoints", () => {
   });
 });
 
-describe("otp verification endpoint", () => {
-  test("it should return 400 if not user with given email found", async () => {
+describe("POST /auth/verify-otp", () => {
+  test("should return 400 when user with given email does not exist", async () => {
     const response = await request(BACKEND_URL).post("/auth/verify-otp").send({
       email: "test@gmail.com",
       otp: 111111,
     });
     expect(response.statusCode).toBe(400);
   });
-  test("it should return 403 if wrong otp given", async () => {
+  test("should return 403 when OTP is incorrect", async () => {
     const response1 = await request(BACKEND_URL)
       .post("/auth/request-otp")
       .send({
@@ -44,7 +45,7 @@ describe("otp verification endpoint", () => {
     });
     expect(response2.statusCode).toBe(403);
   });
-  test("it should return 200 status code & jwt if right otp given", async () => {
+  test("should return 200 and JWT token when OTP is correct", async () => {
     const response1 = await request(BACKEND_URL)
       .post("/auth/request-otp")
       .send({

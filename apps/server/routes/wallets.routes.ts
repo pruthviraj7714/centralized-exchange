@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import authMiddleware from "../middlewares/authMiddleware";
 import prisma from "@repo/db";
+import { DefaultAssets, SUPPORTED_PAIRS } from "../utils/constants";
 
 const walletsRouter: Router = Router();
 
@@ -44,6 +45,13 @@ walletsRouter.post(
             message : "Invalid Inputs"
         });
         return;
+    }
+
+    if(!DefaultAssets.includes(asset)) {
+      res.status(400).json({
+        message : "Unsupported asset"
+      })
+      return;
     }
 
     const wallet = await prisma.wallet.upsert({
