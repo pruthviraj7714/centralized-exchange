@@ -26,9 +26,11 @@ interface IOrderResponse {
   pair: string;
   price: number;
   quantity: number;
+  requestId? : string;
   filledQuantity: number;
   createdAt: Date;
   updatedAt: Date;
+  event? : "ORDER_CREATED" | "ORDER_CANCELLED"
   type: "LIMIT" | "MARKET";
   status: "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
 }
@@ -281,7 +283,7 @@ const processOrders = async (orders: IOrder[]) => {
     orders.map(async (order) => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const orderData = await lockFundsInDbAndCreateOrder(order);
+          let orderData = await lockFundsInDbAndCreateOrder(order);
           
           if (!orderData) {
             console.log("no order data found");
@@ -289,6 +291,13 @@ const processOrders = async (orders: IOrder[]) => {
             await redisClient.del(`retry-count:${order.requestId}`);
             return;
           }
+
+          orderData = {
+            ...orderData,
+            event : "ORDER_CREATED",
+            requestId : order.requestId
+          }
+
           console.log("order successfully created in db");
           await redisClient.xadd(
             MATCHING_ENGINE_STREAM,

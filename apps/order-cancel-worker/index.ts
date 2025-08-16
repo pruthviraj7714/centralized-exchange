@@ -25,6 +25,7 @@ interface ICancelOrderResponse {
   filledQuantity: number;
   createdAt: Date;
   updatedAt: Date;
+  event? : "ORDER_CREATED" | "ORDER_CANCELLED"
   type: "LIMIT" | "MARKET";
   status: "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
 }
@@ -110,7 +111,7 @@ const processOrders = async (orders: ICancelOrder[]) => {
     orders.map(async (order) => {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
-          const orderData = await cancelOrder(order);
+          let orderData = await cancelOrder(order);
           if (!orderData) {
             console.log("no order data found");
             await redisClient.xack(ORDER_CANCEL_STREAM, GROUP_NAME, order.id);
@@ -118,6 +119,12 @@ const processOrders = async (orders: ICancelOrder[]) => {
             return;
           }
           console.log("order successfully cancelled");
+
+          orderData = {
+            ...orderData,
+            event : "ORDER_CANCELLED"
+          }
+
           await redisClient.xadd(
             MATCHING_ENGINE_STREAM,
             "*",
