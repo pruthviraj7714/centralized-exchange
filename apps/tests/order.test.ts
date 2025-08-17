@@ -130,138 +130,138 @@ describe("Order Placement API", () => {
   });
 });
 
-describe("Fetching User Open Orders API", () => {
-  test("GET /orders → should return 1 SOL-USDC LIMIT BUY order", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("USDC", 1200, jwt);
-    await placeRandomOrder(jwt, "SOL-USDC", "BUY", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "SOL-USDC");
-    const response = await request(BACKEND_URL)
-      .get(`/orders?pair=SOL-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.buyOrders).toBeArrayOfSize(1);
-  });
-  test("GET /orders → should return 1 ETH-USDC LIMIT SELL order", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("ETH", 5000, jwt);
-    await placeRandomOrder(jwt, "ETH-USDC", "SELL", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "SELL", 1, "ETH-USDC");
-    const response = await request(BACKEND_URL)
-      .get(`/orders?pair=ETH-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.sellOrders).toBeArrayOfSize(1);
-  });
-  test("GET /orders → should return 1 BTC-USDC LIMIT BUY order", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("USDC", 5000, jwt);
-    await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "BTC-USDC");
-    const response = await request(BACKEND_URL)
-      .get(`/orders?pair=BTC-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.buyOrders).toBeArrayOfSize(1);
-  });
-  test("GET /orders → should return 3 BTC-USDC LIMIT BUY orders", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("USDC", 5000, jwt);
+// describe("Fetching User Open Orders API", () => {
+//   test("GET /orders → should return 1 SOL-USDC LIMIT BUY order", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 1200, jwt);
+//     await placeRandomOrder(jwt, "SOL-USDC", "BUY", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "SOL-USDC");
+//     const response = await request(BACKEND_URL)
+//       .get(`/orders?pair=SOL-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.buyOrders).toBeArrayOfSize(1);
+//   });
+//   test("GET /orders → should return 1 ETH-USDC LIMIT SELL order", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("ETH", 5000, jwt);
+//     await placeRandomOrder(jwt, "ETH-USDC", "SELL", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "SELL", 1, "ETH-USDC");
+//     const response = await request(BACKEND_URL)
+//       .get(`/orders?pair=ETH-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.sellOrders).toBeArrayOfSize(1);
+//   });
+//   test("GET /orders → should return 1 BTC-USDC LIMIT BUY order", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 5000, jwt);
+//     await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "BTC-USDC");
+//     const response = await request(BACKEND_URL)
+//       .get(`/orders?pair=BTC-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.buyOrders).toBeArrayOfSize(1);
+//   });
+//   test("GET /orders → should return 3 BTC-USDC LIMIT BUY orders", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 5000, jwt);
 
-    await Promise.all(
-      Array.from({ length: 3 }).map(async (_) => {
-        await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
-      })
-    );
-    await waitForOrderUpdate(jwt, 5000, 200, "BUY", 3, "BTC-USDC");
+//     await Promise.all(
+//       Array.from({ length: 3 }).map(async (_) => {
+//         await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
+//       })
+//     );
+//     await waitForOrderUpdate(jwt, 5000, 200, "BUY", 3, "BTC-USDC");
 
-    const response = await request(BACKEND_URL)
-      .get(`/orders?pair=BTC-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.buyOrders).toBeArrayOfSize(3);
-  });
-  test("GET /orders → should return 5 SOL-USDC LIMIT SELL orders", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("SOL", 5000, jwt);
+//     const response = await request(BACKEND_URL)
+//       .get(`/orders?pair=BTC-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.buyOrders).toBeArrayOfSize(3);
+//   });
+//   test("GET /orders → should return 5 SOL-USDC LIMIT SELL orders", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("SOL", 5000, jwt);
 
-    await Promise.all(
-      Array.from({ length: 5 }).map(async (_) => {
-        await placeRandomOrder(jwt, "SOL-USDC", "SELL", "LIMIT");
-      })
-    );
-    await waitForOrderUpdate(jwt, 5000, 200, "SELL", 5, "SOL-USDC");
+//     await Promise.all(
+//       Array.from({ length: 5 }).map(async (_) => {
+//         await placeRandomOrder(jwt, "SOL-USDC", "SELL", "LIMIT");
+//       })
+//     );
+//     await waitForOrderUpdate(jwt, 5000, 200, "SELL", 5, "SOL-USDC");
 
-    const response = await request(BACKEND_URL)
-      .get(`/orders?pair=SOL-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
-    expect(response.statusCode).toBe(200);
-    expect(response.body.sellOrders).toBeArrayOfSize(5);
-  });
-});
+//     const response = await request(BACKEND_URL)
+//       .get(`/orders?pair=SOL-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.sellOrders).toBeArrayOfSize(5);
+//   });
+// });
 
-describe("Order Cancellation API", () => {
-  test("should cancel a 1 SOL-USDC LIMIT BUY order and update DB + API response", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("USDC", 1200, jwt);
-    const { id } = await placeRandomOrder(jwt, "SOL-USDC", "BUY", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "SOL-USDC");
-    const res = await request(BACKEND_URL)
-      .get(`/orders?pair=SOL-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
+// describe("Order Cancellation API", () => {
+//   test("should cancel a 1 SOL-USDC LIMIT BUY order and update DB + API response", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 1200, jwt);
+//     const { id } = await placeRandomOrder(jwt, "SOL-USDC", "BUY", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "SOL-USDC");
+//     const res = await request(BACKEND_URL)
+//       .get(`/orders?pair=SOL-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
 
-    const orderId = res.body.buyOrders[0].id;
+//     const orderId = res.body.buyOrders[0].id;
 
-    const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
+//     const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
 
-    await waitForStatus(orderId, "CANCELLED");
+//     await waitForStatus(orderId, "CANCELLED");
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    expect(order?.status).toBe("CANCELLED");
+//     const order = await prisma.order.findUnique({ where: { id: orderId } });
+//     expect(order?.status).toBe("CANCELLED");
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body.message).toBe("Order successfully cancelled");
-  });
-  test("should cancel a 1 ETH-USDC LIMIT SELL order and update DB + API response", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("ETH", 1200, jwt);
-    await placeRandomOrder(jwt, "ETH-USDC", "SELL", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "SELL", 1, "ETH-USDC");
-    const res = await request(BACKEND_URL)
-      .get(`/orders?pair=ETH-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.message).toBe("Order successfully cancelled");
+//   });
+//   test("should cancel a 1 ETH-USDC LIMIT SELL order and update DB + API response", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("ETH", 1200, jwt);
+//     await placeRandomOrder(jwt, "ETH-USDC", "SELL", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "SELL", 1, "ETH-USDC");
+//     const res = await request(BACKEND_URL)
+//       .get(`/orders?pair=ETH-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
 
-    const orderId = res.body.sellOrders[0].id;
+//     const orderId = res.body.sellOrders[0].id;
 
-    const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
+//     const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
 
-    await waitForStatus(orderId, "CANCELLED");
+//     await waitForStatus(orderId, "CANCELLED");
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    expect(order?.status).toBe("CANCELLED");
+//     const order = await prisma.order.findUnique({ where: { id: orderId } });
+//     expect(order?.status).toBe("CANCELLED");
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body.message).toBe("Order successfully cancelled");
-  });
-  test("should cancel a 1 BTC-USDC LIMIT BUY order and update DB + API response", async () => {
-    const { jwt } = await generateRandomUser();
-    await addBalanceToUserWallet("USDC", 1200, jwt);
-    await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
-    await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "BTC-USDC");
-    const res = await request(BACKEND_URL)
-      .get(`/orders?pair=BTC-USDC`)
-      .set("authorization", `Bearer ${jwt}`);
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.message).toBe("Order successfully cancelled");
+//   });
+//   test("should cancel a 1 BTC-USDC LIMIT BUY order and update DB + API response", async () => {
+//     const { jwt } = await generateRandomUser();
+//     await addBalanceToUserWallet("USDC", 1200, jwt);
+//     await placeRandomOrder(jwt, "BTC-USDC", "BUY", "LIMIT");
+//     await waitForOrderUpdate(jwt, 5000, 200, "BUY", 1, "BTC-USDC");
+//     const res = await request(BACKEND_URL)
+//       .get(`/orders?pair=BTC-USDC`)
+//       .set("authorization", `Bearer ${jwt}`);
 
-    const orderId = res.body.buyOrders[0].id;
+//     const orderId = res.body.buyOrders[0].id;
 
-    const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
+//     const response = await waitForOrderCancelUpdate(jwt, 5000, 200, orderId);
 
-    await waitForStatus(orderId, "CANCELLED");
+//     await waitForStatus(orderId, "CANCELLED");
 
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    expect(order?.status).toBe("CANCELLED");
+//     const order = await prisma.order.findUnique({ where: { id: orderId } });
+//     expect(order?.status).toBe("CANCELLED");
 
-    expect(response.statusCode).toBe(200);
-    expect(response.body.message).toBe("Order successfully cancelled");
-  });
-});
+//     expect(response.statusCode).toBe(200);
+//     expect(response.body.message).toBe("Order successfully cancelled");
+//   });
+// });

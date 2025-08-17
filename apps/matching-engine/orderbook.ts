@@ -1,8 +1,8 @@
-import type { IOrder, ITrade } from "./types";
+import type { IOrderResponse, ITrade } from "./types";
 
 class Orderbook {
-  bids: IOrder[];
-  asks: IOrder[];
+  bids: IOrderResponse[];
+  asks: IOrderResponse[];
   bestBid: number;
   bestAsk: number;
   baseAsset: string;
@@ -31,25 +31,41 @@ class Orderbook {
     this.tradeHisotry = [];
   }
 
-  private sortOrders(orders: IOrder[], side: "BUY" | "SELL") {
+  private sortOrders(orders: IOrderResponse[], side: "BUY" | "SELL") {
     if (side === "BUY") {
       orders.sort((a, b) =>
         a.price === b.price
-          ? a.createdAt - b.createdAt
-          : b.quantity - a.quantity
+          ? a.createdAt.getTime() - b.createdAt.getTime()
+          : b.price - a.price
       );
     } else {
       orders.sort((a, b) =>
         a.price === b.price
-          ? a.createdAt - b.createdAt
-          : a.quantity - b.quantity
+          ? a.createdAt.getTime() - b.createdAt.getTime()
+          : a.price - b.price
       );
     }
   }
 
-  addOrder(order: IOrder) {}
+  addOrder(order: IOrderResponse) {}
 
-  cancelOrder(orderId: string) {}
+  cancelOrder(orderId: string): boolean {
+    const isBuyOrder = this.bids.find((b) => b.id === orderId);
+
+    if (isBuyOrder) {
+      this.bids = this.bids.filter((b) => b.id !== orderId);
+      return true;
+    }
+
+    const isSellorder = this.asks.find((b) => b.id === orderId);
+
+    if (isSellorder) {
+      this.asks = this.asks.filter((a) => a.id !== orderId);
+      return true;
+    }
+
+    return false;
+  }
 
   getTicker() {
     return {
@@ -66,7 +82,28 @@ class Orderbook {
     };
   }
 
-  executeTrade() {}
+  private executeTrade(bid: IOrderResponse, ask: IOrderResponse): ITrade {
+    const tradeQty = Math.min(bid.quantity, ask.quantity);
+    const price = ask.price;
+
+    const trade: ITrade = {
+      id: crypto.randomUUID(),
+      price,
+      quantity: tradeQty,
+      pair: bid.pair,
+      type: "LIMIT",
+      executedAt: Date.now(),
+      bidId: bid.id,
+      askId: ask.id,
+    };
+
+    this.tradeHisotry.push(trade);
+
+    bid.quantity -= tradeQty;
+    ask.quantity -= tradeQty;
+
+    return trade;
+  }
 }
 
 export default Orderbook;

@@ -22,15 +22,15 @@ export interface ITrade {
   price: number;
   quantity: number;
   type: "LIMIT" | "MARKET";
-  side: "BUY" | "SELL";
+  bidId: string;
+  askId: string;
   pair: string;
   executedAt: number;
-  userId: string;
 }
 
 export interface IOrderResponse {
   id: string;
-  requestId : string;
+  requestId: string;
   userId: string;
   side: "BUY" | "SELL";
   pair: string;
@@ -38,8 +38,35 @@ export interface IOrderResponse {
   quantity: number;
   filledQuantity: number;
   createdAt: Date;
+  orderId?: string;
   updatedAt: Date;
-  event? : "ORDER_CREATED" | "ORDER_CANCELLED"
+  streamId: string;
+  event?: "CREATE_ORDER" | "CANCEL_ORDER";
   type: "LIMIT" | "MARKET";
   status: "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
 }
+
+export type OrderEvent =
+  | {
+      event: "CREATE_ORDER";
+      requestId: string;
+      side: "BUY" | "SELL";
+      type: "LIMIT" | "MARKET";
+      userId: string;
+      streamId?: string;
+      quantity: string;
+      price: string;
+      orderId?: never;
+      pair: string;
+      timestamp: number;
+    }
+  | {
+      event: "CANCEL_ORDER";
+      requestId: string;
+      userId: string;
+      orderId: string;
+      timestamp: number;
+      streamId?: string;
+      side?: never;
+      pair?: never;
+    };

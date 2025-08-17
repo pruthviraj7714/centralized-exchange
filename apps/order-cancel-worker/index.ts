@@ -1,34 +1,8 @@
 import redisClient from "@repo/redisclient";
 import prisma from "@repo/db";
+import { CONSUMER_NAME, DLQ_STREAM, GROUP_NAME, ORDER_CANCEL_STREAM } from "./config";
+import type { ICancelOrder, ICancelOrderResponse } from "./types";
 
-const ORDER_CANCEL_STREAM = process.env.ORDER_CANCEL_STREAM!;
-const GROUP_NAME = process.env.GROUP_NAME!;
-const CONSUMER_NAME = process.env.CONSUMER_NAME!;
-const ORDER_DLQ_STREAM = process.env.ORDER_DLQ_STREAM!;
-const MATCHING_ENGINE_STREAM = process.env.MATCHING_ENGINE_STREAM!;
-
-interface ICancelOrder {
-  id: string;
-  requestId: string;
-  userId: string;
-  orderId: string;
-  timestamp: number;
-}
-
-interface ICancelOrderResponse {
-  id: string;
-  userId: string;
-  side: "BUY" | "SELL";
-  pair: string;
-  price: number;
-  quantity: number;
-  filledQuantity: number;
-  createdAt: Date;
-  updatedAt: Date;
-  event? : "ORDER_CREATED" | "ORDER_CANCELLED"
-  type: "LIMIT" | "MARKET";
-  status: "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
-}
 
 function parseStreamData(streams: any[]) {
   const results: any[] = [];
@@ -38,7 +12,7 @@ function parseStreamData(streams: any[]) {
       for (let i = 0; i < fields.length; i += 2) {
         obj[fields[i]] = fields[i + 1];
       }
-      results.push({ id, ...obj });
+      results.push({ streamId : id, ...obj });
     }
   }
   return results;
@@ -114,25 +88,14 @@ const processOrders = async (orders: ICancelOrder[]) => {
           let orderData = await cancelOrder(order);
           if (!orderData) {
             console.log("no order data found");
-            await redisClient.xack(ORDER_CANCEL_STREAM, GROUP_NAME, order.id);
+            await redisClient.xack(ORDER_CANCEL_STREAM, GROUP_NAME, order.streamId);
             await redisClient.del(`retry-count:${order.requestId}`);
             return;
           }
           console.log("order successfully cancelled");
 
-          orderData = {
-            ...orderData,
-            event : "ORDER_CANCELLED"
-          }
-
-          await redisClient.xadd(
-            MATCHING_ENGINE_STREAM,
-            "*",
-            ...Object.entries(orderData).flatMap(([k, v]) => [k, String(v)])
-          );
-          console.log(
-            "cancel order successfully pushed to matching queue to remove from orderbook"
-          );
+          //TODO:sending it to client via publisher
+        
           await redisClient.xack(ORDER_CANCEL_STREAM, GROUP_NAME, order.id);
           await redisClient.del(`retry-count:${order.requestId}`);
           return;
@@ -143,14 +106,10 @@ const processOrders = async (orders: ICancelOrder[]) => {
             await new Promise((res) => setTimeout(res, 1000));
           } else {
             console.log("sending to dlq");
-            const orderData = {
-              ...order,
-              type: "CANCEL_ORDER",
-            };
             await redisClient.xadd(
-              ORDER_DLQ_STREAM,
+              DLQ_STREAM,
               "*",
-              ...Object.entries(orderData).flatMap(([k, v]) => [k, String(v)])
+              ...Object.entries(order).flatMap(([k, v]) => [k, String(v)])
             );
           }
         }

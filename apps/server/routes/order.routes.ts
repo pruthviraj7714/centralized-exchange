@@ -4,7 +4,7 @@ import { OrderSchema } from "@repo/common";
 import prisma from "@repo/db";
 import { SUPPORTED_PAIRS } from "../utils/constants";
 import redisClient from "@repo/redisclient";
-import { ORDER_CANCEL_STREAM, ORDER_REQUEST_STREAM } from "../utils/config";
+import { ORDER_STREAM } from "../utils/config";
 
 const orderRouter: Router = Router();
 
@@ -51,24 +51,23 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     }
 
     if (type === "LIMIT" && (price <= 0 || quantity <= 0)) {
-        res.status(400).json({
-          message:
-            "Please Check Amount or Quantity it should be greater than 0",
-        });
-        return;
+      res.status(400).json({
+        message: "Please Check Amount or Quantity it should be greater than 0",
+      });
+      return;
     }
 
     if (type === "MARKET" && quantity <= 0) {
-        res.status(400).json({
-          message: "Quantity should be greater than 0",
-        });
-        return;
+      res.status(400).json({
+        message: "Quantity should be greater than 0",
+      });
+      return;
     }
 
     const requestId = crypto.randomUUID();
 
-
     let orderData = {
+      event: "CREATE_ORDER",
       requestId,
       side,
       type,
@@ -76,19 +75,23 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       quantity,
       price,
       pair,
-      createdAt : Date.now()
-    }
+      timestamp: Date.now(),
+    };
 
-    await redisClient.xadd(ORDER_REQUEST_STREAM, "*", ...Object.entries(orderData).flat());
+    await redisClient.xadd(
+      ORDER_STREAM,
+      "*",
+      ...Object.entries(orderData).flat()
+    );
 
     res.status(200).json({
-      success : true,
-      requestId
-    })
+      success: true,
+      requestId,
+    });
   } catch (error) {
     res.status(500).json({
       message: "Internal Server Error",
-      success : false
+      success: false,
     });
   }
 });
@@ -112,7 +115,7 @@ orderRouter.get("/", authMiddleware, async (req: Request, res: Response) => {
         pair: true,
         type: true,
         createdAt: true,
-        id : true
+        id: true,
       },
     });
 
@@ -156,13 +159,18 @@ orderRouter.delete(
       const cancelRequestId = crypto.randomUUID();
 
       const cancelRequest = {
-        requestId : cancelRequestId,
+        event: "CANCEL_ORDER",
+        requestId: cancelRequestId,
         userId,
         orderId,
-        timestamp : Date.now()
-      }
+        timestamp: Date.now(),
+      };
 
-      await redisClient.xadd(ORDER_CANCEL_STREAM, "*", ...Object.entries(cancelRequest).flat())
+      await redisClient.xadd(
+        ORDER_STREAM,
+        "*",
+        ...Object.entries(cancelRequest).flat()
+      );
 
       res.status(200).json({
         message: "Order successfully cancelled",

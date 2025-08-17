@@ -2,6 +2,8 @@ import redisClient from "@repo/redisclient";
 import { CONSUMER_NAME, GROUP_NAME, MATCHING_ENGINE_STREAM } from "./config";
 import type { IOrderResponse } from "./types";
 
+const publisher = redisClient.duplicate();
+
 const createConsumerGroup = async () => {
   try {
     await redisClient.xgroup(
@@ -28,7 +30,7 @@ function parseStreamData(streams: any[]) {
       for (let i = 0; i < fields.length; i += 2) {
         obj[fields[i]] = fields[i + 1];
       }
-      results.push({ id, ...obj });
+      results.push({ streamId: id, ...obj });
     }
   }
   return results;
@@ -36,20 +38,12 @@ function parseStreamData(streams: any[]) {
 
 function processOrders(orders: IOrderResponse[]) {
   orders.map(async (order) => {
-    switch (order.event) {
-      case "ORDER_CREATED": {
-        //order creation logic here
-        break;
-      }
-      case "ORDER_CANCELLED": {
-        //order cancellation logic here
-        break;
-      }
-    }
+    await publisher.publish("order-events", JSON.stringify(order));
+    await redisClient.xack(MATCHING_ENGINE_STREAM, GROUP_NAME, order.streamId);
   });
 }
 
-async function main() {
+async function startEngineConsumer() {
   await createConsumerGroup();
 
   const prevMessages = await redisClient.xreadgroup(
@@ -61,15 +55,13 @@ async function main() {
     "0"
   );
 
-  console.log(parseStreamData(prevMessages));
-
   if (prevMessages.length > 0) {
     processOrders(parseStreamData(prevMessages));
   }
 
-  // if (prevMessages && prevMessages.length > 0) {
-  //   await processOrders(parseStreamData(prevMessages));
-  // }
+  if (prevMessages && prevMessages.length > 0) {
+    await processOrders(parseStreamData(prevMessages));
+  }
 
   while (true) {
     try {
@@ -82,18 +74,18 @@ async function main() {
         ">"
       );
 
+      if (newMessages && newMessages.length > 0) {
+        processOrders(parseStreamData(newMessages));
+      }
+
       if (!newMessages) {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
       }
-
-      // if (newMessages && newMessages.length > 0) {
-      //   await processOrders(parseStreamData(newMessages));
-      // }
     } catch (error) {
       console.error(error);
     }
   }
-} 
+}
 
-main();
+export default startEngineConsumer;
