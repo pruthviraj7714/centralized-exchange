@@ -4,249 +4,268 @@ import WebSocket from "ws";
 import type { IOrderbookData, IOrderResponse, OrderEvent } from "./types";
 import Orderbook from "./orderbook";
 import redisClient from "@repo/redisclient";
-import { ORDER_CANCEL_STREAM } from "./config";
+import { PERSISTENCE_STREAM } from "./config";
 
 export const broadcastMessageToClients = (
   orderbookData: IOrderbookData,
   message: any
 ) => {
+  if (!orderbookData?.clients?.length) {
+    return;
+  }
+
   orderbookData.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(message));
+    try {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(message));
+      }
+    } catch (error) {
+      console.error("Error broadcasting to client:", error);
     }
   });
 };
 
-const orderbookMap: Map<string, IOrderbookData> = new Map();
-
-const subscriber = redisClient.duplicate();
-
-const initializeSubscriber = async () => {
+const broadcastMessageToClient = (ws: WebSocket, message: any) => {
   try {
-    console.log("🔌 Connecting subscriber to Redis...");
-    console.log("🔔 Subscribing to order-events channel...");
-    await subscriber.subscribe("order-events");
-    console.log("✅ Successfully subscribed to order-events channel");
-    subscriber.on("connect", () => {
-      console.log("🔗 Subscriber connection established");
-    });
-    subscriber.on("ready", () => {
-      console.log("🚀 Subscriber is ready");
-    });
-    subscriber.on("error", (error) => {
-      console.error("❌ Subscriber error:", error);
-    });
-    subscriber.on("end", () => {
-      console.log("🔚 Subscriber connection ended");
-    });
-    subscriber.on("reconnecting", () => {
-      console.log("🔄 Subscriber reconnecting...");
-    });
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
   } catch (error) {
-    console.error("❌ Failed to initialize subscriber:", error);
-    throw error;
+    console.error("Error sending message to client:", error);
   }
 };
 
-export const startWsServer = () => {
-  const wss = new WebSocketServer({ port: 8080 });
+export const orderbookMap: Map<string, IOrderbookData> = new Map();
 
-  subscriber.on("message", async (channel, message) => {
+let wsServer: WebSocketServer | null = null;
+
+export const startWsServer = (): Promise<void> => {
+  return new Promise((resolve, reject) => {
     try {
-      const orderData = JSON.parse(message) as IOrderResponse;
+      wsServer = new WebSocketServer({ port: 8080 });
 
-      const ticker = orderData.pair;
+      wsServer.on("connection", handleClientConnection);
 
-      if (!ticker) {
-        console.error(
-          "❌ Could not extract ticker from order data:",
-          orderData
-        );
-        return;
-      }
-      let orderbookData: IOrderbookData;
-      if (orderbookMap.has(ticker)) {
-        orderbookData = orderbookMap.get(ticker)!;
+      wsServer.on("listening", () => {
+        console.log("WebSocket server is running on ws://localhost:8080");
+        resolve();
+      });
 
-        switch (orderData.event) {
-          case "CREATE_ORDER":
-            console.log("✅ Adding order to orderbook:", orderData);
-
-            try {
-              // orderbookData.orderbook.addOrder(orderData);
-              console.log("📈 Order added to orderbook successfully");
-            } catch (addError) {
-              console.error("❌ Error adding order to orderbook:", addError);
-            }
-
-            break;
-
-          case "CANCEL_ORDER":
-            try {
-              const isCancelled = orderbookData.orderbook.cancelOrder(
-                orderData.orderId!
-              );
-
-              if (isCancelled) {
-                await redisClient.xadd(
-                  ORDER_CANCEL_STREAM,
-                  "*",
-                  ...Object.entries(orderData).flat()
-                );
-              }
-            } catch (removeError) {
-              console.error(
-                "❌ Error removing order from orderbook:",
-                removeError
-              );
-            }
-
-            break;
-
-          default:
-            console.log("❓ Unknown event type:", orderData.event);
-        }
-      } else {
-        let orderbookData: IOrderbookData;
-        const [baseAsset, quoteAsset] = orderData.pair.split("-");
-        if (!baseAsset || !quoteAsset) {
-          console.error("invalid pair");
-          return;
-        }
-
-        const orderbook = new Orderbook(baseAsset, quoteAsset);
-        orderbookData = {
-          clients: [],
-          orderbook,
-        };
-        orderbookMap.set(orderData.pair, orderbookData);
-
-        switch (orderData.event) {
-          case "CREATE_ORDER":
-            console.log("✅ Adding order to orderbook:", orderData);
-
-            try {
-              orderbookData.orderbook.addOrder(orderData);
-            } catch (addError) {
-              console.error("❌ Error adding order to orderbook:", addError);
-            }
-
-            break;
-
-          case "CANCEL_ORDER":
-            try {
-              const isCancelled = orderbookData.orderbook.cancelOrder(
-                orderData.orderId!
-              );
-
-              if (isCancelled) {
-                await redisClient.xadd(
-                  ORDER_CANCEL_STREAM,
-                  "*",
-                  ...Object.entries(orderData).flat()
-                );
-              } else {
-                //will send error by pubsub
-                console.error("error cannot be cancelled");
-              }
-            } catch (removeError) {
-              console.error(
-                "❌ Error removing order from orderbook:",
-                removeError
-              );
-            }
-
-            break;
-
-          default:
-            console.log("❓ Unknown event type:", orderData.event);
-        }
-      }
+      wsServer.on("error", (error) => {
+        console.error("WebSocket server error:", error);
+        reject(error);
+      });
     } catch (error) {
-      console.error("❌ Error processing message:", error);
-      console.error("📄 Raw message that failed to parse:", message);
+      console.error("Failed to start WebSocket server:", error);
+      reject(error);
     }
   });
+};
 
-  subscriber.on("error", (error) => {
-    console.error("❌ Subscriber error:", error);
-  });
+const handleClientConnection = async (ws: WebSocket, req: any) => {
+  let ticker: string | undefined;
 
-  subscriber.on("subscribe", (channel, count) => {
-    console.log(
-      `✅ Successfully subscribed to channel: ${channel} (total: ${count})`
-    );
-  });
-
-  subscriber.on("unsubscribe", (channel, count) => {
-    console.log(
-      `❌ Unsubscribed from channel: ${channel} (remaining: ${count})`
-    );
-  });
-
-  initializeSubscriber();
-
-  wss.on("connection", async (ws, req) => {
-    const ticker = req.url?.split("?ticker=")[1];
+  try {
+    ticker = extractTickerFromUrl(req.url);
 
     if (!ticker) {
-      ws.send(
-        JSON.stringify({
-          type: "ERROR",
-          message: "No Ticker Found!",
-        })
-      );
+      sendErrorToClient(ws, "No ticker provided in URL");
+      ws.close(1008, "No ticker provided");
       return;
     }
 
-    const [baseAsset, quoteAsset] = ticker.split("-");
-
-    if (!baseAsset || !quoteAsset || !SUPPORTED_PAIRS.includes(ticker)) {
-      ws.send(
-        JSON.stringify({
-          type: "ERROR",
-          message: "Invalid Ticker",
-        })
-      );
+    const validation = validateTicker(ticker);
+    if (!validation.isValid) {
+      sendErrorToClient(ws, validation.error!);
+      ws.close(1008, validation.error);
       return;
     }
 
-    let orderbookData: IOrderbookData;
-
-    if (!orderbookMap.has(ticker)) {
-      const orderbook = new Orderbook(baseAsset, quoteAsset);
-      orderbookData = {
-        orderbook,
-        clients: [],
-      };
-      orderbookMap.set(ticker, orderbookData);
-    } else {
-      orderbookData = orderbookMap.get(ticker) as IOrderbookData;
-    }
+    const orderbookData = getOrCreateOrderbookData(ticker);
 
     orderbookData.clients.push(ws);
 
-    console.log(`Client connected for ticker: ${ticker}`);
+    console.log(
+      `Client connected for ticker: ${ticker} (${orderbookData.clients.length} total clients)`
+    );
 
-    ws.on("error", (err) => {
-      console.error(err.message);
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: "ERROR",
-            message: err.message,
-          })
+    await sendOrderbookSnapshot(ws, orderbookData);
+
+    setupClientEventHandlers(ws, orderbookData, ticker);
+  } catch (error) {
+    console.error("Error handling client connection:", error);
+    if (ticker) {
+      removeClientFromOrderbook(ws, ticker);
+    }
+    ws.close(1011, "Internal server error");
+  }
+};
+
+const extractTickerFromUrl = (url?: string): string | undefined => {
+  if (!url) return undefined;
+
+  const match = url.match(/[?&]ticker=([^&]+)/);
+  return match ? decodeURIComponent(match[1]!) : undefined;
+};
+
+const validateTicker = (
+  ticker: string
+): { isValid: boolean; error?: string } => {
+  if (!ticker) {
+    return { isValid: false, error: "Ticker is required" };
+  }
+
+  const [baseAsset, quoteAsset] = ticker.split("-");
+
+  if (!baseAsset || !quoteAsset) {
+    return {
+      isValid: false,
+      error: "Invalid ticker format. Expected format: BASE-QUOTE",
+    };
+  }
+
+  if (!SUPPORTED_PAIRS.includes(ticker)) {
+    return { isValid: false, error: `Unsupported trading pair: ${ticker}` };
+  }
+
+  return { isValid: true };
+};
+
+const getOrCreateOrderbookData = (ticker: string): IOrderbookData => {
+  if (orderbookMap.has(ticker)) {
+    return orderbookMap.get(ticker)!;
+  }
+
+  const [baseAsset, quoteAsset] = ticker.split("-");
+  const orderbook = new Orderbook(baseAsset!, quoteAsset!);
+
+  const orderbookData: IOrderbookData = {
+    orderbook,
+    clients: [],
+  };
+
+  orderbookMap.set(ticker, orderbookData);
+  console.log(`📚 Created new orderbook for ${ticker}`);
+
+  return orderbookData;
+};
+
+const sendOrderbookSnapshot = async (
+  ws: WebSocket,
+  orderbookData: IOrderbookData
+): Promise<void> => {
+  try {
+    const snapshot = {
+      type: "ORDERBOOK_SNAPSHOT",
+      data: {
+        bids: orderbookData.orderbook.getBids(),
+        asks: orderbookData.orderbook.getAsks(),
+        timestamp: Date.now(),
+      },
+    };
+
+    broadcastMessageToClient(ws, snapshot);
+  } catch (error) {
+    console.error("Error sending orderbook snapshot:", error);
+  }
+};
+
+const setupClientEventHandlers = (
+  ws: WebSocket,
+  orderbookData: IOrderbookData,
+  ticker: string
+) => {
+  ws.on("message", async (data) => {
+    try {
+      const message = JSON.parse(data.toString());
+      await handleClientMessage(ws, message, orderbookData);
+    } catch (error) {
+      console.error("Error parsing client message:", error);
+      sendErrorToClient(ws, "Invalid message format");
+    }
+  });
+
+  ws.on("error", (error) => {
+    console.error(`WebSocket error for ${ticker}:`, error);
+    removeClientFromOrderbook(ws, ticker);
+  });
+
+  ws.on("close", (code, reason) => {
+    console.log(
+      `Client disconnected from ${ticker} (code: ${code}, reason: ${reason?.toString()})`
+    );
+    removeClientFromOrderbook(ws, ticker);
+  });
+
+  ws.on("pong", () => {});
+
+  const pingInterval = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.ping();
+    } else {
+      clearInterval(pingInterval);
+    }
+  }, 30000);
+};
+
+const handleClientMessage = async (
+  ws: WebSocket,
+  message: any,
+  orderbookData: IOrderbookData
+): Promise<void> => {
+  try {
+    switch (message.type) {
+      case "PING":
+        broadcastMessageToClient(ws, { type: "PONG", timestamp: Date.now() });
+        break;
+
+      case "GET_ORDERBOOK":
+        await sendOrderbookSnapshot(ws, orderbookData);
+        break;
+
+      default:
+        console.warn("Unknown message type from client:", message.type);
+        sendErrorToClient(ws, `Unknown message type: ${message.type}`);
+    }
+  } catch (error) {
+    console.error("Error handling client message:", error);
+    sendErrorToClient(ws, "Error processing message");
+  }
+};
+
+const removeClientFromOrderbook = (ws: WebSocket, ticker: string): void => {
+  try {
+    const orderbookData = orderbookMap.get(ticker);
+    if (orderbookData) {
+      const initialCount = orderbookData.clients.length;
+      orderbookData.clients = orderbookData.clients.filter(
+        (client) => client !== ws
+      );
+      const finalCount = orderbookData.clients.length;
+
+      if (initialCount !== finalCount) {
+        console.log(
+          `Removed client from ${ticker} (${finalCount} remaining)`
         );
       }
-    });
+    }
+  } catch (error) {
+    console.error("Error removing client from orderbook:", error);
+  }
+};
 
-    ws.on("close", () => {
-      orderbookData.clients = orderbookData.clients.filter((c) => c !== ws);
-      console.log(`Client disconnected for ticker: ${ticker}`);
-    });
-  });
+const sendErrorToClient = (ws: WebSocket, errorMessage: string): void => {
+  try {
+    const errorResponse = {
+      type: "ERROR",
+      message: errorMessage,
+      timestamp: Date.now(),
+    };
 
-  wss.on("listening", () => {
-    console.log("Matching engine server is running on ws://localhost:8080");
-  });
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(errorResponse));
+    }
+  } catch (error) {
+    console.error("Error sending error message to client:", error);
+  }
 };

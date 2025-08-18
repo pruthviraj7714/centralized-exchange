@@ -30,7 +30,9 @@ function parseStreamData(streams: any[]) {
       for (let i = 0; i < fields.length; i += 2) {
         obj[fields[i]] = fields[i + 1];
       }
-      results.push({ streamId: id, ...obj });
+      if (obj.data) {
+        results.push({ streamId: id, ...JSON.parse(obj.data) });
+      }
     }
   }
   return results;

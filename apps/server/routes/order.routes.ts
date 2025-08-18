@@ -81,7 +81,8 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     await redisClient.xadd(
       ORDER_STREAM,
       "*",
-      ...Object.entries(orderData).flat()
+      "data",
+      JSON.stringify(orderData)
     );
 
     res.status(200).json({
@@ -89,6 +90,8 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       requestId,
     });
   } catch (error) {
+    console.log(error);
+    
     res.status(500).json({
       message: "Internal Server Error",
       success: false,
@@ -169,7 +172,8 @@ orderRouter.delete(
       await redisClient.xadd(
         ORDER_STREAM,
         "*",
-        ...Object.entries(cancelRequest).flat()
+        "data",
+        JSON.stringify(cancelRequest)
       );
 
       res.status(200).json({

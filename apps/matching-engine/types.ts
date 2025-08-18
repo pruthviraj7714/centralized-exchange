@@ -1,6 +1,8 @@
 import type WebSocket from "ws";
 import type Orderbook from "./orderbook";
 
+export type ORDER_STATUS = "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
+
 export interface IOrder {
   type: "LIMIT" | "MARKET";
   side: "BUY" | "SELL";
@@ -29,7 +31,7 @@ export interface ITrade {
 }
 
 export interface IOrderResponse {
-  id: string;
+  id?: string;
   requestId: string;
   userId: string;
   side: "BUY" | "SELL";
@@ -37,13 +39,13 @@ export interface IOrderResponse {
   price: number;
   quantity: number;
   filledQuantity: number;
-  createdAt: Date;
+  createdAt: number;
   orderId?: string;
-  updatedAt: Date;
+  updatedAt: number;
   streamId: string;
   event?: "CREATE_ORDER" | "CANCEL_ORDER";
   type: "LIMIT" | "MARKET";
-  status: "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
+  status: ORDER_STATUS;
 }
 
 export type OrderEvent =

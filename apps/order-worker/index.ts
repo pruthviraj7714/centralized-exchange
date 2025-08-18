@@ -1,32 +1,13 @@
 import redisClient from "@repo/redisclient";
 import prisma from "@repo/db";
-import { CONSUMER_NAME, DLQ_STREAM, GROUP_NAME, MATCHING_ENGINE_STREAM, ORDER_STREAM } from "./config";
-
-//use pubsubs to send errors to client
-type OrderEvent =
-  | {
-      event: "CREATE_ORDER";
-      requestId: string;
-      side: "BUY" | "SELL";
-      type: "LIMIT" | "MARKET";
-      userId: string;
-      streamId?: string;
-      quantity: string;
-      price: string;
-      orderId?: never;
-      pair: string;
-      timestamp: number;
-    }
-  | {
-      event: "CANCEL_ORDER";
-      requestId: string;
-      userId: string;
-      orderId: string;
-      timestamp: number;
-      streamId?: string;
-      side?: never;
-      pair?: never;
-    };
+import {
+  CONSUMER_NAME,
+  DLQ_STREAM,
+  GROUP_NAME,
+  MATCHING_ENGINE_STREAM,
+  ORDER_STREAM,
+} from "./config";
+import type { OrderEvent } from "./types";
 
 function parseStreamData(streams: any[]) {
   const results: any[] = [];
@@ -36,7 +17,9 @@ function parseStreamData(streams: any[]) {
       for (let i = 0; i < fields.length; i += 2) {
         obj[fields[i]] = fields[i + 1];
       }
-      results.push({ streamId: id, ...obj });
+      if (obj.data) {
+        results.push({ streamId: id, ...JSON.parse(obj.data) });
+      }
     }
   }
   return results;
@@ -276,7 +259,8 @@ const processOrders = async (orders: OrderEvent[]) => {
               await redisClient.xadd(
                 MATCHING_ENGINE_STREAM,
                 "*",
-                ...Object.entries(order).flatMap(([k, v]) => [k, String(v)])
+                "data",
+                JSON.stringify(order)
               );
               console.log("order successfully pushed to matching engine queue");
               await redisClient.xack(ORDER_STREAM, GROUP_NAME, order.streamId!);
@@ -289,14 +273,12 @@ const processOrders = async (orders: OrderEvent[]) => {
                 await new Promise((res) => setTimeout(res, 1000));
               } else {
                 console.log("sending to dlq");
-               
+
                 await redisClient.xadd(
                   DLQ_STREAM,
                   "*",
-                  ...Object.entries(order).flatMap(([k, v]) => [
-                    k,
-                    String(v),
-                  ])
+                  "data",
+                  JSON.stringify(order)
                 );
               }
             }
@@ -321,7 +303,8 @@ const processOrders = async (orders: OrderEvent[]) => {
               await redisClient.xadd(
                 MATCHING_ENGINE_STREAM,
                 "*",
-                ...Object.entries(order).flatMap(([k, v]) => [k, String(v)])
+                "data",
+                JSON.stringify(order)
               );
               console.log(
                 "order cancel request pushed to matching engine queue"
@@ -339,10 +322,8 @@ const processOrders = async (orders: OrderEvent[]) => {
                 await redisClient.xadd(
                   DLQ_STREAM,
                   "*",
-                  ...Object.entries(order).flatMap(([k, v]) => [
-                    k,
-                    String(v),
-                  ])
+                  "data",
+                  JSON.stringify(order)
                 );
               }
             }
@@ -381,13 +362,13 @@ async function main() {
         ">"
       );
 
+      if (newMessages && newMessages.length > 0) {
+        await processOrders(parseStreamData(newMessages));
+      }
+
       if (!newMessages) {
         await new Promise((r) => setTimeout(r, 1000));
         continue;
-      }
-
-      if (newMessages && newMessages.length > 0) {
-        await processOrders(parseStreamData(newMessages));
       }
     } catch (error) {
       console.error(error);
