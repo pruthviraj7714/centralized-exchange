@@ -10,7 +10,7 @@ export type OrderEvent =
       event: "Order.Create";
       side: "BUY" | "SELL";
       type: "LIMIT" | "MARKET";
-      status: "FILLED" | "PARTIAL" | "OPEN" | "CANCELLED";
+      status: "FILLED" | "PARTIALLY_FILLED" | "OPEN" | "CANCELLED";
       quantity: number;
       price: number;
       pair: string;

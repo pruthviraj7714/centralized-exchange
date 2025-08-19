@@ -4,7 +4,7 @@ import request, { type Response } from "supertest";
 
 export const BACKEND_URL = "http://localhost:3001";
 
-type ORDER_STATUS = "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
+type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 
 const SUPPORTED_PAIRS = [
   "BTC-SOL",
@@ -40,12 +40,10 @@ export const generateRandomUser = async () => {
 
   const otp = await redisClient.get(`OTP:${response.body.id}`);
 
-  const response1 = await request(BACKEND_URL)
-    .post("/auth/verify-otp")
-    .send({
-      email,
-      otp: parseInt(otp!),
-    });
+  const response1 = await request(BACKEND_URL).post("/auth/verify-otp").send({
+    email,
+    otp,
+  });
 
   return {
     userId: response.body.id,

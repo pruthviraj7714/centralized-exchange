@@ -86,7 +86,7 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
     return;
   }
 
-  if (odr.status === "FILLED" || odr.status === "PARTIAL") {
+  if (odr.status === "FILLED" || odr.status === "PARTIALLY_FILLED") {
     console.error(
       "order is already filled or partially filled, cannot cancel now"
     );
@@ -127,6 +127,7 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
       });
     });
     console.log('order successfully cancelled');
+    await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
     
   } catch (error) {
     console.error(error);
@@ -135,6 +136,8 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
 const handleCreateOrder = async (order: OrderEvent): Promise<void> => {
   try {
     if (order.event === "Order.Create") {
+      console.log(order);
+      
       await prisma.order.create({
         data: {
           pair: order.pair,
@@ -147,6 +150,7 @@ const handleCreateOrder = async (order: OrderEvent): Promise<void> => {
         },
       });
     }
+    await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
     console.log('order successfully created');
   } catch (error) {
     console.error(error);
@@ -159,13 +163,14 @@ const handleCreateTrade = async (order: OrderEvent): Promise<void> => {
         data: {
           pair: order.pair,
           price: order.price,
-          buyOrderId: order.bidId,
-          sellOrderId: order.askId,
+          bidId: order.bidId,
+          askId: order.askId,
           quantity: order.quantity,
           executedAt: new Date(order.executedAt),
         },
       });
     }
+    await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
 
     console.log('trade successfully executed');
   } catch (error) {

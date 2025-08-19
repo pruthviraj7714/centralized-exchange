@@ -36,48 +36,57 @@ walletsRouter.post(
   "/deposit",
   authMiddleware,
   async (req: Request, res: Response) => {
-    const userId = req.userId!;
-
-    const { asset, amount } = req.body;
-    
-    if(!asset || typeof amount !== "number" || !amount || amount <= 0) {
+    try {
+      
+      const userId = req.userId!;
+  
+      const { asset, amount } = req.body;
+      
+      if(!asset || typeof amount !== "number" || !amount || amount <= 0) {
+          res.status(400).json({
+              message : "Invalid Inputs"
+          });
+          return;
+      }
+  
+      if(!DefaultAssets.includes(asset)) {
         res.status(400).json({
-            message : "Invalid Inputs"
-        });
+          message : "Unsupported asset"
+        })
         return;
-    }
-
-    if(!DefaultAssets.includes(asset)) {
-      res.status(400).json({
-        message : "Unsupported asset"
+      }
+  
+      const wallet = await prisma.wallet.upsert({
+          where : {
+              userId_asset : {
+                  asset,
+                  userId
+              }
+          },
+          create : {
+              asset,
+              available : amount,
+              userId
+          },
+          update : {
+            available : {
+                  increment : amount
+              }
+          }
       })
-      return;
+  
+      res.status(200).json({
+          success : true,
+          id : wallet.id,
+          message : `${amount} ${asset} successfully deposited`
+      })
+    } catch (error) {
+      console.log(error);
+      
+  res.status(500).json({
+    message : "Internal Server Error"
+  })      
     }
-
-    const wallet = await prisma.wallet.upsert({
-        where : {
-            userId_asset : {
-                asset,
-                userId
-            }
-        },
-        create : {
-            asset,
-            available : amount,
-            userId
-        },
-        update : {
-          available : {
-                increment : amount
-            }
-        }
-    })
-
-    res.status(200).json({
-        success : true,
-        id : wallet.id,
-        message : `${amount} ${asset} successfully deposited`
-    })
 
 
   }

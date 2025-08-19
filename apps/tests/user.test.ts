@@ -23,8 +23,8 @@ describe("POST /auth/request-otp", () => {
 describe("POST /auth/verify-otp", () => {
   test("should return 400 when user with given email does not exist", async () => {
     const response = await request(BACKEND_URL).post("/auth/verify-otp").send({
-      email: "test@gmail.com",
-      otp: 111111,
+      email: "test2342342@gmail.com",
+      otp: "111111",
     });
     expect(response.statusCode).toBe(400);
   });
@@ -37,8 +37,7 @@ describe("POST /auth/verify-otp", () => {
 
     const otp = await redisClient.get(`OTP:${response1.body.id}`);
 
-    const wrongOTP =
-      parseInt(otp!) !== 222222 ? 222222 : 222111;
+    const wrongOTP = otp !== "222222" ? "222222" : "222111";
     const response2 = await request(BACKEND_URL).post("/auth/verify-otp").send({
       email: "test@gmail.com",
       otp: wrongOTP,
@@ -53,10 +52,10 @@ describe("POST /auth/verify-otp", () => {
       });
 
     const otp = await redisClient.get(`OTP:${response1.body.id}`);
-  
+
     const response2 = await request(BACKEND_URL).post("/auth/verify-otp").send({
       email: "test@gmail.com",
-      otp: parseInt(otp!),
+      otp,
     });
     expect(response2.statusCode).toBe(200);
     expect(response2.body.success).toBe(true);

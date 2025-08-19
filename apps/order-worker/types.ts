@@ -4,7 +4,7 @@ export type OrderEvent =
       requestId: string;
       side: "BUY" | "SELL";
       type: "LIMIT" | "MARKET";
-      status : "OPEN" | "FILLED" | "PARTIAL" | "CANCELLED"
+      status : "OPEN" | "FILLED" | "PARTIALLY_FILLED" | "CANCELLED"
       userId: string;
       streamId?: string;
       quantity: string;

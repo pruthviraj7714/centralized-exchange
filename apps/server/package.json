@@ -12,7 +12,7 @@
     "@types/bun": "latest",
     "@repo/redisclient": "*",
     "@repo/db": "*",
-    "@repo/common" : "*"
+    "@repo/common": "*"
   },
   "peerDependencies": {
     "typescript": "^5"

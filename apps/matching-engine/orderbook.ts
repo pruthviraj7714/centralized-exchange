@@ -6,14 +6,14 @@ class Orderbook {
   bestBid: number;
   bestAsk: number;
   baseAsset: string;
+  quoteAsset: string;
   lastPrice: number;
   highPrice24h: number;
   lowPrice24h: number;
   volume24h: number;
   priceChange24h: number;
   priceChangePercent24h: number;
-  quoteAsset: string;
-  tradeHisotry: ITrade[];
+  tradeHistory: ITrade[];
 
   constructor(baseAsset: string, quoteAsset: string) {
     this.baseAsset = baseAsset;
@@ -28,7 +28,7 @@ class Orderbook {
     this.bestBid = 0;
     this.bids = [];
     this.asks = [];
-    this.tradeHisotry = [];
+    this.tradeHistory = [];
   }
 
   private sortOrders(orders: IOrderResponse[], side: "BUY" | "SELL") {
@@ -43,15 +43,17 @@ class Orderbook {
     }
   }
 
+  //new few fixes here TOOD: adding orders also first before trade
   addOrder(order: IOrderResponse): {
-    order: IOrderResponse | null;
-    trades: ITrade[] | null;
+    taker: IOrderResponse | null;
+    makers : IOrderResponse[],
+    trades: ITrade[];
   } {
-    //have to fix this logic
     if (order.side === "BUY") {
       let remainingQty = order.quantity;
       let i = 0;
       let trades: ITrade[] = [];
+      let orgQty = order.quantity;
       while (i < this.asks.length && remainingQty > 0) {
         const currAsk = this.asks[i];
 
@@ -60,18 +62,23 @@ class Orderbook {
         const trade = this.executeTrade(order, currAsk!);
 
         trades.push(trade);
+        remainingQty -= trade.quantity;
 
-        if (trade.quantity >= remainingQty) break;
-        i++;
+        if (currAsk?.quantity! <= 0) {
+          this.asks.splice(i, 1);
+        } else {
+          i++;
+        }
       }
-
-      const orderData: IOrderResponse = {
+      let orderData : IOrderResponse | null = null;
+      
+      orderData = {
         streamId: order.streamId,
-        status: order.status,
-        quantity: remainingQty,
+        status: remainingQty === 0 ? "FILLED" : remainingQty < orgQty ? "PARTIALLY_FILLED" : "OPEN",
+        quantity: orgQty,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        filledQuantity: order.quantity - remainingQty,
+        filledQuantity: orgQty - remainingQty,
         side: order.side,
         type: order.type,
         requestId: order.requestId,
@@ -80,16 +87,18 @@ class Orderbook {
         event: "CREATE_ORDER",
         price: order.price,
       };
-
-      this.bids.push(orderData);
+      if(remainingQty > 0) {
+        this.bids.push(orderData as IOrderResponse);
+      }
 
       return {
-        order: orderData,
-        trades: trades && trades.length > 0 ? trades : null,
+        taker: orderData ? orderData : null,
+        trades: trades && trades.length > 0 ? trades : [],
       };
     } else if (order.side === "SELL") {
       let remainingQty = order.quantity;
       let i = 0;
+      let orgQty = order.quantity;
       let trades: ITrade[] = [];
       while (i < this.bids.length && remainingQty > 0) {
         const currBid = this.bids[i];
@@ -97,20 +106,26 @@ class Orderbook {
         if (currBid?.price! > order.price) break;
 
         const trade = this.executeTrade(order, currBid!);
-
         trades.push(trade);
-
+        remainingQty-= trade.quantity;
+        
         if (trade.quantity >= remainingQty) break;
-        i++;
+
+        if(currBid?.quantity! <= 0) {
+          this.bids.splice(i, 1);
+          break;
+        }else {
+          i++;
+        }
       }
 
       const orderData: IOrderResponse = {
         streamId: order.streamId,
-        status: order.status,
-        quantity: remainingQty,
+        status: remainingQty === 0 ? "FILLED" : remainingQty !== orgQty ? "PARTIALLY_FILLED" : "OPEN",
+        quantity: orgQty,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        filledQuantity: order.quantity - remainingQty,
+        filledQuantity: orgQty - remainingQty,
         side: order.side,
         type: order.type,
         requestId: order.requestId,
@@ -120,17 +135,17 @@ class Orderbook {
         price: order.price,
       };
 
-      this.asks.push(orderData);
+      if(remainingQty > 0) this.asks.push(orderData);
 
       return {
-        order: orderData,
-        trades: trades && trades.length > 0 ? trades : null,
+        order: orderData ? orderData : null,
+        trades: trades && trades.length > 0 ? trades : [],
       };
     }
 
     return {
       order: null,
-      trades: null,
+      trades: [],
     };
   }
 
@@ -192,7 +207,10 @@ class Orderbook {
       askId: ask.id!,
     };
 
-    this.tradeHisotry.push(trade);
+    this.tradeHistory.push(trade);
+    this.lastPrice = price;
+    this.highPrice24h = Math.max(this.highPrice24h, price);
+    this.lowPrice24h = Math.min(this.lowPrice24h, price);
 
     bid.quantity -= tradeQty;
     ask.quantity -= tradeQty;

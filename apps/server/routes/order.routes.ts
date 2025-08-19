@@ -88,6 +88,7 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       requestId,
+      message : "Order Successfully Initiated"
     });
   } catch (error) {
     console.log(error);

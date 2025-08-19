@@ -5,6 +5,7 @@ import rateLimiter from "../middlewares/rateLimiter";
 import { sign } from "jsonwebtoken";
 import { JWT_SECRET } from "../utils/config";
 import { DefaultAssets } from "../utils/constants";
+import { RequestOTPSchema, VerifyOTPSchema } from "@repo/common";
 
 const authRouter: Router = Router();
 
@@ -22,14 +23,18 @@ authRouter.post(
   "/request-otp",
   rateLimiter,
   async (req: Request, res: Response) => {
-    const { email } = req.body;
+    const { error, data } = RequestOTPSchema.safeParse(req.body);
 
-    if (!email) {
+    if (error) {
       res.status(400).json({
         message: "Email should be provided",
+        error : error
       });
       return;
     }
+
+
+    const { email } = data;
 
     try {
       const user = await prisma.user.upsert({
@@ -59,6 +64,8 @@ authRouter.post(
       const alreadyOTPExists = await redisClient.get(`OTP:${user.id}`);
 
       if (alreadyOTPExists) {
+
+      console.log(alreadyOTPExists);
         res.status(200).json({
           message: "OTP successfully sent!",
           id: user.id,
@@ -73,6 +80,9 @@ authRouter.post(
         "PX",
         OTP_EXPIRATION_DURATION
       );
+
+      console.log(otp);
+      
 
       res.status(200).json({
         message: "OTP successfully sent!",
@@ -93,7 +103,16 @@ authRouter.post(
   rateLimiter,
   async (req: Request, res: Response) => {
     try {
-      const { email, otp } = req.body;
+      const { error, data } = VerifyOTPSchema.safeParse(req.body);
+
+      if(error) {
+        res.status(400).json({
+          message : error.message,
+        });
+        return;
+      }
+
+      const { otp, email } = data;
 
       const user = await prisma.user.findFirst({
         where: {
@@ -117,7 +136,7 @@ authRouter.post(
         return;
       }
 
-      if (parseInt(userOTP) !== otp) {
+      if (userOTP !== otp) {
         res.status(403).json({
           message: "wrong otp",
         });

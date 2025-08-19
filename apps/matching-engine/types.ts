@@ -1,7 +1,7 @@
 import type WebSocket from "ws";
 import type Orderbook from "./orderbook";
 
-export type ORDER_STATUS = "OPEN" | "PARTIAL" | "FILLED" | "CANCELLED";
+export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 
 export interface IOrder {
   type: "LIMIT" | "MARKET";

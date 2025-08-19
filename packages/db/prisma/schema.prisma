@@ -52,15 +52,15 @@ model Order {
 
 model Trade {
   id          String   @id @default(uuid())
-  buyOrderId  String
-  sellOrderId String
+  bidId  String
+  askId String
   price       Float
   quantity    Float
   pair        String
   executedAt  DateTime @default(now())
 
-  buyOrder  Order @relation("BuyTrades", fields: [buyOrderId], references: [id])
-  sellOrder Order @relation("SellTrades", fields: [sellOrderId], references: [id])
+  bid  Order @relation("BuyTrades", fields: [bidId], references: [id])
+  ask Order @relation("SellTrades", fields: [askId], references: [id])
 }
 
 enum SIDE {
@@ -70,7 +70,7 @@ enum SIDE {
 
 enum ORDER_STATUS {
   OPEN
-  PARTIAL
+  PARTIALLY_FILLED
   FILLED
   CANCELLED
 }

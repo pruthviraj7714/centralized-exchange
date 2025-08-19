@@ -226,7 +226,7 @@ const validateCancelOrder = async (order: OrderEvent): Promise<boolean> => {
     return false;
   }
 
-  if (odr.status === "FILLED" || odr.status === "PARTIAL") {
+  if (odr.status === "FILLED" || odr.status === "PARTIALLY_FILLED") {
     console.error(
       "order is already filled or partially filled, cannot cancel now"
     );
