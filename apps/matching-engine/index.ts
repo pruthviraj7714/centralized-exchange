@@ -6,7 +6,7 @@ import Orderbook from "./orderbook";
 import {
   createConsumerGroup,
   handleCancelOrder,
-  handleCreateOrder,
+  handleMatchOrder,
   parseStreamData,
 } from "./matchingEngineService";
 import redisClient from "@repo/redisclient";
@@ -210,7 +210,7 @@ async function processOrders(orders: IOrderResponse[]) {
     try {
       switch (order.event) {
         case "CREATE_ORDER": {
-          await handleCreateOrder(orderbookData, order);
+          await handleMatchOrder(orderbookData, order);
           broadcastMessageToClients(orderbookData, {
             type: "ORDERBOOK_UPDATE",
             pair: order.pair,

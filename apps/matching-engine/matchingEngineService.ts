@@ -4,8 +4,7 @@ import {
   MATCHING_ENGINE_STREAM,
   PERSISTENCE_STREAM,
 } from "./config";
-import type { IOrderbookData, IOrderResponse, ORDER_STATUS } from "./types";
-import Orderbook from "./orderbook";
+import type { IOrderbookData, IOrderResponse } from "./types";
 
 export const handleCancelOrder = async (
   orderbookData: IOrderbookData,
@@ -20,7 +19,24 @@ export const handleCancelOrder = async (
     const isCancelled = orderbookData.orderbook.cancelOrder(orderData.orderId);
 
     if (isCancelled) {
-      await persistOrder(orderData, "Order.Cancel", "CANCELLED");
+      const data = {
+        ...orderData,
+        status : "CANCELLED",
+        event: "Order.Cancel",
+      };
+  
+      await redisClient.xadd(
+        PERSISTENCE_STREAM,
+        "*",
+        "data",
+        JSON.stringify(data)
+      );
+  
+      await redisClient.xack(
+        MATCHING_ENGINE_STREAM,
+        GROUP_NAME,
+        orderData.streamId
+      );
       console.log("Order cancelled successfully:", orderData.orderId);
     } else {
       console.warn("Order not found or already cancelled:", orderData.orderId);
@@ -37,59 +53,45 @@ export const handleCancelOrder = async (
   }
 };
 
-export const persistTrades = async (trades: any[]): Promise<void> => {
-  try {
-    const persistPromises = trades.map(async (trade) => {
-      const tradeData = {
-        ...trade,
-        event: "Trade.Create",
-      };
+// export const persistTrades = async (trades: any[]): Promise<void> => {
+//   try {
+//     const persistPromises = trades.map(async (trade) => {
+//       const tradeData = {
+//         ...trade,
+//         event: "Trade.Create",
+//       };
 
-      return redisClient.xadd(
-        PERSISTENCE_STREAM,
-        "*",
-        "data",
-        JSON.stringify(tradeData)
-      );
-    });
+//       return redisClient.xadd(
+//         PERSISTENCE_STREAM,
+//         "*",
+//         "data",
+//         JSON.stringify(tradeData)
+//       );
+//     });
 
-    await Promise.all(persistPromises);
-    console.log(`Persisted ${trades.length} trades`);
-  } catch (error) {
-    console.error("Error persisting trades:", error);
-    throw error;
-  }
-};
+//     await Promise.all(persistPromises);
+//     console.log(`Persisted ${trades.length} trades`);
+//   } catch (error) {
+//     console.error("Error persisting trades:", error);
+//     throw error;
+//   }
+// };
 
-export const persistOrder = async (
-  order: IOrderResponse,
-  eventType: string,
-  orderStatus: ORDER_STATUS
-): Promise<void> => {
-  try {
-    const orderData = {
-      ...order,
-      status: orderStatus,
-      event: eventType,
-    };
+// export const persistOrder = async (
+//   order: IOrderResponse,
+//   eventType: string,
+//   orderStatus: ORDER_STATUS
+// ): Promise<void> => {
+//   try {
 
-    await redisClient.xadd(
-      PERSISTENCE_STREAM,
-      "*",
-      "data",
-      JSON.stringify(orderData)
-    );
+//     console.log(`Persisted order with event: ${eventType}`);
+//   } catch (error) {
+//     console.error(`Error persisting order (${eventType}):`, error);
+//     throw error;
+//   }
+// };
 
-    await redisClient.xack(MATCHING_ENGINE_STREAM, GROUP_NAME, order.streamId);
-
-    console.log(`Persisted order with event: ${eventType}`);
-  } catch (error) {
-    console.error(`Error persisting order (${eventType}):`, error);
-    throw error;
-  }
-};
-
-export const handleCreateOrder = async (
+export const handleMatchOrder = async (
   orderbookData: IOrderbookData,
   orderData: IOrderResponse
 ): Promise<void> => {
@@ -101,29 +103,36 @@ export const handleCreateOrder = async (
       return;
     }
 
-    const { trades, order } = result;
+    const { trades, makers, taker } = result;
 
-    if (!order && (!trades || trades.length === 0)) {
+    if (!taker && (!trades || trades.length === 0)) {
       console.error("Order placement failed - no order or trades created");
       return;
     }
 
-    if (trades && trades.length > 0) {
-      await persistTrades(trades);
-      return;
-    }
+    const data = {
+      event: "Order.CreateWithTrades",
+      data: {
+        makers,
+        taker,
+        trades,
+      },
+    };
 
-    if (!trades && order) {
-      await persistOrder(order, "Order.Create", "OPEN");
-    } else if (trades && order && order.quantity > 0) {
-      await persistOrder(order, "Order.Create", "PARTIALLY_FILLED");
-    }
+    await redisClient.xadd(
+      PERSISTENCE_STREAM,
+      "*",
+      "data",
+      JSON.stringify(data)
+    );
 
-    if (order?.filledQuantity === order?.quantity) {
-      await persistOrder(order!, "Order.Create", "FILLED");
-    }
+    await redisClient.xack(
+      MATCHING_ENGINE_STREAM,
+      GROUP_NAME,
+      orderData.streamId
+    );
   } catch (error) {
-    console.error("Error handling CREATE_ORDER:", error);
+    console.error("Error while mathing order :", error);
     throw error;
   }
 };
