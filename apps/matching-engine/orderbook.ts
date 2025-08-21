@@ -49,11 +49,10 @@ class Orderbook {
     trades: ITrade[];
   } {
     if (order.side === "BUY") {
-      let remainingQty = order.quantity;
       let i = 0;
       let trades: ITrade[] = [];
       let makers: IOrderResponse[] = [];
-      let orgQty = order.quantity;
+      let remainingQty = order.quantity;
       while (i < this.asks.length && remainingQty > 0) {
         const currAsk = this.asks[i];
 
@@ -64,7 +63,7 @@ class Orderbook {
         trades.push(trade);
         remainingQty -= trade.quantity;
 
-        if (currAsk?.quantity! <= 0) {
+        if ((currAsk?.filledQuantity || 0) >= currAsk?.quantity!) {
           makers.push(currAsk!);
           this.asks.splice(i, 1);
         } else {
@@ -72,29 +71,22 @@ class Orderbook {
         }
       }
       let orderData: IOrderResponse | null = null;
-
       orderData = {
-        streamId: order.streamId,
+        ...order,
         status:
           remainingQty === 0
             ? "FILLED"
-            : remainingQty < orgQty
+            : remainingQty < order.quantity
               ? "PARTIALLY_FILLED"
               : "OPEN",
-        quantity: orgQty,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        filledQuantity: orgQty - remainingQty,
-        side: order.side,
-        type: order.type,
-        requestId: order.requestId,
-        pair: order.pair,
-        userId: order.userId,
-        event: "CREATE_ORDER",
-        price: order.price,
+        filledQuantity: order.quantity - remainingQty,
       };
       if (remainingQty > 0) {
+        order.quantity = remainingQty;
         this.bids.push(orderData as IOrderResponse);
+        this.sortOrders(this.bids, "BUY");
       }
       return {
         taker: orderData ? orderData : null,
@@ -102,53 +94,45 @@ class Orderbook {
         trades: trades && trades.length > 0 ? trades : [],
       };
     } else if (order.side === "SELL") {
-      let remainingQty = order.quantity;
       let i = 0;
-      let orgQty = order.quantity;
       let trades: ITrade[] = [];
       let makers: IOrderResponse[] = [];
+      let remainingQty = order.quantity;
       while (i < this.bids.length && remainingQty > 0) {
         const currBid = this.bids[i];
 
-        if (currBid?.price! > order.price) break;
+        if (currBid?.price! < order.price) break;
 
         const trade = this.executeTrade(currBid!, order);
         trades.push(trade);
-        remainingQty -= trade.quantity;
 
-        if (trade.quantity >= remainingQty) break;
+        remainingQty -= trade.quantity
 
-        if (currBid?.quantity! <= 0) {
+        if ((currBid?.filledQuantity || 0) >= currBid?.quantity!) {
           makers.push(currBid!);
           this.bids.splice(i, 1);
-          break;
         } else {
           i++;
         }
       }
-
       const orderData: IOrderResponse = {
-        streamId: order.streamId,
+        ...order,
         status:
           remainingQty === 0
             ? "FILLED"
-            : remainingQty !== orgQty
+            : remainingQty < order.quantity
               ? "PARTIALLY_FILLED"
               : "OPEN",
-        quantity: orgQty,
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        filledQuantity: orgQty - remainingQty,
-        side: order.side,
-        type: order.type,
-        requestId: order.requestId,
-        pair: order.pair,
-        userId: order.userId,
-        event: "CREATE_ORDER",
-        price: order.price,
+        filledQuantity: order.quantity - remainingQty,
       };
 
-      if (remainingQty > 0) this.asks.push(orderData);
+      if (remainingQty > 0) {
+        order.quantity = remainingQty;
+        this.asks.push(orderData);
+        this.sortOrders(this.asks, "SELL");
+      }
 
       return {
         taker: orderData ? orderData : null,
@@ -229,6 +213,9 @@ class Orderbook {
 
     bid.quantity -= tradeQty;
     ask.quantity -= tradeQty;
+
+    bid.filledQuantity = (bid.filledQuantity || 0) + tradeQty;
+    ask.filledQuantity = (ask.filledQuantity || 0) + tradeQty;
 
     return trade;
   }
