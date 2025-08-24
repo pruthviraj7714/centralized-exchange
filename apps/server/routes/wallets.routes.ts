@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from "express";
 import authMiddleware from "../middlewares/authMiddleware";
 import prisma from "@repo/db";
-import { DefaultAssets, SUPPORTED_PAIRS } from "../utils/constants";
+import { DefaultAssets } from "../utils/constants";
 
 const walletsRouter: Router = Router();
 

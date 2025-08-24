@@ -4,7 +4,7 @@ import { OrderSchema } from "@repo/common";
 import prisma from "@repo/db";
 import { SUPPORTED_PAIRS } from "../utils/constants";
 import redisClient from "@repo/redisclient";
-import { ORDER_STREAM } from "../utils/config";
+import { MATCHING_ENGINE_STREAM } from "../utils/config";
 
 const orderRouter: Router = Router();
 
@@ -66,6 +66,157 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
 
     const requestId = crypto.randomUUID();
 
+    const wallets = await prisma.wallet.findMany({
+      where: { userId },
+    });
+
+    const [baseAsset, quoteAsset] = pair?.split("-")!;
+
+    if (!baseAsset || !quoteAsset) {
+      res.status(400).json({ message: "invalid ticker" });
+      return;
+    }
+
+    const baseWallet = wallets.find((w) => w.asset === baseAsset);
+    const quoteWallet = wallets.find((w) => w.asset === quoteAsset);
+
+    if (!quoteWallet) {
+      res.status(400).json({ message: "no quote asset wallet found" });
+      return;
+    }
+
+    if (!baseWallet) {
+      res.status(400).json({ message: "no base asset wallet found" });
+      return;
+    }
+
+    if (side === "BUY" && type === "LIMIT") {
+      if (price === 0 || quantity === 0) {
+        res
+          .status(400)
+          .json({ message: "qty & price should be greater than 0" });
+        return;
+      }
+
+      const amount = price * quantity;
+
+      if (quoteWallet.available < amount) {
+        res.status(400).json({ message: "insuffcient funds!" });
+        return;
+      }
+-``
+      await prisma.wallet.update({
+        where: {
+          id: quoteWallet?.id,
+        },
+        data: {
+          available: {
+            decrement: amount,
+          },
+          locked: {
+            increment: amount,
+          },
+        },
+      });
+    }
+
+    // if (side === "BUY" && order.type === "MARKET") {
+    //   if (parseFloat(order.quantity) === 0) {
+    //     console.log("amount should be greater than 0");
+    //     return false;
+    //   }
+
+    //   const bestPrice = await redisClient.get(`Best-Ask:${order.pair}`);
+
+    //   if (!bestPrice) {
+    //     console.log("no best price found");
+    //     return false;
+    //   }
+
+    //   const amount =
+    //     (bestPrice ? parseFloat(bestPrice) : 0) * parseInt(order.quantity);
+
+    //   if (quoteWallet.available < amount) {
+    //     console.log("insufficient funds");
+    //     return false;
+    //   }
+
+    //   try {
+    //     await prisma.wallet.update({
+    //       where: {
+    //         id: quoteWallet?.id,
+    //       },
+    //       data: {
+    //         available: {
+    //           decrement: amount,
+    //         },
+    //         locked: {
+    //           increment: amount,
+    //         },
+    //       },
+    //     });
+    //   } catch (error) {
+    //     return false;
+    //   }
+
+    //   return true;
+    // }
+
+    if (side === "SELL" && type === "LIMIT") {
+      const quantityToLock = quantity;
+
+      if (baseWallet.available < quantityToLock) {
+        res.status(400).json({ message: "insufficient balance" });
+        return;
+      }
+      await prisma.wallet.update({
+        where: {
+          id: baseWallet?.id,
+        },
+        data: {
+          available: {
+            decrement: quantityToLock,
+          },
+          locked: {
+            increment: quantityToLock,
+          },
+        },
+      });
+    }
+
+    // if (side === "SELL" && order.type === "MARKET") {
+    //   const qty = parseFloat(order.quantity);
+
+    //   if (qty === 0) {
+    //     console.log("quantity should be more than 0");
+    //     return false;
+    //   }
+
+    //   if (qty > baseWallet.available) {
+    //     console.log("you don't have enought qty");
+    //     return false;
+    //   }
+    //   try {
+    //     await prisma.wallet.update({
+    //       where: {
+    //         id: baseWallet?.id,
+    //       },
+    //       data: {
+    //         available: {
+    //           decrement: qty,
+    //         },
+    //         locked: {
+    //           increment: qty,
+    //         },
+    //       },
+    //     });
+
+    //     return true;
+    //   } catch (error) {
+    //     return false;
+    //   }
+    // }
+
     let orderData = {
       event: "CREATE_ORDER",
       requestId,
@@ -79,7 +230,7 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     };
 
     await redisClient.xadd(
-      ORDER_STREAM,
+      MATCHING_ENGINE_STREAM,
       "*",
       "data",
       JSON.stringify(orderData)
@@ -88,11 +239,11 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     res.status(200).json({
       success: true,
       requestId,
-      message : "Order Successfully Initiated"
+      message: "Order Successfully Initiated",
     });
   } catch (error) {
     console.log(error);
-    
+
     res.status(500).json({
       message: "Internal Server Error",
       success: false,
@@ -160,6 +311,18 @@ orderRouter.delete(
         return;
       }
 
+      if (order.status === "CANCELLED") {
+        res.status(400).json({ message: "order is already cancelled" });
+        return;
+      }
+
+      if (order.status === "FILLED" || order.status === "PARTIALLY_FILLED") {
+        console.error(
+          "order is already filled or partially filled, cannot cancel now"
+        );
+        return;
+      }
+
       const cancelRequestId = crypto.randomUUID();
 
       const cancelRequest = {
@@ -171,7 +334,7 @@ orderRouter.delete(
       };
 
       await redisClient.xadd(
-        ORDER_STREAM,
+        MATCHING_ENGINE_STREAM,
         "*",
         "data",
         JSON.stringify(cancelRequest)

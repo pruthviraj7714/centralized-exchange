@@ -48,10 +48,10 @@ const sendOrderbookSnapshot = async (
   try {
     const snapshot = {
       type: "ORDERBOOK_SNAPSHOT",
-        bids: orderbookData.orderbook.getBids(),
-        asks: orderbookData.orderbook.getAsks(),
-        lastPrice : orderbookData.orderbook.lastPrice,
-        timestamp: Date.now(),
+      bids: orderbookData.orderbook.getBids(),
+      asks: orderbookData.orderbook.getAsks(),
+      lastPrice: orderbookData.orderbook.lastPrice,
+      timestamp: Date.now(),
     };
 
     broadcastMessageToClient(ws, snapshot);
@@ -210,13 +210,13 @@ async function processOrders(orders: IOrderResponse[]) {
       switch (order.event) {
         case "CREATE_ORDER": {
           const isDone = await handleMatchOrder(orderbookData, order);
-          if(isDone) {
+          if (isDone) {
             broadcastMessageToClients(orderbookData, {
               type: "ORDERBOOK_UPDATE",
               pair: order.pair,
               bids: orderbookData.orderbook.getBids(),
               asks: orderbookData.orderbook.getAsks(),
-              lastPrice : orderbookData.orderbook.lastPrice,
+              lastPrice: orderbookData.orderbook.lastPrice,
               timestamp: Date.now(),
             });
             await redisClient.xack(

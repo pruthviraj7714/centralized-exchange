@@ -1,2 +1,2 @@
 export const JWT_SECRET = process.env.JWT_SECRET!;
-export const ORDER_STREAM = process.env.ORDER_STREAM!;
+export const MATCHING_ENGINE_STREAM = process.env.MATCHING_ENGINE_STREAM!;

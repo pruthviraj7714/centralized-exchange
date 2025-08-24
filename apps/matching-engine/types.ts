@@ -43,7 +43,7 @@ export interface IOrderResponse {
   orderId?: string;
   updatedAt: number;
   streamId: string;
-  event?: "CREATE_ORDER" | "CANCEL_ORDER";
+  event?: "CREATE_ORDER" | "CANCEL_ORDER" | "ERROR";
   type: "LIMIT" | "MARKET";
   status: ORDER_STATUS;
 }
