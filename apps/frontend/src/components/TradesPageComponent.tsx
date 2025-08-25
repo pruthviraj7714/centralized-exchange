@@ -1,77 +1,119 @@
-"use client"
+"use client";
 
-import useSocket from "@/hooks/useSocket"
-import { useEffect, useState } from "react"
-import { Label } from "./ui/label"
-import { Input } from "./ui/input"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { toast } from "sonner"
-import axios from "axios"
-import { BACKEND_URL } from "@/lib/config"
-import { Button } from "./ui/button"
-import { TrendingUp, TrendingDown, DollarSign, BarChart3 } from "lucide-react"
+import useSocket from "@/hooks/useSocket";
+import { useEffect, useState } from "react";
+import { Label } from "./ui/label";
+import { Input } from "./ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { toast } from "sonner";
+import axios from "axios";
+import { BACKEND_URL } from "@/lib/config";
+import { Button } from "./ui/button";
+import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 
-type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED"
+type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
-  id?: string
-  requestId: string
-  userId: string
-  side: "BUY" | "SELL"
-  pair: string
-  price: number
-  quantity: number
-  filledQuantity: number
-  createdAt: number
-  orderId?: string
-  updatedAt: number
-  streamId: string
-  event?: "CREATE_ORDER" | "CANCEL_ORDER"
-  type: "LIMIT" | "MARKET"
-  status: ORDER_STATUS
+  id?: string;
+  requestId: string;
+  userId: string;
+  side: "BUY" | "SELL";
+  pair: string;
+  price: number;
+  quantity: number;
+  filledQuantity: number;
+  createdAt: number;
+  orderId?: string;
+  updatedAt: number;
+  streamId: string;
+  event?: "CREATE_ORDER" | "CANCEL_ORDER";
+  type: "LIMIT" | "MARKET";
+  status: ORDER_STATUS;
 }
 
+const transformOrderbook = (
+  orders: IOrderResponse[]
+): {
+  price: number;
+  size: number;
+  total: number;
+  requestId: string;
+}[] => {
+  let orderbook: {
+    price: number;
+    size: number;
+    total: number;
+    requestId: string;
+  }[] = [];
+  let currTotal = 0;
+  let lastOrderIndex = 0;
+  for (let i = 0; i < orders.length; i++) {
+      if (i !== 0 && orderbook.length > 0  && orders[lastOrderIndex].price === orders[i].price) {
+        orderbook[lastOrderIndex].size += orders[i].quantity;
+        orderbook[lastOrderIndex].total += orders[i].quantity;
+      } else {
+        orderbook.push({
+          price: orders[i].price,
+          requestId: orders[i].requestId,
+          size: orders[i].quantity,
+          total: orders[i].quantity + currTotal,
+        });
+    }
+    lastOrderIndex = orderbook.length - 1;
+    currTotal += orders[i].quantity
+  }
+
+  return orderbook;
+};
+
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
-  const { isConnected, socket } = useSocket(ticker)
-  const [currentTab, setCurrentTab] = useState<"BUY" | "SELL">("BUY")
-  const [bids, setBids] = useState<IOrderResponse[]>([])
-  const [asks, setAsks] = useState<IOrderResponse[]>([])
-  const [lastPrice, setLastPrice] = useState<number | null>(null)
-  const [quantity, setQuantity] = useState(0)
-  const [price, setPrice] = useState(0)
-  const authToken = localStorage.getItem("user-auth")
+  const { isConnected, socket } = useSocket(ticker);
+  const [currentTab, setCurrentTab] = useState<"BUY" | "SELL">("BUY");
+  const [bids, setBids] = useState<IOrderResponse[]>([]);
+  const [asks, setAsks] = useState<IOrderResponse[]>([]);
+  const [lastPrice, setLastPrice] = useState<number | null>(null);
+  const [quantity, setQuantity] = useState(0);
+  const [price, setPrice] = useState(0);
+  const authToken = localStorage.getItem("user-auth");
 
   useEffect(() => {
     if (socket && isConnected) {
       socket.send(
         JSON.stringify({
           type: "GET_ORDERBOOK",
-        }),
-      )
+        })
+      );
     }
-  }, [socket, isConnected, ticker])
+  }, [socket, isConnected, ticker]);
 
   useEffect(() => {
-    if (!socket) return
+    if (!socket) return;
 
     socket.onmessage = ({ data }) => {
-      const payload = JSON.parse(data.toString())
+      const payload = JSON.parse(data.toString());
 
       switch (payload.type) {
         case "ORDERBOOK_SNAPSHOT": {
-          setBids(payload.bids)
-          setAsks(payload.asks)
-          setLastPrice(payload.lastPrice)
+          setBids(payload.bids);
+          setAsks(payload.asks);
+          setLastPrice(payload.lastPrice);
           break;
         }
-        case "ORDERBOOK_UPDATE" : {
-          setBids(payload.bids)
-          setAsks(payload.asks)
-          setLastPrice(payload.lastPrice)
+        case "ORDERBOOK_UPDATE": {
+          setBids(payload.bids);
+          setAsks(payload.asks);
+          setLastPrice(payload.lastPrice);
           break;
         }
       }
-    }
-  }, [socket, isConnected])
+    };
+  }, [socket, isConnected]);
 
   const handlePlaceOrder = async (side: "BUY" | "SELL") => {
     try {
@@ -81,20 +123,20 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
           side,
           quantity,
           price,
-          type: "LIMIT", 
+          type: "LIMIT",
           pair: ticker,
         },
         {
           headers: {
             Authorization: authToken,
           },
-        },
-      )
-      toast.success(response.data.message)
+        }
+      );
+      toast.success(response.data.message);
     } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message)
+      toast.error(error.response.data.message ?? error.message);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6">
@@ -107,7 +149,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             {lastPrice && (
               <div className="flex items-center space-x-2 bg-slate-800/50 backdrop-blur-sm rounded-lg px-4 py-2 border border-slate-700">
                 {/* <DollarSign className="w-5 h-5 text-emerald-400" /> */}
-                <span className="text-2xl font-bold text-emerald-400">${lastPrice.toFixed(2)}</span>
+                <span className="text-2xl font-bold text-emerald-400">
+                  ${lastPrice.toFixed(2)}
+                </span>
               </div>
             )}
           </div>
@@ -148,16 +192,24 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
               <div className="space-y-4">
                 <div>
-                  <Label className="text-slate-300 font-medium mb-2 block">Price (USD)</Label>
+                  <Label className="text-slate-300 font-medium mb-2 block">
+                    Price (USD)
+                  </Label>
                   <Input
                     onChange={(e) => setPrice(e.target.valueAsNumber)}
                     type="number"
-                    placeholder={currentTab === "BUY" ? "Enter bid price" : "Enter ask price"}
+                    placeholder={
+                      currentTab === "BUY"
+                        ? "Enter bid price"
+                        : "Enter ask price"
+                    }
                     className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
                   />
                 </div>
                 <div>
-                  <Label className="text-slate-300 font-medium mb-2 block">Quantity</Label>
+                  <Label className="text-slate-300 font-medium mb-2 block">
+                    Quantity
+                  </Label>
                   <Input
                     onChange={(e) => setQuantity(e.target.valueAsNumber)}
                     type="number"
@@ -173,7 +225,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                       : "bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25"
                   }`}
                 >
-                  {currentTab === "BUY" ? "Place Buy Order" : "Place Sell Order"}
+                  {currentTab === "BUY"
+                    ? "Place Buy Order"
+                    : "Place Sell Order"}
                 </Button>
               </div>
             </div>
@@ -193,24 +247,41 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                     <Table>
                       <TableHeader>
                         <TableRow className="border-slate-700 hover:bg-slate-800/50">
-                          <TableHead className="text-slate-300 font-medium">Quantity</TableHead>
-                          <TableHead className="text-slate-300 font-medium">Price (USD)</TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Price (USD)
+                          </TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Size ({ticker.split("-")[0]})
+                          </TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Total ({ticker.split("-")[0]})
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {asks && asks.length > 0 ? (
-                          [...asks].reverse().map((ask) => (
+                          [...transformOrderbook(asks)].reverse().map((ask) => (
                             <TableRow
                               key={ask.requestId}
                               className="border-slate-700 hover:bg-red-900/10 transition-colors"
                             >
-                              <TableCell className="text-slate-200">{ask.quantity}</TableCell>
-                              <TableCell className="text-red-400 font-medium">${ask.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-red-400 font-medium">
+                                ${ask.price.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-slate-200">
+                                {ask.size}
+                              </TableCell>
+                              <TableCell className="text-slate-200">
+                                {ask.total}
+                              </TableCell>
                             </TableRow>
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={2} className="text-center text-slate-400 py-8">
+                            <TableCell
+                              colSpan={2}
+                              className="text-center text-slate-400 py-8"
+                            >
                               No ask orders available
                             </TableCell>
                           </TableRow>
@@ -229,24 +300,41 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                     <Table>
                       <TableHeader>
                         <TableRow className="border-slate-700 hover:bg-slate-800/50">
-                          <TableHead className="text-slate-300 font-medium">Quantity</TableHead>
-                          <TableHead className="text-slate-300 font-medium">Price (USD)</TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Price (USD)
+                          </TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Size ({ticker.split("-")[0]})
+                          </TableHead>
+                          <TableHead className="text-slate-300 font-medium">
+                            Total ({ticker.split("-")[0]})
+                          </TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {bids && bids.length > 0 ? (
-                          bids.map((bid) => (
+                          transformOrderbook(bids).map((bid) => (
                             <TableRow
                               key={bid.requestId}
                               className="border-slate-700 hover:bg-emerald-900/10 transition-colors"
                             >
-                              <TableCell className="text-slate-200">{bid.quantity}</TableCell>
-                              <TableCell className="text-emerald-400 font-medium">${bid.price.toFixed(2)}</TableCell>
+                              <TableCell className="text-emerald-400 font-medium">
+                                ${bid.price.toFixed(2)}
+                              </TableCell>
+                              <TableCell className="text-slate-200">
+                                {bid.size}
+                              </TableCell>
+                              <TableCell className="text-slate-200">
+                                {bid.total}
+                              </TableCell>
                             </TableRow>
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={2} className="text-center text-slate-400 py-8">
+                            <TableCell
+                              colSpan={2}
+                              className="text-center text-slate-400 py-8"
+                            >
                               No bid orders available
                             </TableCell>
                           </TableRow>
@@ -261,5 +349,5 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
