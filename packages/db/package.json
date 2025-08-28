@@ -7,7 +7,8 @@
     "." : "./index.ts"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@repo/common" : "*"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -34,33 +34,47 @@ model Wallet {
 }
 
 model Order {
-  id         String       @id @default(uuid())
-  userId     String
-  side       SIDE
-  pair       String
-  price      Float        @default(0)
-  quantity   Float
-  filledQuantity  Float     @default(0)
-  createdAt  DateTime     @default(now())
-  updatedAt   DateTime    @updatedAt
-  type       ORDER_TYPE
-  status     ORDER_STATUS
-  buyTrades  Trade[]      @relation("BuyTrades")
-  sellTrades Trade[]      @relation("SellTrades")
-  user       User         @relation(fields: [userId], references: [id])
+  id             String       @id @default(uuid())
+  userId         String
+  side           SIDE
+  pair           String
+  price          Float        @default(0)
+  quantity       Float
+  filledQuantity Float        @default(0)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  type           ORDER_TYPE
+  status         ORDER_STATUS
+  buyTrades      Trade[]      @relation("BuyTrades")
+  sellTrades     Trade[]      @relation("SellTrades")
+  user           User         @relation(fields: [userId], references: [id])
 }
 
 model Trade {
-  id          String   @id @default(uuid())
-  bidId  String
-  askId String
-  price       Float
-  quantity    Float
-  pair        String
-  executedAt  DateTime @default(now())
+  id         String   @id @default(uuid())
+  bidId      String
+  askId      String
+  price      Float
+  quantity   Float
+  pair       String
+  executedAt DateTime @default(now())
 
-  bid  Order @relation("BuyTrades", fields: [bidId], references: [id])
+  bid Order @relation("BuyTrades", fields: [bidId], references: [id])
   ask Order @relation("SellTrades", fields: [askId], references: [id])
+}
+
+model Market {
+  id          String   @id @default(uuid())
+  ticker      String
+  baseAsset   String
+  quoteAsset  String
+  price       Float
+  volume24h   Float
+  marketCap   Float
+  change24h   Float
+  sparkline7d Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 enum SIDE {
