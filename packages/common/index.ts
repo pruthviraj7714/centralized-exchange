@@ -17,3 +17,14 @@ export const VerifyOTPSchema = z.object({
     email : z.email({error : "Please Provide a Valid Email"}),
     otp: z.string().length(6, { message: "Invalid OTP" })
 })
+
+
+export const SUPPORTED_MARKETS = [
+    "BTC-USDT", "BTC-USDC",
+    "ETH-USDT", "ETH-USDC", 
+    "SOL-USDT", "SOL-USDC",
+    "ETH-BTC",
+    "SOL-BTC",
+    "SOL-ETH",
+    "USDC-USDT"
+  ];

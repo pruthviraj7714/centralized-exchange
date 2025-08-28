@@ -23,6 +23,7 @@ function parseStreamData(streams: any[]) {
   }
   return results;
 }
+
 const createConsumerGroup = async () => {
   try {
     await redisClient.xgroup(
@@ -40,6 +41,7 @@ const createConsumerGroup = async () => {
     }
   }
 };
+
 const handleEvent = async (
   eventFn: (order: OrderEvent) => void | any,
   order: OrderEvent
@@ -47,7 +49,6 @@ const handleEvent = async (
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await eventFn(order);
-      console.log("order successfully cancelled");
       //TODO:sending it to client via publisher
       return;
     } catch (err) {
@@ -69,7 +70,6 @@ const handleEvent = async (
     }
   }
 };
-
 
 const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
   const odr = await prisma.order.findUnique({
@@ -134,50 +134,6 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
     console.error(error);
   }
 };
-// const handleCreateOrder = async (order: OrderEvent): Promise<void> => {
-//   try {
-//     if (order.event === "Order.Create") {
-//       console.log(order);
-
-//       await prisma.order.create({
-//         data: {
-//           pair: order.pair,
-//           quantity: order.quantity,
-//           side: order.side,
-//           type: order.type,
-//           status: order.status,
-//           filledQuantity: order.quantity,
-//           userId: order.userId,
-//         },
-//       });
-//     }
-//     await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
-//     console.log("order successfully created");
-//   } catch (error) {
-//     console.error(error);
-//   }
-// };
-// const handleCreateTrade = async (order: OrderEvent): Promise<void> => {
-//   try {
-//     if (order.event === "Trade.Create") {
-//       await prisma.trade.create({
-//         data: {
-//           pair: order.pair,
-//           price: order.price,
-//           bidId: order.bidId,
-//           askId: order.askId,
-//           quantity: order.quantity,
-//           executedAt: new Date(order.executedAt),
-//         },
-//       });
-//     }
-//     await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
-
-//     console.log("trade successfully executed");
-//   } catch (error) {
-//     console.error(error);
-//   }
-// };
 
 const handleOrderMatchOrCreate = async (data: any) => {
   try {
@@ -223,8 +179,21 @@ const handleOrderMatchOrCreate = async (data: any) => {
               executedAt: new Date(trade.executedAt),
             },
           });
+          tx.market.updateMany({
+            where : {
+              ticker : trade.pair,
+            },
+            data : {
+              price : trade.price,
+              volume24h : {
+                increment : trade.quantity
+              }
+            }
+          })
         })
       );
+
+     
     });
 
     await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, streamId);
