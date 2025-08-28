@@ -54,7 +54,7 @@ const transformOrderbook = (
   let currTotal = 0;
   let lastOrderIndex = 0;
   for (let i = 0; i < orders.length; i++) {
-      if (i !== 0 && orderbook.length > 0  && orders[lastOrderIndex].price === orders[i].price) {
+      if (orderbook.length > 0  && orders[lastOrderIndex].price === orders[i].price) {
         orderbook[lastOrderIndex].size += orders[i].quantity;
         orderbook[lastOrderIndex].total += orders[i].quantity;
       } else {
