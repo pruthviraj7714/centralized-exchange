@@ -63,7 +63,7 @@ class Orderbook {
         trades.push(trade);
         remainingQty -= trade.quantity;
 
-        if ((currAsk?.filledQuantity || 0) >= currAsk?.quantity!) {
+        if (currAsk?.quantity! <= 0) {
           makers.push(currAsk!);
           this.asks.splice(i, 1);
         } else {
@@ -108,7 +108,7 @@ class Orderbook {
 
         remainingQty -= trade.quantity
 
-        if ((currBid?.filledQuantity || 0) >= currBid?.quantity!) {
+        if (currBid?.quantity! <= 0) {
           makers.push(currBid!);
           this.bids.splice(i, 1);
         } else {
@@ -193,7 +193,7 @@ class Orderbook {
 
   private executeTrade(bid: IOrderResponse, ask: IOrderResponse): ITrade {
     const tradeQty = Math.min(bid.quantity, ask.quantity);
-    const price = ask.price;
+    const price = bid.createdAt < ask.createdAt ? bid.price : ask.price;
 
     const trade: ITrade = {
       id: crypto.randomUUID(),
