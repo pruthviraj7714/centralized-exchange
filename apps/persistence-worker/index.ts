@@ -135,6 +135,8 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
   }
 };
 
+//TODO:unlocking funds for market buy orders + for other orders unlocking locked funds from user wallets
+
 const handleOrderMatchOrCreate = async (data: any) => {
   try {
     const { data : {makers, taker, trades }, streamId } = data;
@@ -152,6 +154,15 @@ const handleOrderMatchOrCreate = async (data: any) => {
           filledQuantity: taker.filledQuantity,
         },
       });
+
+      const market = await tx.market.findFirst({
+        where : {
+          baseAsset : taker.pair.split("-")[0],
+          quoteAsset : taker.pair.split("-")[1],
+        }
+      })
+
+      if(!market) throw new Error("market not found!");
 
       await Promise.all(
         makers.map((m: IOrderResponse) => {
@@ -173,27 +184,15 @@ const handleOrderMatchOrCreate = async (data: any) => {
             data: {
               pair: trade.pair,
               price: trade.price,
+              marketId : market.id,
               quantity: trade.quantity,
               askId: order.side === "BUY" ? trade.askId : order.id,
               bidId: order.side === "BUY" ? trade.bidId : order.id,
               executedAt: new Date(trade.executedAt),
             },
           });
-          tx.market.updateMany({
-            where : {
-              ticker : trade.pair,
-            },
-            data : {
-              price : trade.price,
-              volume24h : {
-                increment : trade.quantity
-              }
-            }
-          })
         })
       );
-
-     
     });
 
     await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, streamId);
