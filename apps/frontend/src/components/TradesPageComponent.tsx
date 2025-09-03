@@ -148,7 +148,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             </h1>
             {lastPrice && (
               <div className="flex items-center space-x-2 bg-slate-800/50 backdrop-blur-sm rounded-lg px-4 py-2 border border-slate-700">
-                {/* <DollarSign className="w-5 h-5 text-emerald-400" /> */}
                 <span className="text-2xl font-bold text-emerald-400">
                   ${lastPrice.toFixed(2)}
                 </span>
@@ -279,7 +278,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                         ) : (
                           <TableRow>
                             <TableCell
-                              colSpan={2}
+                              colSpan={3}
                               className="text-center text-slate-400 py-8"
                             >
                               No ask orders available
@@ -332,7 +331,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                         ) : (
                           <TableRow>
                             <TableCell
-                              colSpan={2}
+                              colSpan={3}
                               className="text-center text-slate-400 py-8"
                             >
                               No bid orders available
