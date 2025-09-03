@@ -4,7 +4,7 @@ import { OrderSchema } from "@repo/common";
 import prisma from "@repo/db";
 import { SUPPORTED_PAIRS } from "../utils/constants";
 import redisClient from "@repo/redisclient";
-import { MATCHING_ENGINE_STREAM } from "../utils/config";
+import { MARKET_ORDER_BUFFER, MATCHING_ENGINE_STREAM } from "../utils/config";
 
 const orderRouter: Router = Router();
 
@@ -104,7 +104,6 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
         res.status(400).json({ message: "insuffcient funds!" });
         return;
       }
--``
       await prisma.wallet.update({
         where: {
           id: quoteWallet?.id,
@@ -120,47 +119,54 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
-    // if (side === "BUY" && order.type === "MARKET") {
-    //   if (parseFloat(order.quantity) === 0) {
-    //     console.log("amount should be greater than 0");
-    //     return false;
-    //   }
+    if (side === "BUY" && type === "MARKET") {
+      if (quantity === 0) {
+        res.status(400).json({ message: "insuffcient funds!" });
+        return;
+      }
 
-    //   const bestPrice = await redisClient.get(`Best-Ask:${order.pair}`);
+      let bestPrice = await redisClient.get(`Best-Ask:${pair}`);
 
-    //   if (!bestPrice) {
-    //     console.log("no best price found");
-    //     return false;
-    //   }
+      if (!bestPrice) {
+        const market = await prisma.market.findFirst({
+          where: {
+            ticker: pair,
+          },
+        });
+        if (!market) {
+          res.status(400).json({
+            message: "market not found!",
+          });
+          return;
+        }
+        bestPrice = market?.price.toString();
+      }
 
-    //   const amount =
-    //     (bestPrice ? parseFloat(bestPrice) : 0) * parseInt(order.quantity);
+      const amount = (bestPrice ? parseFloat(bestPrice) : 0) * quantity;
 
-    //   if (quoteWallet.available < amount) {
-    //     console.log("insufficient funds");
-    //     return false;
-    //   }
+      const bufferPercentage = parseFloat(MARKET_ORDER_BUFFER) || 0.03;
 
-    //   try {
-    //     await prisma.wallet.update({
-    //       where: {
-    //         id: quoteWallet?.id,
-    //       },
-    //       data: {
-    //         available: {
-    //           decrement: amount,
-    //         },
-    //         locked: {
-    //           increment: amount,
-    //         },
-    //       },
-    //     });
-    //   } catch (error) {
-    //     return false;
-    //   }
+      const bufferedAmount = amount * (1 + bufferPercentage);
 
-    //   return true;
-    // }
+      if (quoteWallet.available < bufferedAmount) {
+        res.status(400).json({ message: "insufficient funds" });
+        return;
+      }
+
+      await prisma.wallet.update({
+        where: {
+          id: quoteWallet?.id,
+        },
+        data: {
+          available: {
+            decrement: bufferedAmount,
+          },
+          locked: {
+            increment: bufferedAmount,
+          },
+        },
+      });
+    }
 
     if (side === "SELL" && type === "LIMIT") {
       const quantityToLock = quantity;
@@ -184,38 +190,30 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       });
     }
 
-    // if (side === "SELL" && order.type === "MARKET") {
-    //   const qty = parseFloat(order.quantity);
+    if (side === "SELL" && type === "MARKET") {
+      if (quantity === 0) {
+        res.status(400).json({ message: "Quantity Should be greater than 0" });
+        return;
+      }
 
-    //   if (qty === 0) {
-    //     console.log("quantity should be more than 0");
-    //     return false;
-    //   }
-
-    //   if (qty > baseWallet.available) {
-    //     console.log("you don't have enought qty");
-    //     return false;
-    //   }
-    //   try {
-    //     await prisma.wallet.update({
-    //       where: {
-    //         id: baseWallet?.id,
-    //       },
-    //       data: {
-    //         available: {
-    //           decrement: qty,
-    //         },
-    //         locked: {
-    //           increment: qty,
-    //         },
-    //       },
-    //     });
-
-    //     return true;
-    //   } catch (error) {
-    //     return false;
-    //   }
-    // }
+      if (quantity > baseWallet.available) {
+        res.status(400).json({ message: "insufficient balance" });
+        return;
+      }
+      await prisma.wallet.update({
+        where: {
+          id: baseWallet?.id,
+        },
+        data: {
+          available: {
+            decrement: quantity,
+          },
+          locked: {
+            increment: quantity,
+          },
+        },
+      });
+    }
 
     let orderData = {
       event: "CREATE_ORDER",

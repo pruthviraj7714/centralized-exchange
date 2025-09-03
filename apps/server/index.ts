@@ -2,6 +2,7 @@ import express from 'express'
 import authRouter from './routes/auth.routes';
 import walletsRouter from './routes/wallets.routes';
 import orderRouter from './routes/order.routes';
+import marketRouter from './routes/market.routes';
 import cors from 'cors';
 const app = express();
 
@@ -17,6 +18,7 @@ app.get('/', (req,res) => {
 app.use('/auth', authRouter);
 app.use('/wallets', walletsRouter);
 app.use('/orders', orderRouter);
+app.use('/market', marketRouter);
 
 
 app.listen(3001, () => {
