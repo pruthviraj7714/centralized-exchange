@@ -58,7 +58,8 @@ model Trade {
   quantity   Float
   pair       String
   executedAt DateTime @default(now())
-
+  marketId   String
+  market     Market   @relation(fields: [marketId], references: [id])
   bid Order @relation("BuyTrades", fields: [bidId], references: [id])
   ask Order @relation("SellTrades", fields: [askId], references: [id])
 }
@@ -68,11 +69,14 @@ model Market {
   ticker      String
   baseAsset   String
   quoteAsset  String
+  symbol    String
+  logo   String
   price       Float
-  volume24h   Float
-  marketCap   Float
-  change24h   Float
-  sparkline7d Json
+  volume24h   Float?
+  marketCap   Float?
+  change24h   Float?
+  sparkline7d Json?
+  trades      Trade[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

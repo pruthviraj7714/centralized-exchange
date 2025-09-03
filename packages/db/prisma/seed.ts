@@ -1,22 +1,23 @@
-import { SUPPORTED_MARKETS } from "@repo/common";
+import { SEED_MARKETS } from "@repo/common";
 import prisma from "..";
 
 async function seedDb() {
+  await prisma.market.deleteMany({})
   await prisma.market.createMany({
-    data: SUPPORTED_MARKETS.map((m) => {
-      const [base, quote] = m.split("-");
+    data: SEED_MARKETS.map((m) => {
       return {
-        ticker: m,
-        baseAsset: base!,
-        quoteAsset: quote!,
-        price: 0,
-        volume24h: 0,
-        marketCap: 0,
-        change24h: 0,
+        ticker: m.ticker,
+        baseAsset: m.baseAsset,
+        quoteAsset: m.quoteAsset,
         sparkline7d: [],
+        logo: m.logo,
+        symbol: m.symbol,
+        price: 0,
       };
     }),
   });
+  console.log('markets successfully seeded into db');
+  
 }
 
 seedDb();
