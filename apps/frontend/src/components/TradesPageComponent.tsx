@@ -17,6 +17,7 @@ import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { Button } from "./ui/button";
 import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
+import { useSession } from "next-auth/react";
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
@@ -84,7 +85,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const [quantity, setQuantity] = useState(0);
   const [price, setPrice] = useState(0);
-  const authToken = localStorage.getItem("user-auth");
+  const { data } = useSession();
 
   useEffect(() => {
     if (socket && isConnected) {
@@ -120,6 +121,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   }, [socket, isConnected]);
 
   const handlePlaceOrder = async (side: "BUY" | "SELL") => {
+    if(!data || !data.accessToken) return;
     try {
       const response = await axios.post(
         `${BACKEND_URL}/orders`,
@@ -132,7 +134,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
         },
         {
           headers: {
-            Authorization: authToken,
+            Authorization: `Bearer ${data.accessToken}`,
           },
         }
       );

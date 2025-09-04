@@ -7,6 +7,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import OTPDialog from "@/components/OTPComponent"
+import { signIn } from "next-auth/react"
 
 export default function LandingPage() {
   const [email, setEmail] = useState("")
@@ -43,13 +44,12 @@ export default function LandingPage() {
     }
     setIsVerifying(true)
     try {
-      const response = await axios.post(`${BACKEND_URL}/auth/verify-otp`, {
+      await signIn("credentials", {
+        redirect: false,
         email,
         otp: otpString,
-      })
-      toast.success(response.data.message)
-      localStorage.setItem("user-auth", `Bearer ${response.data.jwt}`)
-      router.push("/dashboard")
+      });
+      router.push('/dashboard')
     } catch (error: any) {
       toast.error(error.response.data.message ?? error.message)
     } finally {

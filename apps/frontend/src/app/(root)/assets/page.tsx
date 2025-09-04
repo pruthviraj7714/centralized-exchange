@@ -9,26 +9,28 @@ import axios from "axios"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Wallet, DollarSign, Plus } from "lucide-react"
+import { useSession } from "next-auth/react"
 
 export default function AssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState("SOL")
   const [amount, setAmount] = useState(0)
-  const authToken = localStorage.getItem("user-auth")
   const [balances, setBalances] = useState<
     {
       asset: string
       balance: number
     }[]
   >([])
+    const { data } = useSession();
 
   const handleValueChange = (e: any) => {
     setSelectedAsset(e.target.value)
   }
 
   const fetchBalances = async () => {
+    if(!data?.accessToken) return;
     try {
       const response = await axios.get(`${BACKEND_URL}/wallets/`, {
-        headers: { Authorization: authToken },
+        headers: { Authorization: `Bearer ${data.accessToken}` },
       })
       setBalances(response.data.wallets)
     } catch (error: any) {
@@ -41,6 +43,7 @@ export default function AssetsPage() {
   }, [])
 
   const handleDeposit = async () => {
+    if(!data || !data.accessToken) return;
     try {
       const response = await axios.post(
         `${BACKEND_URL}/wallets/deposit`,
@@ -50,7 +53,7 @@ export default function AssetsPage() {
         },
         {
           headers: {
-            Authorization: authToken,
+            Authorization: `Bearer ${data.accessToken}`,
           },
         },
       )

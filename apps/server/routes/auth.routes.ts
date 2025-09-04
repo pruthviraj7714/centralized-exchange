@@ -150,6 +150,7 @@ authRouter.post(
       res.status(200).json({
         message: "sucessfully verified otp",
         jwt,
+        id : user.id,
         success: true,
       });
     } catch (error) {

@@ -1,60 +1,61 @@
-"use client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { BACKEND_URL } from "@/lib/config"
-import axios from "axios"
-import { useState } from "react"
-import { toast } from "sonner"
-import { useRouter } from "next/navigation"
-import OTPDialog from "@/components/OTPComponent"
+"use client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { BACKEND_URL } from "@/lib/config";
+import axios from "axios";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import OTPDialog from "@/components/OTPComponent";
+import { signIn } from "next-auth/react";
 
 export default function AuthPage() {
-  const [email, setEmail] = useState("")
-  const [isOTPSent, setIsOTPSent] = useState<boolean>(false)
-  const [isVerifying, setIsVerifying] = useState(false)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [isOTPSent, setIsOTPSent] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const router = useRouter();
 
   const handleLogin = async () => {
     if (!email || email.length === 0) {
-      toast.warning("please provide email to send otp")
-      return
+      toast.warning("please provide email to send otp");
+      return;
     }
     try {
       const res = await axios.post(`${BACKEND_URL}/auth/request-otp`, {
         email,
-      })
+      });
       if (res.status === 200) {
         toast.success("OTP successfully sent to email", {
           description: "Please Enter OTP for verification",
-        })
-        setIsOTPSent(true)
+        });
+        setIsOTPSent(true);
       }
     } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message)
-      setIsOTPSent(false)
+      toast.error(error.response.data.message ?? error.message);
+      setIsOTPSent(false);
     }
-  }
+  };
 
   const verifyOTP = async (otpString: string) => {
     if (!otpString || otpString.length < 6) {
-      toast.warning("Please Provide OTP Properly")
-      return
+      toast.warning("Please Provide OTP Properly");
+      return;
     }
-    setIsVerifying(true)
+    setIsVerifying(true);
     try {
-      const response = await axios.post(`${BACKEND_URL}/auth/verify-otp`, {
+      await signIn("credentials", {
+        redirect: false,
         email,
         otp: otpString,
-      })
-      toast.success(response.data.message)
-      localStorage.setItem("user-auth", `Bearer ${response.data.jwt}`)
-      router.push("/dashboard")
+      });
+
+      router.push('/dashboard');
     } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message)
+      toast.error(error.response.data.message ?? error.message);
     } finally {
-      setIsVerifying(false)
+      setIsVerifying(false);
     }
-  }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
@@ -65,18 +66,26 @@ export default function AuthPage() {
       <div className="relative z-10 w-full max-w-md">
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-2xl mb-6 shadow-lg shadow-emerald-500/25">
-            <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-8 h-8 text-white"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-slate-400">Enter your email to access your account</p>
+          <p className="text-slate-400">
+            Enter your email to access your account
+          </p>
         </div>
 
         <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 shadow-2xl">
           <div className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-300">Email Address</label>
+              <label className="text-sm font-medium text-slate-300">
+                Email Address
+              </label>
               <Input
                 type="email"
                 onChange={(e) => setEmail(e.target.value)}
@@ -97,17 +106,25 @@ export default function AuthPage() {
 
           <div className="mt-6 pt-6 border-t border-slate-800/50">
             <p className="text-xs text-slate-500 text-center">
-              By continuing, you agree to our Terms of Service and Privacy Policy
+              By continuing, you agree to our Terms of Service and Privacy
+              Policy
             </p>
           </div>
         </div>
 
         <div className="text-center mt-8">
-          <p className="text-slate-500 text-sm">Secure authentication powered by OTP verification</p>
+          <p className="text-slate-500 text-sm">
+            Secure authentication powered by OTP verification
+          </p>
         </div>
       </div>
 
-      <OTPDialog isOTPSent={isOTPSent} isVerifying={isVerifying} setIsOTPSent={setIsOTPSent} verifyOTP={verifyOTP} />
+      <OTPDialog
+        isOTPSent={isOTPSent}
+        isVerifying={isVerifying}
+        setIsOTPSent={setIsOTPSent}
+        verifyOTP={verifyOTP}
+      />
     </div>
-  )
+  );
 }

@@ -2,14 +2,17 @@
 
 import { useRouter } from "next/navigation";
 import { Button } from "./ui/button";
+import { signOut, useSession } from "next-auth/react";
 
 export default function Appbar() {
   const router = useRouter();
-  const isLoggedIn = localStorage.getItem("user-auth");
+  const { status } = useSession();
+  const isLoggedIn = status === "authenticated"
 
   const handleNavigate = () => {
     isLoggedIn ? router.push("/dashboard") : router.push("/");
   };
+
 
   return (
     <header className="bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 relative z-10 flex items-center justify-between p-6 border-b border-slate-800/50 backdrop-blur-xl">
@@ -39,9 +42,8 @@ export default function Appbar() {
               Assets
             </Button>
             <Button
-              onClick={() => {
-                router.push("/");
-                localStorage.removeItem("user-auth");
+              onClick={async () => {
+                await signOut({ callbackUrl: "/" });
               }}
               variant={"destructive"}
             >
