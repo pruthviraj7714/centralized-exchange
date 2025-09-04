@@ -54,19 +54,22 @@ const transformOrderbook = (
   let currTotal = 0;
   let lastOrderIndex = 0;
   for (let i = 0; i < orders.length; i++) {
-      if (orderbook.length > 0  && orders[lastOrderIndex].price === orders[i].price) {
-        orderbook[lastOrderIndex].size += orders[i].quantity;
-        orderbook[lastOrderIndex].total += orders[i].quantity;
-      } else {
-        orderbook.push({
-          price: orders[i].price,
-          requestId: orders[i].requestId,
-          size: orders[i].quantity,
-          total: orders[i].quantity + currTotal,
-        });
+    if (
+      orderbook.length > 0 &&
+      orders[lastOrderIndex].price === orders[i].price
+    ) {
+      orderbook[lastOrderIndex].size += orders[i].quantity;
+      orderbook[lastOrderIndex].total += orders[i].quantity;
+    } else {
+      orderbook.push({
+        price: orders[i].price,
+        requestId: orders[i].requestId,
+        size: orders[i].quantity,
+        total: orders[i].quantity + currTotal,
+      });
     }
     lastOrderIndex = orderbook.length - 1;
-    currTotal += orders[i].quantity
+    currTotal += orders[i].quantity;
   }
 
   return orderbook;
@@ -75,6 +78,7 @@ const transformOrderbook = (
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const { isConnected, socket } = useSocket(ticker);
   const [currentTab, setCurrentTab] = useState<"BUY" | "SELL">("BUY");
+  const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
   const [bids, setBids] = useState<IOrderResponse[]>([]);
   const [asks, setAsks] = useState<IOrderResponse[]>([]);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
@@ -123,7 +127,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
           side,
           quantity,
           price,
-          type: "LIMIT",
+          type: orderType,
           pair: ticker,
         },
         {
@@ -158,76 +162,105 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-1">
-            <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700 p-6">
-              <h2 className="text-xl font-semibold mb-6 flex items-center">
-                <BarChart3 className="w-5 h-5 mr-2 text-red-400" />
-                Place Order
-              </h2>
+            <div className="lg:col-span-1">
+              <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700 p-6">
+                <h2 className="text-xl font-semibold mb-6 flex items-center">
+                  <BarChart3 className="w-5 h-5 mr-2 text-red-400" />
+                  Place Order
+                </h2>
 
-              <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-slate-900/50 rounded-lg">
-                <button
-                  className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
-                    currentTab === "BUY"
-                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25"
-                      : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                  }`}
-                  onClick={() => setCurrentTab("BUY")}
-                >
-                  <TrendingUp className="w-4 h-4 inline mr-2" />
-                  Buy
-                </button>
-                <button
-                  className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
-                    currentTab === "SELL"
-                      ? "bg-red-600 text-white shadow-lg shadow-red-600/25"
-                      : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                  }`}
-                  onClick={() => setCurrentTab("SELL")}
-                >
-                  <TrendingDown className="w-4 h-4 inline mr-2" />
-                  Sell
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-slate-300 font-medium mb-2 block">
-                    Price (USD)
-                  </Label>
-                  <Input
-                    onChange={(e) => setPrice(e.target.valueAsNumber)}
-                    type="number"
-                    placeholder={
+                <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-slate-900/50 rounded-lg">
+                  <button
+                    className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
                       currentTab === "BUY"
-                        ? "Enter bid price"
-                        : "Enter ask price"
-                    }
-                    className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
-                  />
+                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    }`}
+                    onClick={() => setCurrentTab("BUY")}
+                  >
+                    <TrendingUp className="w-4 h-4 inline mr-2" />
+                    Buy
+                  </button>
+                  <button
+                    className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
+                      currentTab === "SELL"
+                        ? "bg-red-600 text-white shadow-lg shadow-red-600/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    }`}
+                    onClick={() => setCurrentTab("SELL")}
+                  >
+                    <TrendingDown className="w-4 h-4 inline mr-2" />
+                    Sell
+                  </button>
                 </div>
-                <div>
-                  <Label className="text-slate-300 font-medium mb-2 block">
-                    Quantity
-                  </Label>
-                  <Input
-                    onChange={(e) => setQuantity(e.target.valueAsNumber)}
-                    type="number"
-                    placeholder="Enter quantity"
-                    className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
-                  />
+
+                <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-slate-900/50 rounded-lg">
+                  <button
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                      orderType === "MARKET"
+                        ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    }`}
+                    onClick={() => setOrderType("MARKET")}
+                  >
+                    Market
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                      orderType === "LIMIT"
+                        ? "bg-purple-600 text-white shadow-lg shadow-purple-600/25"
+                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
+                    }`}
+                    onClick={() => setOrderType("LIMIT")}
+                  >
+                    Limit
+                  </button>
                 </div>
-                <Button
-                  onClick={() => handlePlaceOrder(currentTab)}
-                  className={`w-full py-3 font-semibold transition-all duration-200 ${
-                    currentTab === "BUY"
-                      ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/25"
-                      : "bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25"
-                  }`}
-                >
-                  {currentTab === "BUY"
-                    ? "Place Buy Order"
-                    : "Place Sell Order"}
-                </Button>
+
+                <div className="space-y-4">
+                  {orderType === "LIMIT" && (
+                    <div>
+                      <Label className="text-slate-300 font-medium mb-2 block">
+                        Price (USD)
+                      </Label>
+                      <Input
+                        onChange={(e) => setPrice(e.target.valueAsNumber)}
+                        type="number"
+                        placeholder={
+                          currentTab === "BUY"
+                            ? "Enter bid price"
+                            : "Enter ask price"
+                        }
+                        className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <Label className="text-slate-300 font-medium mb-2 block">
+                      Quantity
+                    </Label>
+                    <Input
+                      onChange={(e) => setQuantity(e.target.valueAsNumber)}
+                      type="number"
+                      placeholder="Enter quantity"
+                      className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
+                    />
+                  </div>
+
+                  <Button
+                    onClick={() => handlePlaceOrder(currentTab)}
+                    className={`w-full py-3 font-semibold transition-all duration-200 ${
+                      currentTab === "BUY"
+                        ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/25"
+                        : "bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25"
+                    }`}
+                  >
+                    {currentTab === "BUY"
+                      ? `Place ${orderType} Buy Order`
+                      : `Place ${orderType} Sell Order`}
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
