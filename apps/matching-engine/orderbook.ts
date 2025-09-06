@@ -1,4 +1,5 @@
 import type { IOrderResponse, ITrade } from "./types";
+import fs from "fs";
 
 class Orderbook {
   bids: IOrderResponse[];
@@ -29,6 +30,7 @@ class Orderbook {
     this.bids = [];
     this.asks = [];
     this.tradeHistory = [];
+    setInterval(() => this.saveSnapshot(), 5000);
   }
 
   private sortOrders(orders: IOrderResponse[], side: "BUY" | "SELL") {
@@ -196,6 +198,31 @@ class Orderbook {
     ask.filledQuantity = (ask.filledQuantity || 0) + tradeQty;
 
     return trade;
+  }
+
+  private saveSnapshot() {
+    const orderBookData = {
+      bids: this.bids,
+      asks: this.asks,
+      bestBid: this.bestBid,
+      bestAsk: this.bestAsk,
+      baseAsset: this.baseAsset,
+      quoteAsset: this.quoteAsset,
+      lastPrice: this.lastPrice,
+      highPrice24h: this.highPrice24h,
+      lowPrice24h: this.lowPrice24h,
+      volume24h: this.volume24h,
+      priceChange24h: this.priceChange24h,
+      priceChangePercent24h: this.priceChangePercent24h,
+      tradeHistory: this.tradeHistory,
+    };
+    fs.appendFile(
+      "./snapshot.json",
+      JSON.stringify(orderBookData) + "\n",
+      (err) => {
+        if (err) console.error(err);
+      }
+    );
   }
 }
 
