@@ -51,7 +51,7 @@ model Order {
 }
 
 model Trade {
-  id         String   @id @default(uuid())
+  id         String   @default(uuid())
   bidId      String
   askId      String
   price      Float
@@ -62,6 +62,8 @@ model Trade {
   market     Market   @relation(fields: [marketId], references: [id])
   bid Order @relation("BuyTrades", fields: [bidId], references: [id])
   ask Order @relation("SellTrades", fields: [askId], references: [id])
+
+  @@unique([executedAt, id])
 }
 
 model Market {
