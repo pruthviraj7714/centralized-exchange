@@ -1,7 +1,7 @@
 "use client";
 
 import useSocket from "@/hooks/useSocket";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import {
@@ -18,6 +18,14 @@ import { BACKEND_URL } from "@/lib/config";
 import { Button } from "./ui/button";
 import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { useSession } from "next-auth/react";
+import {
+  CandlestickSeries,
+  type ChartOptions,
+  createChart,
+  type DeepPartial,
+  type UTCTimestamp,
+} from "lightweight-charts";
+import { Card } from "./ui/card";
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
@@ -37,6 +45,17 @@ interface IOrderResponse {
   type: "LIMIT" | "MARKET";
   status: ORDER_STATUS;
 }
+const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
+type Interval = (typeof INTERVALS)[number];
+
+type Candle = {
+  time: UTCTimestamp;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  trades?: number;
+};
 
 const transformOrderbook = (
   orders: IOrderResponse[]
@@ -76,16 +95,170 @@ const transformOrderbook = (
   return orderbook;
 };
 
+const getIntervalSec = (interval: string) => {
+  switch (interval) {
+    case "1m": {
+      return 60;
+    }
+    case "5m": {
+      return 5 * 60;
+    }
+    case "15m": {
+      return 15 * 60;
+    }
+    case "30m": {
+      return 30 * 60;
+    }
+    case "1h": {
+      return 60 * 60;
+    }
+    case "4h": {
+      return 4 * 60 * 60;
+    }
+    case "1d": {
+      return 24 * 60 * 60;
+    }
+    default: {
+      return 0;
+    }
+  }
+};
+
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const { isConnected, socket } = useSocket(ticker);
+  const [interval, setInterval] = useState<Interval>("1m");
   const [currentTab, setCurrentTab] = useState<"BUY" | "SELL">("BUY");
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
   const [bids, setBids] = useState<IOrderResponse[]>([]);
   const [asks, setAsks] = useState<IOrderResponse[]>([]);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const lastCandleRef = useRef<Candle | null>(null);
+  const candlestickSeriesRef = useRef<any | null>(null);
   const [quantity, setQuantity] = useState(0);
   const [price, setPrice] = useState(0);
   const { data } = useSession();
+
+  const fetchChartData = async () => {
+    if (!data || !data.accessToken) return;
+    try {
+      const response = await axios.get(
+        `${BACKEND_URL}/klines?symbol=${ticker.toUpperCase()}&interval=${interval}`,
+        {
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        }
+      );
+
+      return response.data
+        .filter(
+          (candle: any) =>
+            candle.open != null &&
+            candle.high != null &&
+            candle.low != null &&
+            candle.close != null
+        )
+        .map((candle: any) => ({
+          time: Math.floor(new Date(candle.bucket).getTime() / 1000),
+          open: Number(candle.open),
+          high: Number(candle.high),
+          low: Number(candle.low),
+          close: Number(candle.close),
+        }));
+    } catch (error: any) {
+      toast.error(error.message || "Failed to fetch chart data");
+      return [];
+    }
+  };
+
+  const processTick = (price: number, timestamp: number) => {
+    const time = Math.floor(timestamp / 1000);
+    const interverSec = getIntervalSec(interval);
+
+    const candleTime = Math.floor(time / interverSec) * interverSec;
+
+    const lastCandle = lastCandleRef.current;
+    if (!lastCandle || !candlestickSeriesRef.current) return;
+
+    if (candleTime === lastCandle.time) {
+      lastCandle.high = Math.max(lastCandle.high, price);
+      lastCandle.low = Math.min(lastCandle.low, price);
+      lastCandle.close = price;
+
+      candlestickSeriesRef.current.update(lastCandle);
+    } else {
+      const newCandle: Candle = {
+        time: candleTime as UTCTimestamp,
+        open: price,
+        high: price,
+        low: price,
+        close: price,
+      };
+      lastCandleRef.current = newCandle;
+      candlestickSeriesRef.current.update(newCandle);
+    }
+  };
+
+  useEffect(() => {
+    if (!chartRef.current) return;
+
+    const chartOptions: DeepPartial<ChartOptions> = {
+      layout: {
+        textColor: "#e5e7eb",
+        background: { color: "#0b0b0b" },
+      },
+      grid: {
+        vertLines: { color: "rgba(255,255,255,0.06)" },
+        horzLines: { color: "rgba(255,255,255,0.06)" },
+      },
+    };
+    const chart = createChart(chartRef.current, chartOptions);
+
+    chart.applyOptions({
+      width: chartRef.current.clientWidth,
+      height: 500,
+    });
+
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#26a69a",
+      downColor: "#ef5350",
+      borderVisible: false,
+      wickUpColor: "#26a69a",
+      wickDownColor: "#ef5350",
+      borderColor: "#404040",
+    });
+
+    candlestickSeriesRef.current = candlestickSeries;
+
+    const loadData = async () => {
+      const data = await fetchChartData();
+      if (data.length > 0) {
+        candlestickSeries.setData(data);
+        lastCandleRef.current = data[data.length - 1];
+        chart.timeScale().fitContent();
+      }
+    };
+
+    loadData();
+
+    const ro = new ResizeObserver((entries) => {
+      const cr = entries[0]?.contentRect;
+      if (cr?.width) {
+        chart.applyOptions({
+          width: Math.floor(cr.width),
+          height: 500,
+        });
+      }
+    });
+    ro.observe(chartRef.current);
+
+    return () => {
+      ro.disconnect();
+      chart.remove();
+      candlestickSeriesRef.current = null;
+    };
+  }, [ticker, interval, data]);
 
   useEffect(() => {
     if (socket && isConnected) {
@@ -121,7 +294,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   }, [socket, isConnected]);
 
   const handlePlaceOrder = async (side: "BUY" | "SELL") => {
-    if(!data || !data.accessToken) return;
+    if (!data || !data.accessToken) return;
     try {
       const response = await axios.post(
         `${BACKEND_URL}/orders`,
@@ -145,240 +318,245 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              {ticker}
-            </h1>
-            {lastPrice && (
-              <div className="flex items-center space-x-2 bg-slate-800/50 backdrop-blur-sm rounded-lg px-4 py-2 border border-slate-700">
-                <span className="text-2xl font-bold text-emerald-400">
-                  ${lastPrice.toFixed(2)}
-                </span>
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="border-b border-slate-800 bg-slate-900/50">
+        <div className="mx-auto px-3 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-8">
+              <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-2 text-sm">
+                  <span className="text-emerald-400">O</span>
+                  <span className="text-white">207.35</span>
+                  <span className="text-emerald-400">H</span>
+                  <span className="text-white">208.44</span>
+                  <span className="text-emerald-400">L</span>
+                  <span className="text-white">206.72</span>
+                  <span className="text-emerald-400">C</span>
+                  <span className="text-white">208.40</span>
+                  <span className="text-emerald-400">1.05 (+0.51%)</span>
+                </div>
               </div>
-            )}
+            </div>
+            <div className="flex items-center space-x-4">
+              <nav className="flex items-center space-x-6 text-sm">
+                <span className="text-white font-medium">Chart</span>
+              </nav>
+              <div className="flex items-center space-x-4">
+                <span className="text-slate-400">Book</span>
+                <span className="text-slate-400">Trades</span>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-1">
-            <div className="lg:col-span-1">
-              <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700 p-6">
-                <h2 className="text-xl font-semibold mb-6 flex items-center">
-                  <BarChart3 className="w-5 h-5 mr-2 text-red-400" />
-                  Place Order
-                </h2>
+      <div className="max-w-8xl mx-auto p-6">
+        <div className="grid grid-cols-12 gap-4 h-[calc(100vh-120px)]">
+          <div className="col-span-6">
+            <Card className="h-full bg-slate-900/30 border-slate-800">
+              <div className="p-4 border-b border-slate-800">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    {INTERVALS.map((iv) => {
+                      const isActive = iv === interval;
+                      return (
+                        <Button
+                          key={iv}
+                          size="sm"
+                          variant="ghost"
+                          className={
+                            isActive
+                              ? "bg-slate-700 text-white hover:bg-slate-600"
+                              : "text-slate-400 hover:text-white hover:bg-slate-800"
+                          }
+                          onClick={() => setInterval(iv)}
+                        >
+                          {iv}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center space-x-2 text-sm text-slate-400">
+                    <span>07:18:51 (UTC)</span>
+                  </div>
+                </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-slate-900/50 rounded-lg">
-                  <button
-                    className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
-                      currentTab === "BUY"
-                        ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                    }`}
-                    onClick={() => setCurrentTab("BUY")}
-                  >
-                    <TrendingUp className="w-4 h-4 inline mr-2" />
-                    Buy
-                  </button>
-                  <button
-                    className={`px-4 py-3 rounded-md font-medium transition-all duration-200 ${
-                      currentTab === "SELL"
-                        ? "bg-red-600 text-white shadow-lg shadow-red-600/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                    }`}
-                    onClick={() => setCurrentTab("SELL")}
-                  >
-                    <TrendingDown className="w-4 h-4 inline mr-2" />
-                    Sell
-                  </button>
+              <div className="p-4 flex-1">
+                <div
+                  ref={chartRef}
+                  className="w-full h-[400px] bg-slate-950 rounded border border-slate-800 flex items-center justify-center"
+                ></div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="col-span-3">
+            <Card className="h-full bg-slate-900/30 border-slate-800">
+              <div className="p-4 border-b border-slate-800">
+                <h2 className="text-lg font-semibold text-white">Order Book</h2>
+              </div>
+
+              <div className="p-4 space-y-4 overflow-auto">
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-400 mb-2">
+                    <span>Price (USD)</span>
+                    <span>Size (SOL)</span>
+                    <span>Total (SOL)</span>
+                  </div>
+                  <div className="space-y-1">
+                    {transformOrderbook(asks)
+                      .slice(0, 8)
+                      .reverse()
+                      .map((ask) => (
+                        <div
+                          key={ask.requestId}
+                          className="flex items-center justify-between text-sm hover:bg-red-900/10 px-2 py-1 rounded"
+                        >
+                          <span className="text-red-400 font-mono">
+                            {ask.price.toFixed(2)}
+                          </span>
+                          <span className="text-slate-300 font-mono">
+                            {ask.size}
+                          </span>
+                          <span className="text-slate-300 font-mono">
+                            {ask.total}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2 mb-6 p-1 bg-slate-900/50 rounded-lg">
-                  <button
-                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
-                      orderType === "MARKET"
-                        ? "bg-blue-600 text-white shadow-lg shadow-blue-600/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                    }`}
-                    onClick={() => setOrderType("MARKET")}
-                  >
-                    Market
-                  </button>
-                  <button
-                    className={`px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                <div className="text-center py-2 border-y border-slate-800">
+                  <div className="text-lg font-bold text-emerald-400">
+                    208.40
+                  </div>
+                  <div className="text-xs text-slate-400">Spread: 0.07</div>
+                </div>
+
+                <div>
+                  <div className="space-y-1">
+                    {transformOrderbook(bids)
+                      .slice(0, 8)
+                      .map((bid) => (
+                        <div
+                          key={bid.requestId}
+                          className="flex items-center justify-between text-sm hover:bg-emerald-900/10 px-2 py-1 rounded"
+                        >
+                          <span className="text-emerald-400 font-mono">
+                            {bid.price.toFixed(2)}
+                          </span>
+                          <span className="text-slate-300 font-mono">
+                            {bid.size}
+                          </span>
+                          <span className="text-slate-300 font-mono">
+                            {bid.total}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          <div className="col-span-3">
+            <Card className="h-full bg-slate-900/30 border-slate-800">
+              <div className="p-4 border-b border-slate-800">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    size="sm"
+                    variant={orderType === "LIMIT" ? "default" : "ghost"}
+                    className={
                       orderType === "LIMIT"
-                        ? "bg-purple-600 text-white shadow-lg shadow-purple-600/25"
-                        : "text-slate-400 hover:text-white hover:bg-slate-700/50"
-                    }`}
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "text-slate-400"
+                    }
                     onClick={() => setOrderType("LIMIT")}
                   >
                     Limit
-                  </button>
-                </div>
-
-                <div className="space-y-4">
-                  {orderType === "LIMIT" && (
-                    <div>
-                      <Label className="text-slate-300 font-medium mb-2 block">
-                        Price (USD)
-                      </Label>
-                      <Input
-                        onChange={(e) => setPrice(e.target.valueAsNumber)}
-                        type="number"
-                        placeholder={
-                          currentTab === "BUY"
-                            ? "Enter bid price"
-                            : "Enter ask price"
-                        }
-                        className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
-                      />
-                    </div>
-                  )}
-
-                  <div>
-                    <Label className="text-slate-300 font-medium mb-2 block">
-                      Quantity
-                    </Label>
-                    <Input
-                      onChange={(e) => setQuantity(e.target.valueAsNumber)}
-                      type="number"
-                      placeholder="Enter quantity"
-                      className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
-                    />
-                  </div>
-
+                  </Button>
                   <Button
-                    onClick={() => handlePlaceOrder(currentTab)}
-                    className={`w-full py-3 font-semibold transition-all duration-200 ${
-                      currentTab === "BUY"
-                        ? "bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/25"
-                        : "bg-red-600 hover:bg-red-700 shadow-lg shadow-red-600/25"
-                    }`}
+                    size="sm"
+                    variant={orderType === "MARKET" ? "default" : "ghost"}
+                    className={
+                      orderType === "MARKET"
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "text-slate-400"
+                    }
+                    onClick={() => setOrderType("MARKET")}
                   >
-                    {currentTab === "BUY"
-                      ? `Place ${orderType} Buy Order`
-                      : `Place ${orderType} Sell Order`}
+                    Market
                   </Button>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <div className="lg:col-span-2">
-            <div className="bg-slate-800/30 backdrop-blur-sm rounded-xl border border-slate-700 p-6">
-              <h2 className="text-xl font-semibold mb-6">Order Book</h2>
+              <div className="p-4 space-y-4">
+                {orderType === "LIMIT" && (
+                  <div className="space-y-2">
+                    <Label className="text-slate-300 text-sm">
+                      Price (USD)
+                    </Label>
+                    <Input
+                      type="number"
+                      onChange={(e) => setPrice(e.target.valueAsNumber)}
+                      placeholder={
+                        currentTab === "BUY"
+                          ? "Enter bid price"
+                          : "Enter ask price"
+                      }
+                      className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                )}
 
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-red-400 font-medium mb-3 flex items-center">
-                    <TrendingDown className="w-4 h-4 mr-2" />
-                    Asks (Sell Orders)
-                  </h3>
-                  <div className="bg-slate-900/50 rounded-lg overflow-hidden border border-slate-700">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-slate-700 hover:bg-slate-800/50">
-                          <TableHead className="text-slate-300 font-medium">
-                            Price (USD)
-                          </TableHead>
-                          <TableHead className="text-slate-300 font-medium">
-                            Size ({ticker.split("-")[0]})
-                          </TableHead>
-                          <TableHead className="text-slate-300 font-medium">
-                            Total ({ticker.split("-")[0]})
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {asks && asks.length > 0 ? (
-                          [...transformOrderbook(asks)].reverse().map((ask) => (
-                            <TableRow
-                              key={ask.requestId}
-                              className="border-slate-700 hover:bg-red-900/10 transition-colors"
-                            >
-                              <TableCell className="text-red-400 font-medium">
-                                ${ask.price.toFixed(2)}
-                              </TableCell>
-                              <TableCell className="text-slate-200">
-                                {ask.size}
-                              </TableCell>
-                              <TableCell className="text-slate-200">
-                                {ask.total}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell
-                              colSpan={3}
-                              className="text-center text-slate-400 py-8"
-                            >
-                              No ask orders available
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                <div className="space-y-2">
+                  <Label className="text-slate-300 text-sm">Quantity</Label>
+                  <Input
+                    type="number"
+                    onChange={(e) => setQuantity(e.target.valueAsNumber)}
+                    placeholder="Enter quantity"
+                    className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
+                  />
+                  <div className="text-xs text-orange-400">
+                    ⚠ Minimum 0.01 SOL
                   </div>
                 </div>
 
-                <div>
-                  <h3 className="text-emerald-400 font-medium mb-3 flex items-center">
-                    <TrendingUp className="w-4 h-4 mr-2" />
-                    Bids (Buy Orders)
-                  </h3>
-                  <div className="bg-slate-900/50 rounded-lg overflow-hidden border border-slate-700">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-slate-700 hover:bg-slate-800/50">
-                          <TableHead className="text-slate-300 font-medium">
-                            Price (USD)
-                          </TableHead>
-                          <TableHead className="text-slate-300 font-medium">
-                            Size ({ticker.split("-")[0]})
-                          </TableHead>
-                          <TableHead className="text-slate-300 font-medium">
-                            Total ({ticker.split("-")[0]})
-                          </TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {bids && bids.length > 0 ? (
-                          transformOrderbook(bids).map((bid) => (
-                            <TableRow
-                              key={bid.requestId}
-                              className="border-slate-700 hover:bg-emerald-900/10 transition-colors"
-                            >
-                              <TableCell className="text-emerald-400 font-medium">
-                                ${bid.price.toFixed(2)}
-                              </TableCell>
-                              <TableCell className="text-slate-200">
-                                {bid.size}
-                              </TableCell>
-                              <TableCell className="text-slate-200">
-                                {bid.total}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell
-                              colSpan={3}
-                              className="text-center text-slate-400 py-8"
-                            >
-                              No bid orders available
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
+                {orderType === "LIMIT" && (
+                  <div className="space-y-2">
+                    <Label className="text-slate-300 text-sm">
+                      Order Value
+                    </Label>
+                    <div className="text-lg text-white font-bold">
+                      {(quantity * price).toFixed(2)}
+                    </div>
                   </div>
+                )}
+
+                <div className="space-y-3 pt-4">
+                  <Button
+                    onClick={() => {
+                      setCurrentTab("BUY");
+                      handlePlaceOrder("BUY");
+                    }}
+                    className="w-full bg-green-400 text-white hover:bg-green-500 font-semibold"
+                  >
+                    {`Place ${orderType} Buy Order`}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      setCurrentTab("SELL");
+                      handlePlaceOrder("SELL");
+                    }}
+                    variant="destructive"
+                    className="w-full border-slate-600 text-white "
+                  >
+                    {`Place ${orderType} Sell Order`}
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
         </div>
       </div>
