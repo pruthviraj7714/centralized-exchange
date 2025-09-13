@@ -5,6 +5,8 @@ import {
   PERSISTENCE_STREAM,
 } from "./config";
 import type { IOrderbookData, IOrderResponse } from "./types";
+import WebSocket from "ws";
+
 
 export const createConsumerGroup = async () => {
   try {
@@ -128,5 +130,69 @@ export const handleMatchOrder = async (
   } catch (error) {
     console.error("Error while mathing order :", error);
     return false;
+  }
+};
+
+export const sendErrorToClient = (ws: WebSocket, errorMessage: string): void => {
+  try {
+    const errorResponse = {
+      type: "ERROR",
+      message: errorMessage,
+      timestamp: Date.now(),
+    };
+
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(errorResponse));
+    }
+  } catch (error) {
+    console.error("Error sending error message to client:", error);
+  }
+};
+
+export const broadcastMessageToClients = (
+  orderbookData: IOrderbookData,
+  message: any
+) => {
+  if (!orderbookData?.clients?.length) {
+    return;
+  }
+
+  orderbookData.clients.forEach((client) => {
+    try {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify(message));
+      }
+    } catch (error) {
+      console.error("Error broadcasting to client:", error);
+    }
+  });
+};
+
+export const broadcastMessageToClient = (ws: WebSocket, message: any) => {
+  try {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
+  } catch (error) {
+    console.error("Error sending message to client:", error);
+  }
+};
+
+export const sendOrderbookSnapshot = async (
+  ws: WebSocket,
+  orderbookData: IOrderbookData
+): Promise<void> => {
+  try {
+    const snapshot = {
+      type: "ORDERBOOK_SNAPSHOT",
+      bids: orderbookData.orderbook.getBids(),
+      asks: orderbookData.orderbook.getAsks(),
+      lastPrice: orderbookData.orderbook.lastPrice,
+      timestamp: Date.now(),
+    };
+
+    broadcastMessageToClient(ws, snapshot);
+  } catch (error) {
+    console.error("Error sending orderbook snapshot:", error);
   }
 };

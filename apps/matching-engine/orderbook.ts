@@ -107,7 +107,7 @@ class Orderbook {
           : remainingQty < order.quantity
             ? "PARTIALLY_FILLED"
             : "OPEN",
-      createdAt: Date.now(),
+      createdAt: order.createdAt || Date.now(),
       updatedAt: Date.now(),
       filledQuantity: order.quantity - remainingQty,
     };
@@ -216,9 +216,9 @@ class Orderbook {
       priceChangePercent24h: this.priceChangePercent24h,
       tradeHistory: this.tradeHistory,
     };
-    fs.appendFile(
+    fs.writeFile(
       "./snapshot.json",
-      JSON.stringify(orderBookData) + "\n",
+      JSON.stringify(orderBookData),
       (err) => {
         if (err) console.error(err);
       }

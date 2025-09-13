@@ -4,124 +4,25 @@ import WebSocket from "ws";
 import { SUPPORTED_PAIRS } from "./constants";
 import Orderbook from "./orderbook";
 import {
+  broadcastMessageToClient,
+  broadcastMessageToClients,
   createConsumerGroup,
   handleCancelOrder,
   handleMatchOrder,
   parseStreamData,
+  sendErrorToClient,
+  sendOrderbookSnapshot,
 } from "./matchingEngineService";
 import redisClient from "@repo/redisclient";
-import { CONSUMER_NAME, GROUP_NAME, MATCHING_ENGINE_STREAM } from "./config";
+import {
+  CONSUMER_NAME,
+  GROUP_NAME,
+  JWT_SECRET,
+  MATCHING_ENGINE_STREAM,
+} from "./config";
+import jwt, { type JwtPayload } from "jsonwebtoken";
 
-const broadcastMessageToClients = (
-  orderbookData: IOrderbookData,
-  message: any
-) => {
-  if (!orderbookData?.clients?.length) {
-    return;
-  }
-
-  orderbookData.clients.forEach((client) => {
-    try {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify(message));
-      }
-    } catch (error) {
-      console.error("Error broadcasting to client:", error);
-    }
-  });
-};
-
-const broadcastMessageToClient = (ws: WebSocket, message: any) => {
-  try {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
-    }
-  } catch (error) {
-    console.error("Error sending message to client:", error);
-  }
-};
-
-const sendOrderbookSnapshot = async (
-  ws: WebSocket,
-  orderbookData: IOrderbookData
-): Promise<void> => {
-  try {
-    const snapshot = {
-      type: "ORDERBOOK_SNAPSHOT",
-      bids: orderbookData.orderbook.getBids(),
-      asks: orderbookData.orderbook.getAsks(),
-      lastPrice: orderbookData.orderbook.lastPrice,
-      timestamp: Date.now(),
-    };
-
-    broadcastMessageToClient(ws, snapshot);
-  } catch (error) {
-    console.error("Error sending orderbook snapshot:", error);
-  }
-};
-
-const setupClientEventHandlers = (
-  ws: WebSocket,
-  orderbookData: IOrderbookData,
-  ticker: string
-) => {
-  ws.on("message", async (data) => {
-    try {
-      const message = JSON.parse(data.toString());
-      await handleClientMessage(ws, message, orderbookData);
-    } catch (error) {
-      console.error("Error parsing client message:", error);
-      sendErrorToClient(ws, "Invalid message format");
-    }
-  });
-
-  ws.on("error", (error) => {
-    console.error(`WebSocket error for ${ticker}:`, error);
-    removeClientFromOrderbook(ws, ticker);
-  });
-
-  ws.on("close", (code, reason) => {
-    console.log(
-      `Client disconnected from ${ticker} (code: ${code}, reason: ${reason?.toString()})`
-    );
-    removeClientFromOrderbook(ws, ticker);
-  });
-
-  ws.on("pong", () => {});
-
-  const pingInterval = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.ping();
-    } else {
-      clearInterval(pingInterval);
-    }
-  }, 30000);
-};
-
-const handleClientMessage = async (
-  ws: WebSocket,
-  message: any,
-  orderbookData: IOrderbookData
-): Promise<void> => {
-  try {
-    switch (message.type) {
-      case "PING":
-        broadcastMessageToClient(ws, { type: "PONG", timestamp: Date.now() });
-        break;
-
-      case "GET_ORDERBOOK":
-        await sendOrderbookSnapshot(ws, orderbookData);
-        break;
-
-      default:
-        console.warn("Unknown message type from client:", message.type);
-        sendErrorToClient(ws, `Unknown message type: ${message.type}`);
-    }
-  } catch (error) {
-    console.error("Error handling client message:", error);
-    sendErrorToClient(ws, "Error processing message");
-  }
-};
+const orderbookMap: Map<string, IOrderbookData> = new Map();
 
 const removeClientFromOrderbook = (ws: WebSocket, ticker: string): void => {
   try {
@@ -139,22 +40,6 @@ const removeClientFromOrderbook = (ws: WebSocket, ticker: string): void => {
     }
   } catch (error) {
     console.error("Error removing client from orderbook:", error);
-  }
-};
-
-const sendErrorToClient = (ws: WebSocket, errorMessage: string): void => {
-  try {
-    const errorResponse = {
-      type: "ERROR",
-      message: errorMessage,
-      timestamp: Date.now(),
-    };
-
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(errorResponse));
-    }
-  } catch (error) {
-    console.error("Error sending error message to client:", error);
   }
 };
 
@@ -181,7 +66,14 @@ const validateTicker = (
   return { isValid: true };
 };
 
-const orderbookMap: Map<string, IOrderbookData> = new Map();
+const validateUser = (token: string) => {
+  try {
+    const user = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    return user.sub;
+  } catch (error) {
+    return null;
+  }
+};
 
 const getOrCreateOrderbookData = (ticker: string): IOrderbookData => {
   if (orderbookMap.has(ticker)) {
@@ -253,15 +145,33 @@ async function processOrders(orders: IOrderResponse[]) {
 const wss = new WebSocketServer({ port: 8080 });
 
 wss.on("connection", async (ws, req) => {
-  let ticker: string | undefined;
+  let ticker: string | null;
+  let token: string | null;
 
+  const params = new URLSearchParams(req.url?.split("?")[1]);
+  ticker = params.get("ticker");
+  token = params.get("token");
+
+  if (!token) {
+    sendErrorToClient(ws, "No Token Found!");
+    ws.close(1008, "No token found");
+    return;
+  }
+
+  if (!ticker) {
+    sendErrorToClient(ws, "No ticker provided in URL");
+    ws.close(1008, "No ticker provided");
+    return;
+  }
   try {
-    ticker = req.url?.split("?ticker=")[1];
+    const userId = validateUser(token);
 
-    if (!ticker) {
-      sendErrorToClient(ws, "No ticker provided in URL");
-      ws.close(1008, "No ticker provided");
+    if (!userId) {
+      sendErrorToClient(ws, "Unauthorized User");
+      ws.close(1008, "UnAuthorized User");
       return;
+    } else {
+      (ws as any).userId = userId;
     }
 
     const validation = validateTicker(ticker);
@@ -277,7 +187,49 @@ wss.on("connection", async (ws, req) => {
 
     await sendOrderbookSnapshot(ws, orderbookData);
 
-    setupClientEventHandlers(ws, orderbookData, ticker);
+    ws.on("message", async (data) => {
+      try {
+        const payload = JSON.parse(data.toString());
+        switch (payload.type) {
+          case "PING":
+            broadcastMessageToClient(ws, { type: "PONG", timestamp: Date.now() });
+            break;
+    
+          case "GET_ORDERBOOK":
+            await sendOrderbookSnapshot(ws, orderbookData);
+            break;
+    
+          default:
+            console.warn("Unknown message type from client:", payload.type);
+            sendErrorToClient(ws, `Unknown message type: ${payload.type}`);
+        }
+      } catch (error) {
+        console.error("Error parsing client message:", error);
+        sendErrorToClient(ws, "Invalid message format");
+      }
+    });
+
+    ws.on("error", (error) => {
+      console.error(`WebSocket error for ${ticker}:`, error);
+      removeClientFromOrderbook(ws, ticker);
+    });
+
+    ws.on("close", (code, reason) => {
+      console.log(
+        `Client disconnected from ${ticker} (code: ${code}, reason: ${reason?.toString()})`
+      );
+      removeClientFromOrderbook(ws, ticker);
+    });
+
+    ws.on("pong", () => {});
+
+    const pingInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.ping();
+      } else {
+        clearInterval(pingInterval);
+      }
+    }, 30000);
   } catch (error) {
     console.error("Error handling client connection:", error);
     if (ticker) {
@@ -318,6 +270,8 @@ const consumerStream = async () => {
         "GROUP",
         GROUP_NAME,
         CONSUMER_NAME,
+        "BLOCK",
+        5000,
         "STREAMS",
         MATCHING_ENGINE_STREAM,
         ">"
@@ -326,9 +280,6 @@ const consumerStream = async () => {
       if (newMessages && newMessages.length > 0) {
         const orders = parseStreamData(newMessages);
         await processOrders(orders);
-      } else {
-        await new Promise((r) => setTimeout(r, 500));
-        continue;
       }
     } catch (error) {
       console.error(error);

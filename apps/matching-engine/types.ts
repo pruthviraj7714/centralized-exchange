@@ -4,6 +4,7 @@ import type Orderbook from "./orderbook";
 export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 
 export interface IOrder {
+  id : string;
   type: "LIMIT" | "MARKET";
   side: "BUY" | "SELL";
   price: number;
@@ -55,6 +56,7 @@ export type OrderEvent =
       side: "BUY" | "SELL";
       type: "LIMIT" | "MARKET";
       userId: string;
+      id: string;
       streamId?: string;
       quantity: string;
       price: string;
