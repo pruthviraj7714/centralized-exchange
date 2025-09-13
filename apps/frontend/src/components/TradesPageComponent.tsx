@@ -281,12 +281,14 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
           setBids(payload.bids);
           setAsks(payload.asks);
           setLastPrice(payload.lastPrice);
+          processTick(payload.lastPrice, payload.timestamp);
           break;
         }
         case "ORDERBOOK_UPDATE": {
           setBids(payload.bids);
           setAsks(payload.asks);
           setLastPrice(payload.lastPrice);
+          processTick(payload.lastPrice, payload.timestamp);
           break;
         }
       }

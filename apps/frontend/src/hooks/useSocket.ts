@@ -1,14 +1,16 @@
 import { WS_URL } from "@/lib/config";
+import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react"
 
 
 const useSocket = (ticker : string) => {
     const [socket, setSocket] = useState<null | WebSocket>(null);
     const [isConnected, setIsConnected] = useState<boolean>(false);
-
+    const { data } = useSession();
 
     useEffect(() => {
-        const ws = new WebSocket(`${WS_URL}?ticker=${ticker}`)
+        if(!data || !data.accessToken) return;
+        const ws = new WebSocket(`${WS_URL}?ticker=${ticker}&token=${data.accessToken}`)
 
         setIsConnected(false);
 
@@ -29,8 +31,7 @@ const useSocket = (ticker : string) => {
             setSocket(null);
         }
 
-    },[ticker])
-
+    },[ticker, data])
 
     return {
         socket,
