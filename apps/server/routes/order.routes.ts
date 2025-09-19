@@ -31,6 +31,8 @@ const splitOrders = (orders: IOrder[]) => {
 orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = req.userId!;
+    let bestPrice;
+    let bufferedAmount;
 
     const { success, data } = OrderSchema.safeParse(req.body);
 
@@ -91,7 +93,7 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     }
 
     if (side === "BUY" && type === "LIMIT") {
-      if (price === 0 || quantity === 0) {
+      if (price <= 0 || quantity <= 0) {
         res
           .status(400)
           .json({ message: "qty & price should be greater than 0" });
@@ -120,12 +122,12 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     }
 
     if (side === "BUY" && type === "MARKET") {
-      if (quantity === 0) {
+      if (quantity <= 0) {
         res.status(400).json({ message: "insuffcient funds!" });
         return;
       }
 
-      let bestPrice = await redisClient.get(`Best-Ask:${pair}`);
+      bestPrice = await redisClient.get(`Best-Ask:${pair}`);
 
       if (!bestPrice) {
         const market = await prisma.market.findFirst({
@@ -142,11 +144,11 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
         bestPrice = market?.price.toString();
       }
 
-      const amount = (bestPrice ? parseFloat(bestPrice) : 0) * quantity;
+      const amount = parseFloat(bestPrice) * quantity;
 
       const bufferPercentage = parseFloat(MARKET_ORDER_BUFFER) || 0.03;
 
-      const bufferedAmount = amount * (1 + bufferPercentage);
+      bufferedAmount = amount * (1 + bufferPercentage);
 
       if (quoteWallet.available < bufferedAmount) {
         res.status(400).json({ message: "insufficient funds" });
@@ -191,7 +193,7 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
     }
 
     if (side === "SELL" && type === "MARKET") {
-      if (quantity === 0) {
+      if (quantity <= 0) {
         res.status(400).json({ message: "Quantity Should be greater than 0" });
         return;
       }
@@ -225,6 +227,10 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       price,
       pair,
       timestamp: Date.now(),
+      ...(type === "MARKET" && {
+          bufferedPrice: bestPrice,
+          bufferedAmount,
+      })
     };
 
     await redisClient.xadd(
@@ -240,7 +246,7 @@ orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
       message: "Order Successfully Initiated",
     });
   } catch (error) {
-    console.log(error);
+    console.error("Order creation failed", error);
 
     res.status(500).json({
       message: "Internal Server Error",

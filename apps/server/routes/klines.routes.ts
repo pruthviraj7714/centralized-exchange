@@ -27,49 +27,55 @@ const getCandleView = (interval: string): string => {
 
 klinesRouter.get("/", authMiddleware, async (req, res) => {
   try {
-    const { symbol, interval, startTime, endTime } = req.query;
+    const { symbol, interval, startTime, endTime, limit } = req.query;
 
     if (!symbol || !interval) {
-      res.status(400).json({
+      return res.status(400).json({
         message: "Symbol and Interval must be passed in params",
       });
-      return;
     }
 
     const viewName = getCandleView(interval as string);
 
-    const end = new Date();
-    const start = new Date(end.getTime() - 60 * 60 * 1000);
+    const end = endTime ? new Date(Number(endTime)) : new Date();
+    const start = startTime
+      ? new Date(Number(startTime))
+      : new Date(end.getTime() - 60 * 60 * 1000);
+
+    const maxLimit = 1000;
+    const rowsLimit = limit ? Math.min(Number(limit), maxLimit) : 500;
 
     const candles: any = await prisma.$queryRawUnsafe(
       `
-          SELECT bucket, pair, open, high, low, close
-          FROM "${viewName}"
-          WHERE pair = $1
-            AND bucket >= $2::timestamptz
-            AND bucket <= $3::timestamptz
-          ORDER BY bucket ASC;
-          `,
+        SELECT bucket, pair, open, high, low, close, volume
+        FROM "${viewName}"
+        WHERE pair = $1
+          AND bucket >= $2::timestamptz
+          AND bucket <= $3::timestamptz
+        ORDER BY bucket ASC
+        LIMIT $4;
+      `,
       symbol,
       start,
-      end
+      end,
+      rowsLimit
     );
 
-    const formattedCandles = candles.map((c: any) => ({
-      ...c,
-      open: Number(c.open),
-      high: Number(c.high),
-      low: Number(c.low),
-      close: Number(c.close),
-    }));
-    res.status(200).json(formattedCandles);
+    const formattedCandles = candles.map((c: any) => ([
+      new Date(c.bucket).getTime(), 
+      Number(c.open),
+      Number(c.high),
+      Number(c.low),
+      Number(c.close),
+      Number(c.volume ?? 0)
+    ]));
+
+    return res.status(200).json(formattedCandles);
   } catch (error) {
-    console.log(error);
-    
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
+    console.error(error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
 
 export default klinesRouter;
