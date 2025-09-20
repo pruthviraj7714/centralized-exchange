@@ -1,0 +1,45 @@
+# For Development
+services:
+  server:
+    build:
+      context: .
+      dockerfile: docker/server/Dockerfile
+    ports:
+      - "3001:3001"
+    depends_on:
+      - engine
+    restart: always
+
+  engine:
+    build:
+      context: .
+      dockerfile: docker/matching-engine/Dockerfile
+    ports:
+      - "8080:8080"
+    restart: always
+
+  # frontend:
+  #   image: cex-frontend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - server
+  #   restart: always
+
+  persistence-worker:
+    build:
+      context: .
+      dockerfile: docker/persistence-worker/Dockerfile
+    restart: always
+
+  market-metrics-worker:
+    build:
+      context: .
+      dockerfile: docker/market-metrics-worker/Dockerfile
+    restart: always
+
+  dlq-worker:
+    build:
+      context: .
+      dockerfile: docker/dlq-worker/Dockerfile
+    restart: always
