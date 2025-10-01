@@ -431,9 +431,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                 <div className="text-center py-2 border-y border-slate-800">
                   <div className="text-lg font-bold text-emerald-400">
-                    208.40
+                        {lastPrice}
                   </div>
-                  <div className="text-xs text-slate-400">Spread: 0.07</div>
+                  <div className="text-xs text-slate-400">Spread: {asks[0]?.price - bids[0]?.price || 0}</div>
                 </div>
 
                 <div>
