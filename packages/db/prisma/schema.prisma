@@ -25,7 +25,7 @@ model User {
 model Wallet {
   id        String @id @default(uuid())
   userId    String
-  user      User   @relation(fields: [userId], references: [id])
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   asset     String
   available Float  @default(0)
   locked    Float  @default(0)
@@ -47,7 +47,7 @@ model Order {
   status         ORDER_STATUS
   buyTrades      Trade[]      @relation("BuyTrades")
   sellTrades     Trade[]      @relation("SellTrades")
-  user           User         @relation(fields: [userId], references: [id])
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Trade {
@@ -59,9 +59,9 @@ model Trade {
   pair       String
   executedAt DateTime @default(now())
   marketId   String
-  market     Market   @relation(fields: [marketId], references: [id])
-  bid Order @relation("BuyTrades", fields: [bidId], references: [id])
-  ask Order @relation("SellTrades", fields: [askId], references: [id])
+  market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
+  bid Order @relation("BuyTrades", fields: [bidId], references: [id], onDelete: Cascade)
+  ask Order @relation("SellTrades", fields: [askId], references: [id], onDelete: Cascade)
 
   @@unique([executedAt, id])
 }

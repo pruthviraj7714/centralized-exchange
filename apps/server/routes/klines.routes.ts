@@ -47,7 +47,7 @@ klinesRouter.get("/", authMiddleware, async (req, res) => {
 
     const candles: any = await prisma.$queryRawUnsafe(
       `
-        SELECT bucket, pair, open, high, low, close, volume
+        SELECT bucket, pair, open, high, low, close
         FROM "${viewName}"
         WHERE pair = $1
           AND bucket >= $2::timestamptz
@@ -67,7 +67,6 @@ klinesRouter.get("/", authMiddleware, async (req, res) => {
       Number(c.high),
       Number(c.low),
       Number(c.close),
-      Number(c.volume ?? 0)
     ]));
 
     return res.status(200).json(formattedCandles);
