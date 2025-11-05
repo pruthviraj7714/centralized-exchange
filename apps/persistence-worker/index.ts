@@ -6,7 +6,7 @@ import {
   GROUP_NAME,
   PERSISTENCE_STREAM,
 } from "./config";
-import type { IOrderResponse, ITrade, OrderEvent } from "./types";
+import type { OrderEvent } from "./types";
 
 function parseStreamData(streams: any[]) {
   const results: any[] = [];
@@ -49,7 +49,7 @@ const handleEvent = async (
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       await eventFn(order);
-      //TODO:sending it to client via publisher
+      await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
       return;
     } catch (err) {
       console.error(`Failed to process order ${order.streamId}:`, err);
@@ -58,15 +58,9 @@ const handleEvent = async (
         await new Promise((res) => setTimeout(res, 1000));
       } else {
         console.log("sending to dlq");
-        await redisClient.xadd(
-          DLQ_STREAM,
-          "*",
-          ...Object.entries(order).flatMap(([k, v]) => [k, String(v)])
-        );
+        await redisClient.xadd(DLQ_STREAM, "*", "data", JSON.stringify(order));
+        await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
       }
-    } finally {
-      await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, order.streamId);
-      await redisClient.del(`retry-count:${order.requestId}`);
     }
   }
 };
@@ -135,71 +129,200 @@ const handleCancelOrder = async (order: OrderEvent): Promise<void> => {
   }
 };
 
-//TODO:unlocking funds for market buy orders + for other orders unlocking locked funds from user wallets
-
 const handleOrderMatchOrCreate = async (data: any) => {
   try {
-    const { data : {makers, taker, trades }, streamId } = data;
+    const {
+      data: { makers = [], taker, trades = [] },
+      streamId,
+    } = data;
+
+    console.log(trades);
+    
+
+    const [baseAsset, quoteAsset] = taker.pair.split("-");
 
     await prisma.$transaction(async (tx) => {
-      const order = await tx.order.create({
-        data: {
-          pair: taker.pair,
-          quantity: taker.quantity,
-          side: taker.side,
-          status: taker.status,
-          type: taker.type,
-          userId: taker.userId,
-          price: taker.price,
-          filledQuantity: taker.filledQuantity,
-        },
-      });
+      let order;
+      if (taker.id) {
+        order = await tx.order.update({
+          where: { id: taker.id },
+          data: {
+            status: taker.status,
+            filledQuantity: taker.filledQuantity,
+          },
+        });
+      } else {
+        order = await tx.order.create({
+          data: {
+            pair: taker.pair,
+            quantity: taker.quantity,
+            side: taker.side,
+            status: taker.status,
+            type: taker.type,
+            userId: taker.userId,
+            price: taker.price,
+            filledQuantity: taker.filledQuantity,
+          },
+        });
+      }
+
+      const isOrderBuy = taker.side === "BUY";
 
       const market = await tx.market.findFirst({
-        where : {
-          baseAsset : taker.pair.split("-")[0],
-          quoteAsset : taker.pair.split("-")[1],
+        where: { baseAsset, quoteAsset },
+      });
+      if (!market) throw new Error("market not found!");
+
+      const ensureWallet = async (userId: string, asset: string) => {
+        await tx.wallet.upsert({
+          where: { userId_asset: { userId, asset } },
+          update: {},
+          create: { userId, asset, available: 0, locked: 0 },
+        });
+      };
+
+      const ensurePromises: Promise<any>[] = [
+        ensureWallet(taker.userId, baseAsset),
+        ensureWallet(taker.userId, quoteAsset),
+      ];
+      for (const m of makers) {
+        ensurePromises.push(ensureWallet(m.userId, baseAsset));
+        ensurePromises.push(ensureWallet(m.userId, quoteAsset));
+      }
+      await Promise.all(ensurePromises);
+
+      let usedBidAmount = 0; 
+      let usedAskAmount = 0; 
+
+      for (const m of makers) {
+        await tx.order.update({
+          where: { id: m.id },
+          data: {
+            status: "FILLED",
+            filledQuantity: m.filledQuantity,
+          },
+        });
+
+        if (isOrderBuy) {
+          await tx.wallet.update({
+            where: { userId_asset: { userId: m.userId, asset: baseAsset } },
+            data: {
+              locked: { increment: -Number(m.filledQuantity) },
+            },
+          });
+          await tx.wallet.update({
+            where: { userId_asset: { userId: m.userId, asset: quoteAsset } },
+            data: {
+              available: { increment: Number(m.filledQuantity) * Number(m.price) },
+            },
+          });
+        } else {
+          await tx.wallet.update({
+            where: { userId_asset: { userId: m.userId, asset: quoteAsset } },
+            data: {
+              locked: { increment: -(Number(m.filledQuantity) * Number(m.price)) },
+            },
+          });
+          await tx.wallet.update({
+            where: { userId_asset: { userId: m.userId, asset: baseAsset } },
+            data: {
+              available: { increment: Number(m.filledQuantity) },
+            },
+          });
         }
-      })
+      }
 
-      if(!market) throw new Error("market not found!");
+      for (const trade of trades) {
+        await tx.trade.create({
+          data: {
+            pair: trade.pair,
+            price: trade.price,
+            marketId: market.id, 
+            quantity: trade.quantity,
+            askId: order.side === "BUY" ? trade.askId : order.id,
+            bidId: order.side === "BUY" ? trade.bidId : order.id,
+            executedAt: new Date(trade.executedAt),
+          },
+        });
 
-      await Promise.all(
-        makers.map((m: IOrderResponse) => {
-          tx.order.update({
-            where: {
-              id: m.id,
-            },
-            data: {
-              status: "FILLED",
-              filledQuantity: m.filledQuantity,
-            },
+        if (isOrderBuy) {
+          usedBidAmount += Number(trade.quantity) * Number(trade.price);
+          usedAskAmount += Number(trade.quantity); 
+        } else {
+          usedAskAmount += Number(trade.quantity); 
+          usedBidAmount += Number(trade.quantity) * Number(trade.price); 
+        }
+      }
+
+      if (isOrderBuy) {
+        await tx.wallet.update({
+          where: { userId_asset: { userId: taker.userId, asset: quoteAsset } },
+          data: {
+            locked: { increment: -usedBidAmount },
+          },
+        });
+        await tx.wallet.update({
+          where: { userId_asset: { userId: taker.userId, asset: baseAsset } },
+          data: {
+            available: { increment: usedAskAmount },
+          },
+        });
+      } else {
+        await tx.wallet.update({
+          where: { userId_asset: { userId: taker.userId, asset: baseAsset } },
+          data: {
+            locked: { increment: -usedAskAmount },
+          },
+        });
+        await tx.wallet.update({
+          where: { userId_asset: { userId: taker.userId, asset: quoteAsset } },
+          data: {
+            available: { increment: usedBidAmount },
+          },
+        });
+      }
+
+      if (taker.type === "MARKET") {
+        if (isOrderBuy) {
+          const takerQuote = await tx.wallet.findUnique({
+            where: { userId_asset: { userId: taker.userId, asset: quoteAsset } },
+            select: { locked: true },
           });
-        })
-      );
-
-      await Promise.all(
-        trades.map((trade: ITrade) => {
-          tx.trade.create({
-            data: {
-              pair: trade.pair,
-              price: trade.price,
-              marketId : market.id,
-              quantity: trade.quantity,
-              askId: order.side === "BUY" ? trade.askId : order.id,
-              bidId: order.side === "BUY" ? trade.bidId : order.id,
-              executedAt: new Date(trade.executedAt),
-            },
+          const leftover = Number(takerQuote?.locked ?? 0);
+          if (leftover > 0) {
+            await tx.wallet.update({
+              where: { userId_asset: { userId: taker.userId, asset: quoteAsset } },
+              data: {
+                locked: { increment: -leftover },
+                available: { increment: leftover },
+              },
+            });
+          }
+        } else {
+          const takerBase = await tx.wallet.findUnique({
+            where: { userId_asset: { userId: taker.userId, asset: baseAsset } },
+            select: { locked: true },
           });
-        })
-      );
+          const leftover = Number(takerBase?.locked ?? 0);
+          if (leftover > 0) {
+            await tx.wallet.update({
+              where: { userId_asset: { userId: taker.userId, asset: baseAsset } },
+              data: {
+                locked: { increment: -leftover },
+                available: { increment: leftover },
+              },
+            });
+          }
+        }
+      }
     });
 
     await redisClient.xack(PERSISTENCE_STREAM, GROUP_NAME, streamId);
 
     console.log("Order + Trades persisted successfully");
   } catch (error) {
-    console.error(error);
+    console.error("Error in handleOrderMatchOrCreate:", error);
+    throw error;
   }
 };
 
@@ -223,6 +346,8 @@ const processOrders = async (orders: OrderEvent[]) => {
   );
 };
 async function main() {
+  console.log("Persistence worker is running...");
+  
   await createConsumerGroup();
 
   const prevMessages = await redisClient.xreadgroup(

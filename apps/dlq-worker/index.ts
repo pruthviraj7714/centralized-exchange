@@ -39,11 +39,28 @@ const createConsumerGroup = async () => {
   }
 };
 
-const processEvent = async (events: any[]) => {
-   
+const processEvents = async (events: any[]) => {
+  for(const event of events) {
+      switch(event.event) {
+        case "ORDER_PLACED" : 
+
+        break;
+
+        case "ORDER_CANCELLED" : {
+
+          break;
+        }
+        case "TRADE_EXECUTED" : {
+
+          break;
+        }
+      }
+  } 
 };
 
 async function main() {
+  console.log("dlq worker is running...");
+  
   await createConsumerGroup();
 
   const prevMessages = await redisClient.xreadgroup(
@@ -56,7 +73,8 @@ async function main() {
   );
 
   if (prevMessages && prevMessages.length > 0) {
-        //TODO: process all events here according to types
+        const data = parseStreamData(prevMessages);
+        await processEvents(data);
   }
 
   while (true) {
@@ -65,19 +83,17 @@ async function main() {
         "GROUP",
         GROUP_NAME,
         CONSUMER_NAME,
+        "BLOCK",
+        5000,
         "STREAMS",
         DLQ_STREAM,
         ">"
       );
 
       if (newMessages && newMessages.length > 0) {
-        //TODO: process all events here according to types
+        const data = parseStreamData(prevMessages);
+        await processEvents(data);
     }
-
-      if (!newMessages) {
-        await new Promise((r) => setTimeout(r, 1000));
-        continue;
-      }
     } catch (error) {
       console.error(error);
     }

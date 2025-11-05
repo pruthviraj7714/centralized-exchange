@@ -21,6 +21,7 @@ import {
   MATCHING_ENGINE_STREAM,
 } from "./config";
 import jwt, { type JwtPayload } from "jsonwebtoken";
+import fs from "fs";
 
 const orderbookMap: Map<string, IOrderbookData> = new Map();
 
@@ -192,13 +193,16 @@ wss.on("connection", async (ws, req) => {
         const payload = JSON.parse(data.toString());
         switch (payload.type) {
           case "PING":
-            broadcastMessageToClient(ws, { type: "PONG", timestamp: Date.now() });
+            broadcastMessageToClient(ws, {
+              type: "PONG",
+              timestamp: Date.now(),
+            });
             break;
-    
+
           case "GET_ORDERBOOK":
             await sendOrderbookSnapshot(ws, orderbookData);
             break;
-    
+
           default:
             console.warn("Unknown message type from client:", payload.type);
             sendErrorToClient(ws, `Unknown message type: ${payload.type}`);
@@ -248,6 +252,19 @@ wss.on("error", (error) => {
 });
 
 const consumerStream = async () => {
+  // let latestSnapshot = {};
+
+  // fs.readFile("./snaphost.json", (err, data) => {
+  //   if (err) console.log(err.message);
+  //   else {
+  //     latestSnapshot = data || {};
+  //   }
+  // });
+
+  // if(Object.keys(latestSnapshot).length !== 0) {
+    
+  // }
+
   await createConsumerGroup();
 
   const prevMessages = await redisClient.xreadgroup(
