@@ -102,3 +102,8 @@ export const SEED_MARKETS = [
     logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
   },
 ];
+
+export const fetchMarketMetadata = (ticker : string)=> {
+  const marketData = SEED_MARKETS.find((market) => market.ticker === ticker);
+  return marketData;
+} 

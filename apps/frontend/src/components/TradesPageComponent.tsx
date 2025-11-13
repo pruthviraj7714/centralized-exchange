@@ -1,22 +1,13 @@
 "use client";
 
 import useSocket from "@/hooks/useSocket";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { Button } from "./ui/button";
-import { TrendingUp, TrendingDown, BarChart3 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import {
   CandlestickSeries,
@@ -26,6 +17,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { Card } from "./ui/card";
+import { fetchMarketMetadata } from "@repo/common"
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
@@ -200,6 +192,30 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
   };
 
+  const handlePlaceOrder = async (side: "BUY" | "SELL") => {
+    if (!data || !data.accessToken) return;
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/orders`,
+        {
+          side,
+          quantity,
+          price,
+          type: orderType,
+          pair: ticker,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${data.accessToken}`,
+          },
+        }
+      );
+      toast.success(response.data.message);
+    } catch (error: any) {
+      toast.error(error.response.data.message ?? error.message);
+    }
+  };
+
   useEffect(() => {
     if (!chartRef.current) return;
 
@@ -295,29 +311,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     };
   }, [socket, isConnected]);
 
-  const handlePlaceOrder = async (side: "BUY" | "SELL") => {
-    if (!data || !data.accessToken) return;
-    try {
-      const response = await axios.post(
-        `${BACKEND_URL}/orders`,
-        {
-          side,
-          quantity,
-          price,
-          type: orderType,
-          pair: ticker,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${data.accessToken}`,
-          },
-        }
-      );
-      toast.success(response.data.message);
-    } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message);
-    }
-  };
+  const transformedBids = useMemo(() => transformOrderbook(bids).slice(0,8), bids);
+  const transformedAsks = useMemo(() => transformOrderbook(asks).slice(0,8), asks);
+  const marketData = fetchMarketMetadata(ticker);
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
@@ -325,6 +321,16 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
         <div className="mx-auto px-3 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-8">
+              <div className="flex gap-1.5 pl-5">
+              <img
+  src={marketData?.logo}
+  alt="logo"
+  className="h-6 w-6 object-contain border border-slate-700"
+/>
+                <p>
+                  {marketData?.baseAsset}-{marketData?.quoteAsset}
+                </p>
+              </div>
               <div className="flex items-center space-x-4">
                 <div className="flex items-center space-x-2 text-sm">
                   <span className="text-emerald-400">O</span>
@@ -407,7 +413,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                     <span>Total (SOL)</span>
                   </div>
                   <div className="space-y-1">
-                    {transformOrderbook(asks)
+                    {transformedAsks
                       .slice(0, 8)
                       .reverse()
                       .map((ask) => (
@@ -438,7 +444,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                 <div>
                   <div className="space-y-1">
-                    {transformOrderbook(bids)
+                    {transformedBids
                       .slice(0, 8)
                       .map((bid) => (
                         <div
