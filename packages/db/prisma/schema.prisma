@@ -5,87 +5,126 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
   output   = "../generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
-  orders    Order[]
-  wallets   Wallet[]
+
+  wallets Wallet[]
+  orders  Order[]
+}
+
+model WalletLedger {
+  id           String      @id @default(uuid())
+  walletId     String
+  type         LEDGER_TYPE
+  amount       Decimal     @db.Decimal(36, 18)
+  balanceAfter Decimal     @db.Decimal(36, 18)
+  referenceId  String?
+  createdAt    DateTime    @default(now())
+
+  wallet Wallet @relation(fields: [walletId], references: [id])
+
+  @@index([walletId, createdAt])
 }
 
 model Wallet {
-  id        String @id @default(uuid())
-  userId    String
-  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  asset     String
-  available Float  @default(0)
-  locked    Float  @default(0)
+  id     String @id @default(uuid())
+  userId String
+  asset  String
+
+  available Decimal @db.Decimal(36, 18)
+  locked    Decimal @db.Decimal(36, 18)
+
+  user   User           @relation(fields: [userId], references: [id])
+  ledger WalletLedger[]
 
   @@unique([userId, asset])
 }
 
 model Order {
-  id             String       @id @default(uuid())
-  userId         String
-  side           SIDE
-  pair           String
-  price          Float        @default(0)
-  quantity       Float
-  filledQuantity Float        @default(0)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  type           ORDER_TYPE
-  status         ORDER_STATUS
-  buyTrades      Trade[]      @relation("BuyTrades")
-  sellTrades     Trade[]      @relation("SellTrades")
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  userId   String
+  marketId String
+
+  side   SIDE
+  type   ORDER_TYPE
+  status ORDER_STATUS
+
+  price             Decimal? @db.Decimal(36, 18) // null for MARKET
+  originalQuantity  Decimal  @db.Decimal(36, 18)
+  remainingQuantity Decimal  @db.Decimal(36, 18)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  market Market @relation(fields: [marketId], references: [id])
+
+  buyTrades  Trade[] @relation("BuyTrades")
+  sellTrades Trade[] @relation("SellTrades")
+
+  @@index([marketId, price])
+  @@index([marketId, createdAt])
 }
 
 model Trade {
-  id         String   @default(uuid())
-  bidId      String
-  askId      String
-  price      Float
-  quantity   Float
-  pair       String
-  executedAt DateTime @default(now())
-  marketId   String
-  market     Market   @relation(fields: [marketId], references: [id], onDelete: Cascade)
-  bid Order @relation("BuyTrades", fields: [bidId], references: [id], onDelete: Cascade)
-  ask Order @relation("SellTrades", fields: [askId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid())
+  marketId String
 
-  @@unique([executedAt, id])
+  buyOrderId  String
+  sellOrderId String
+
+  price    Decimal @db.Decimal(36, 18)
+  quantity Decimal @db.Decimal(36, 18)
+
+  makerFee Decimal @db.Decimal(36, 18)
+  takerFee Decimal @db.Decimal(36, 18)
+
+  executedAt DateTime @default(now())
+
+  market    Market @relation(fields: [marketId], references: [id])
+  buyOrder  Order  @relation("BuyTrades", fields: [buyOrderId], references: [id])
+  sellOrder Order  @relation("SellTrades", fields: [sellOrderId], references: [id])
+
+  @@index([marketId, executedAt])
 }
 
 model Market {
-  id          String   @id @default(uuid())
-  ticker      String
-  baseAsset   String
-  quoteAsset  String
-  symbol    String
-  logo   String
-  price       Float
-  volume24h   Float?
-  marketCap   Float?
-  change24h   Float?
-  sparkline7d Json?
-  trades      Trade[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String @id @default(uuid())
+  symbol     String @unique // BTC_USDT
+  baseAsset  String // BTC
+  quoteAsset String // USDT
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+  trades Trade[]
+}
+
+model FeeAccount {
+  id      String  @id @default(uuid())
+  asset   String
+  balance Decimal @db.Decimal(36, 18)
 }
 
 enum SIDE {
   BUY
   SELL
+}
+
+enum ORDER_TYPE {
+  LIMIT
+  MARKET
 }
 
 enum ORDER_STATUS {
@@ -95,7 +134,11 @@ enum ORDER_STATUS {
   CANCELLED
 }
 
-enum ORDER_TYPE {
-  LIMIT
-  MARKET
+enum LEDGER_TYPE {
+  DEPOSIT
+  WITHDRAW
+  TRADE_DEBIT
+  TRADE_CREDIT
+  FEE
+  REFUND
 }
