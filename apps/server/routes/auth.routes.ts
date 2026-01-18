@@ -6,6 +6,7 @@ import { sign } from "jsonwebtoken";
 import { JWT_SECRET } from "../utils/config";
 import { DefaultAssets } from "../utils/constants";
 import { RequestOTPSchema, VerifyOTPSchema } from "@repo/common";
+import Decimal from "decimal.js";
 
 const authRouter: Router = Router();
 
@@ -33,7 +34,6 @@ authRouter.post(
       return;
     }
 
-
     const { email } = data;
 
     try {
@@ -55,7 +55,8 @@ authRouter.post(
         await prisma.wallet.createMany({
           data: DefaultAssets.map((a) => ({
             asset: a,
-            available: 0,
+            available: new Decimal(0),
+            locked : new Decimal(0),
             userId: user.id,
           })),
         });
@@ -64,7 +65,6 @@ authRouter.post(
       const alreadyOTPExists = await redisClient.get(`OTP:${user.id}`);
 
       if (alreadyOTPExists) {
-
       console.log(alreadyOTPExists);
         res.status(200).json({
           message: "OTP successfully sent!",
@@ -80,9 +80,6 @@ authRouter.post(
         "PX",
         OTP_EXPIRATION_DURATION
       );
-
-      console.log(otp);
-      
 
       res.status(200).json({
         message: "OTP successfully sent!",

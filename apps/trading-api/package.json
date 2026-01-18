@@ -1,30 +1,24 @@
 {
-  "name": "server",
+  "name": "trading-api",
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@repo/common" : "*"
+  },
   "scripts": {
     "dev": "bun --watch run index.ts",
     "build": "bun build index.ts --outdir dist",
     "start": "bun run dist/index.js"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "@repo/redisclient": "*",
-    "@repo/db": "*",
-    "@repo/common": "*"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.3",
-    "@types/jsonwebtoken": "^9.0.10",
+    "@types/express": "^5.0.6",
     "cors": "^2.8.5",
-    "decimal.js": "^10.6.0",
-    "express": "^5.1.0",
-    "jsonwebtoken": "^9.0.2",
-    "zod": "^4.0.15"
+    "express": "^5.2.1"
   }
 }

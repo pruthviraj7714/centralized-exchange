@@ -1,10 +1,17 @@
+import Decimal from "decimal.js";
 import z from "zod";
 
 export const OrderSchema = z.object({
   pair: z.string(),
   side: z.enum(["BUY", "SELL"]),
-  price: z.number(),
-  quantity: z.number(),
+  price: z.string().transform((val) => new Decimal(val)).refine(
+    (val) => val.greaterThan(0),
+    "Price must be greater than 0"
+  ),
+  quantity: z.string().transform((val) => new Decimal(val)).refine(
+    (val) => val.greaterThan(0),
+    "Quantity must be greater than 0"
+  ),
   type: z.enum(["LIMIT", "MARKET"]),
 });
 
