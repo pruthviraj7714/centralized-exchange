@@ -5,6 +5,7 @@ import orderRouter from './routes/order.routes';
 import marketRouter from './routes/market.routes';
 import cors from 'cors';
 import klinesRouter from './routes/klines.routes';
+
 const app = express();
 
 app.use(express.json());
@@ -17,11 +18,10 @@ app.get('/', (req,res) => {
 })
 
 app.use('/auth', authRouter);
+app.use('/markets', marketRouter);
 app.use('/wallets', walletsRouter);
 app.use('/orders', orderRouter);
-app.use('/market', marketRouter);
 app.use('/klines', klinesRouter);
-
 
 app.listen(3001, () => {
     console.log("server is running on port 3001");

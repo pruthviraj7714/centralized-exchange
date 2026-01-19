@@ -1,9 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import authMiddleware from "../middlewares/authMiddleware";
-import prisma from "@repo/db";
-import { SUPPORTED_PAIRS } from "../utils/constants";
-import redisClient from "@repo/redisclient";
-import { MARKET_ORDER_BUFFER, MATCHING_ENGINE_STREAM, TRADING_API_SERVER_URL } from "../utils/config";
+import { fetchOrderDetailsController, fetchOrdersController, proxyOrderCancelAPI, proxyToTradingAPIServer } from "../controller/order.controller";
 
 const orderRouter: Router = Router();
 
@@ -27,34 +24,14 @@ const splitOrders = (orders: IOrder[]) => {
   };
 };
 
+orderRouter.post("/",authMiddleware, proxyToTradingAPIServer);
 
-const proxyToTradingAPIServer = async (req: Request, res: Response) => {
-  try {
-    const response = await fetch(`${TRADING_API_SERVER_URL}/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        authorization: `Bearer ${req.headers.authorization?.split(" ")[1]}`
-      },
-      body: JSON.stringify(req.body)
-    });
+orderRouter.post("/:id/cancel", authMiddleware, proxyOrderCancelAPI);
 
-    const data = await response.json();
+orderRouter.get('/', authMiddleware, fetchOrdersController);
 
-    if (!response.ok) {
-      res.status(response.status).json(data);
-      return;
-    }
+orderRouter.get('/:id', authMiddleware, fetchOrderDetailsController);
 
-    res.status(200).json(data);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Trading API Server Error: " + error
-    });
-  }
-}
-orderRouter.post("/", proxyToTradingAPIServer)
 
 // orderRouter.post("/", authMiddleware, async (req: Request, res: Response) => {
 //   try {

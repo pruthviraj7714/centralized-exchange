@@ -1,8 +1,10 @@
 import { Router} from "express";
-import { placeOrderController } from "../controllers/order.controller";
+import { cancelOrderController, placeOrderController } from "../controllers/order.controller";
 
 const orderRouter = Router();
 
-orderRouter.post('/', placeOrderController)
+orderRouter.post('/', placeOrderController);
+
+orderRouter.post('/:id/cancel', cancelOrderController);
 
 export default orderRouter;

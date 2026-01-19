@@ -10,6 +10,7 @@ import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Wallet, DollarSign, Plus } from "lucide-react"
 import { useSession } from "next-auth/react"
+import Decimal from "decimal.js"
 
 export default function AssetsPage() {
   const [selectedAsset, setSelectedAsset] = useState("SOL")
@@ -17,10 +18,11 @@ export default function AssetsPage() {
   const [balances, setBalances] = useState<
     {
       asset: string
-      balance: number
+      available: Decimal,
+      locked : Decimal
     }[]
   >([])
-    const { data } = useSession();
+    const { data, status } = useSession();
 
   const handleValueChange = (e: any) => {
     setSelectedAsset(e.target.value)
@@ -39,8 +41,10 @@ export default function AssetsPage() {
   }
 
   useEffect(() => {
-    fetchBalances()
-  }, [])
+    if(status === "authenticated") {
+      fetchBalances();
+    }
+  }, [status])
 
   const handleDeposit = async () => {
     if(!data || !data.accessToken) return;
@@ -66,7 +70,6 @@ export default function AssetsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
-      {/* Header */}
       <div className="border-b border-slate-800/50 bg-slate-950/50 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
@@ -82,7 +85,6 @@ export default function AssetsPage() {
 
       <div className="max-w-7xl mx-auto px-6 py-8">
         <div className="grid lg:grid-cols-2 gap-8">
-          {/* Deposit Section */}
           <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-gradient-to-r from-emerald-500/20 to-emerald-600/20 rounded-lg border border-emerald-500/30">
@@ -134,7 +136,6 @@ export default function AssetsPage() {
             </div>
           </div>
 
-          {/* Balances Section */}
           <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-gradient-to-r from-blue-500/20 to-blue-600/20 rounded-lg border border-blue-500/30">
@@ -160,7 +161,11 @@ export default function AssetsPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-lg text-white">{b.balance.toLocaleString()}</div>
+                      <div className="font-bold text-lg text-white">{b.available.toLocaleString()}</div>
+                      <div className="text-sm text-slate-400">{b.asset}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-lg text-white">{b.locked.toLocaleString()}</div>
                       <div className="text-sm text-slate-400">{b.asset}</div>
                     </div>
                   </div>

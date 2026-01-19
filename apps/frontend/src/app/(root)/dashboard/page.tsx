@@ -34,7 +34,7 @@ export default function MarketDashboard() {
 
   const fetchMarketData = async () => {
     try {
-      const res = await axios.get(`${BACKEND_URL}/market/all`);
+      const res = await axios.get(`${BACKEND_URL}/markets`);
       setMarketData(res.data.markets);
     } catch (error: any) {
       toast.error(error.response?.data?.message ?? error.message);

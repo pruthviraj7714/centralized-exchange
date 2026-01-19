@@ -1,18 +1,10 @@
-import prisma from "@repo/db";
 import { Router } from "express";
+import { fetchMarkets, getMarketBySymbol } from "../controller/market.controller";
 
 const marketRouter = Router();
 
-marketRouter.get("/all", async (req, res) => {
-  try {
-    const markets = await prisma.market.findMany({});
+marketRouter.get("/", fetchMarkets);
 
-    res.status(200).json({ markets: markets || [] });
-  } catch (error) {
-    res.status(500).json({
-      message: "Internal Server Error",
-    });
-  }
-});
+marketRouter.get("/:symbol", getMarketBySymbol);
 
 export default marketRouter;
