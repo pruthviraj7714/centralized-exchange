@@ -1,16 +1,18 @@
 import type Decimal from "decimal.js"
 
-type EngineOrder = {
-    id: string
-    userId: string
-    side: "BUY" | "SELL"
-    price: Decimal | null
-    quantity: Decimal
-    filled: Decimal
-    createdAt: number
-  }
-  
-  type Trade = {
+export type Side = "BUY" | "SELL";
+
+export type EngineOrder = {
+  id: string;
+  userId: string;
+  side: Side;
+  price: Decimal | null; // null for MARKET
+  quantity: Decimal;
+  filled: Decimal;
+  createdAt: number;
+};
+
+export type Trade = {
     buyOrderId: string
     sellOrderId: string
     price: Decimal
