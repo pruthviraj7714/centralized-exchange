@@ -8,5 +8,4 @@ tradeRouter.post('/', authMiddleware, fetchUserTradesController);
 
 tradeRouter.get('/markets/:symbol', authMiddleware, fetchMarketTradesForSymbolController);
 
-
 export default tradeRouter;

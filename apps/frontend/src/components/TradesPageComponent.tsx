@@ -18,6 +18,7 @@ import {
 } from "lightweight-charts";
 import { Card } from "./ui/card";
 import { fetchMarketMetadata } from "@repo/common"
+import Decimal from "decimal.js";
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
@@ -127,70 +128,70 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const chartRef = useRef<HTMLDivElement>(null);
   const lastCandleRef = useRef<Candle | null>(null);
   const candlestickSeriesRef = useRef<any | null>(null);
-  const [quantity, setQuantity] = useState(0);
-  const [price, setPrice] = useState(0);
+  const [quantity, setQuantity] = useState<Decimal>(new Decimal(0));
+  const [price, setPrice] = useState<Decimal>(new Decimal(0));
   const { data } = useSession();
 
-  const fetchChartData = async () => {
-    if (!data || !data.accessToken) return;
-    try {
-      const response = await axios.get(
-        `${BACKEND_URL}/klines?symbol=${ticker.toUpperCase()}&interval=${interval}`,
-        {
-          headers: {
-            Authorization: `Bearer ${data.accessToken}`,
-          },
-        }
-      );
+  // const fetchChartData = async () => {
+  //   if (!data || !data.accessToken) return;
+  //   try {
+  //     const response = await axios.get(
+  //       `${BACKEND_URL}/klines?symbol=${ticker.toUpperCase()}&interval=${interval}`,
+  //       {
+  //         headers: {
+  //           Authorization: `Bearer ${data.accessToken}`,
+  //         },
+  //       }
+  //     );
 
-      return response.data
-        .filter(
-          (candle: any) =>
-            candle.open != null &&
-            candle.high != null &&
-            candle.low != null &&
-            candle.close != null
-        )
-        .map((candle: any) => ({
-          time: Math.floor(new Date(candle.bucket).getTime() / 1000),
-          open: Number(candle.open),
-          high: Number(candle.high),
-          low: Number(candle.low),
-          close: Number(candle.close),
-        }));
-    } catch (error: any) {
-      toast.error(error.message || "Failed to fetch chart data");
-      return [];
-    }
-  };
+  //     return response.data
+  //       .filter(
+  //         (candle: any) =>
+  //           candle.open != null &&
+  //           candle.high != null &&
+  //           candle.low != null &&
+  //           candle.close != null
+  //       )
+  //       .map((candle: any) => ({
+  //         time: Math.floor(new Date(candle.bucket).getTime() / 1000),
+  //         open: Number(candle.open),
+  //         high: Number(candle.high),
+  //         low: Number(candle.low),
+  //         close: Number(candle.close),
+  //       }));
+  //   } catch (error: any) {
+  //     toast.error(error.message || "Failed to fetch chart data");
+  //     return [];
+  //   }
+  // };
 
-  const processTick = (price: number, timestamp: number) => {
-    const time = Math.floor(timestamp / 1000);
-    const interverSec = getIntervalSec(interval);
+  // const processTick = (price: number, timestamp: number) => {
+  //   const time = Math.floor(timestamp / 1000);
+  //   const interverSec = getIntervalSec(interval);
 
-    const candleTime = Math.floor(time / interverSec) * interverSec;
+  //   const candleTime = Math.floor(time / interverSec) * interverSec;
 
-    const lastCandle = lastCandleRef.current;
-    if (!lastCandle || !candlestickSeriesRef.current) return;
+  //   const lastCandle = lastCandleRef.current;
+  //   if (!lastCandle || !candlestickSeriesRef.current) return;
 
-    if (candleTime === lastCandle.time) {
-      lastCandle.high = Math.max(lastCandle.high, price);
-      lastCandle.low = Math.min(lastCandle.low, price);
-      lastCandle.close = price;
+  //   if (candleTime === lastCandle.time) {
+  //     lastCandle.high = Math.max(lastCandle.high, price);
+  //     lastCandle.low = Math.min(lastCandle.low, price);
+  //     lastCandle.close = price;
 
-      candlestickSeriesRef.current.update(lastCandle);
-    } else {
-      const newCandle: Candle = {
-        time: candleTime as UTCTimestamp,
-        open: price,
-        high: price,
-        low: price,
-        close: price,
-      };
-      lastCandleRef.current = newCandle;
-      candlestickSeriesRef.current.update(newCandle);
-    }
-  };
+  //     candlestickSeriesRef.current.update(lastCandle);
+  //   } else {
+  //     const newCandle: Candle = {
+  //       time: candleTime as UTCTimestamp,
+  //       open: price,
+  //       high: price,
+  //       low: price,
+  //       close: price,
+  //     };
+  //     lastCandleRef.current = newCandle;
+  //     candlestickSeriesRef.current.update(newCandle);
+  //   }
+  // };
 
   const handlePlaceOrder = async (side: "BUY" | "SELL") => {
     if (!data || !data.accessToken) return;
@@ -216,65 +217,65 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
   };
 
-  useEffect(() => {
-    if (!chartRef.current) return;
+  // useEffect(() => {
+  //   if (!chartRef.current) return;
 
-    const chartOptions: DeepPartial<ChartOptions> = {
-      layout: {
-        textColor: "#e5e7eb",
-        background: { color: "#0b0b0b" },
-      },
-      grid: {
-        vertLines: { color: "rgba(255,255,255,0.06)" },
-        horzLines: { color: "rgba(255,255,255,0.06)" },
-      },
-    };
-    const chart = createChart(chartRef.current, chartOptions);
+  //   const chartOptions: DeepPartial<ChartOptions> = {
+  //     layout: {
+  //       textColor: "#e5e7eb",
+  //       background: { color: "#0b0b0b" },
+  //     },
+  //     grid: {
+  //       vertLines: { color: "rgba(255,255,255,0.06)" },
+  //       horzLines: { color: "rgba(255,255,255,0.06)" },
+  //     },
+  //   };
+  //   const chart = createChart(chartRef.current, chartOptions);
 
-    chart.applyOptions({
-      width: chartRef.current.clientWidth,
-      height: 500,
-    });
+  //   chart.applyOptions({
+  //     width: chartRef.current.clientWidth,
+  //     height: 500,
+  //   });
 
-    const candlestickSeries = chart.addSeries(CandlestickSeries, {
-      upColor: "#26a69a",
-      downColor: "#ef5350",
-      borderVisible: false,
-      wickUpColor: "#26a69a",
-      wickDownColor: "#ef5350",
-      borderColor: "#404040",
-    });
+  //   const candlestickSeries = chart.addSeries(CandlestickSeries, {
+  //     upColor: "#26a69a",
+  //     downColor: "#ef5350",
+  //     borderVisible: false,
+  //     wickUpColor: "#26a69a",
+  //     wickDownColor: "#ef5350",
+  //     borderColor: "#404040",
+  //   });
 
-    candlestickSeriesRef.current = candlestickSeries;
+  //   candlestickSeriesRef.current = candlestickSeries;
 
-    const loadData = async () => {
-      const data = await fetchChartData();
-      if (data.length > 0) {
-        candlestickSeries.setData(data);
-        lastCandleRef.current = data[data.length - 1];
-        chart.timeScale().fitContent();
-      }
-    };
+  //   const loadData = async () => {
+  //     const data = await fetchChartData();
+  //     if (data.length > 0) {
+  //       candlestickSeries.setData(data);
+  //       lastCandleRef.current = data[data.length - 1];
+  //       chart.timeScale().fitContent();
+  //     }
+  //   };
 
-    loadData();
+  //   loadData();
 
-    const ro = new ResizeObserver((entries) => {
-      const cr = entries[0]?.contentRect;
-      if (cr?.width) {
-        chart.applyOptions({
-          width: Math.floor(cr.width),
-          height: 500,
-        });
-      }
-    });
-    ro.observe(chartRef.current);
+  //   const ro = new ResizeObserver((entries) => {
+  //     const cr = entries[0]?.contentRect;
+  //     if (cr?.width) {
+  //       chart.applyOptions({
+  //         width: Math.floor(cr.width),
+  //         height: 500,
+  //       });
+  //     }
+  //   });
+  //   ro.observe(chartRef.current);
 
-    return () => {
-      ro.disconnect();
-      chart.remove();
-      candlestickSeriesRef.current = null;
-    };
-  }, [ticker, interval, data]);
+  //   return () => {
+  //     ro.disconnect();
+  //     chart.remove();
+  //     candlestickSeriesRef.current = null;
+  //   };
+  // }, [ticker, interval, data]);
 
   useEffect(() => {
     if (socket && isConnected) {
@@ -286,30 +287,30 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
   }, [socket, isConnected, ticker]);
 
-  useEffect(() => {
-    if (!socket) return;
+  // useEffect(() => {
+  //   if (!socket) return;
 
-    socket.onmessage = ({ data }) => {
-      const payload = JSON.parse(data.toString());
+  //   socket.onmessage = ({ data }) => {
+  //     const payload = JSON.parse(data.toString());
 
-      switch (payload.type) {
-        case "ORDERBOOK_SNAPSHOT": {
-          setBids(payload.bids);
-          setAsks(payload.asks);
-          setLastPrice(payload.lastPrice);
-          processTick(payload.lastPrice, payload.timestamp);
-          break;
-        }
-        case "ORDERBOOK_UPDATE": {
-          setBids(payload.bids);
-          setAsks(payload.asks);
-          setLastPrice(payload.lastPrice);
-          processTick(payload.lastPrice, payload.timestamp);
-          break;
-        }
-      }
-    };
-  }, [socket, isConnected]);
+  //     switch (payload.type) {
+  //       case "ORDERBOOK_SNAPSHOT": {
+  //         setBids(payload.bids);
+  //         setAsks(payload.asks);
+  //         setLastPrice(payload.lastPrice);
+  //         processTick(payload.lastPrice, payload.timestamp);
+  //         break;
+  //       }
+  //       case "ORDERBOOK_UPDATE": {
+  //         setBids(payload.bids);
+  //         setAsks(payload.asks);
+  //         setLastPrice(payload.lastPrice);
+  //         processTick(payload.lastPrice, payload.timestamp);
+  //         break;
+  //       }
+  //     }
+  //   };
+  // }, [socket, isConnected]);
 
   const transformedBids = useMemo(() => transformOrderbook(bids).slice(0,8), bids);
   const transformedAsks = useMemo(() => transformOrderbook(asks).slice(0,8), asks);
@@ -507,7 +508,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                     </Label>
                     <Input
                       type="number"
-                      onChange={(e) => setPrice(e.target.valueAsNumber)}
+                      onChange={(e) => setPrice(new Decimal(e.target.value))}
                       placeholder={
                         currentTab === "BUY"
                           ? "Enter bid price"
@@ -522,7 +523,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                   <Label className="text-slate-300 text-sm">Quantity</Label>
                   <Input
                     type="number"
-                    onChange={(e) => setQuantity(e.target.valueAsNumber)}
+                    onChange={(e) => setQuantity(new Decimal(e.target.value))}
                     placeholder="Enter quantity"
                     className="bg-slate-900/50 border-slate-600 text-white placeholder-slate-400 focus:border-emerald-500 focus:ring-emerald-500/20"
                   />
@@ -537,7 +538,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                       Order Value
                     </Label>
                     <div className="text-lg text-white font-bold">
-                      {(quantity * price).toFixed(2)}
+                      {quantity.mul(price).toFixed(2)}
                     </div>
                   </div>
                 )}

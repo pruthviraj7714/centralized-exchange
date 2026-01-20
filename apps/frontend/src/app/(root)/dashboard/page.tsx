@@ -117,7 +117,7 @@ export default function MarketDashboard() {
   const CoinCard = ({ coin }: { coin: IMarketData }) => (
     <div
       className="flex items-center justify-between p-4 bg-slate-900/40 rounded-xl border border-slate-800/50 hover:bg-slate-800/40 hover:border-slate-700/50 transition-all cursor-pointer group"
-      onClick={() => router.push(`/trade/${coin.ticker}`)}
+      onClick={() => router.push(`/trade/${coin.symbol}`)}
     >
       <div className="flex items-center space-x-3">
         <img
@@ -129,7 +129,7 @@ export default function MarketDashboard() {
           <div className="font-semibold text-white group-hover:text-emerald-400 transition-colors">
             {coin.baseAsset}
           </div>
-          <div className="text-sm text-slate-500">{coin.ticker}</div>
+          <div className="text-sm text-slate-500">{coin.symbol}</div>
         </div>
       </div>
       <div className="text-right">
@@ -300,7 +300,7 @@ export default function MarketDashboard() {
               <div
                 key={coin.id}
                 className="grid grid-cols-7 gap-4 px-6 py-4 hover:bg-slate-800/20 transition-colors cursor-pointer group"
-                onClick={() => router.push(`/trade/${coin.ticker}`)}
+                onClick={() => router.push(`/trade/${coin.symbol}`)}
               >
                 <div className="flex items-center space-x-3">
                   <img
@@ -312,7 +312,7 @@ export default function MarketDashboard() {
                     <div className="font-semibold text-white group-hover:text-emerald-400 transition-colors">
                       {coin.baseAsset}
                     </div>
-                    <div className="text-sm text-slate-400">{coin.ticker}</div>
+                    <div className="text-sm text-slate-400">{coin.symbol}</div>
                   </div>
                 </div>
 

@@ -1,7 +1,7 @@
 import { RequestOTPSchema, VerifyOTPSchema } from "@repo/common";
 import type { Request, Response } from "express";
 import prisma from '@repo/db';
-import { DefaultAssets } from "../utils/constants";
+import { DefaultAssets } from "@repo/common";
 import redisClient from "@repo/redisclient";
 import Decimal from "decimal.js";
 import { sign } from "jsonwebtoken";
@@ -68,6 +68,8 @@ const requestOTPController = async (req: Request, res: Response) => {
         }
         const otp = generateRandomOTP();
 
+        console.log("OTP:", otp);
+        
         await redisClient.set(
             `OTP:${user.id}`,
             otp,
