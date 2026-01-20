@@ -17,7 +17,6 @@ app.get('/health' , (req : Request, res : Response) => {
 
 app.use('/orders', rateLimiter ,orderRouter);
 
-
 app.listen(PORT, () => {
     console.log(`Server is running on Port ${PORT}`);
 })

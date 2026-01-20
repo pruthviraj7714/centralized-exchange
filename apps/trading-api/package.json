@@ -5,7 +5,8 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "@repo/common" : "*"
+    "@repo/common" : "*",
+    "@repo/kafka" : "*"
   },
   "scripts": {
     "dev": "bun --watch run index.ts",
