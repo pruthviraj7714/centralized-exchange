@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "@repo/db";
-import { DefaultAssets } from "../utils/constants";
+import { DefaultAssets } from "@repo/common";
 
 const fetchLedgers = async (req: Request, res: Response) => {
     try {

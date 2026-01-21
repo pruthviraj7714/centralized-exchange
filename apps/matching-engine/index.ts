@@ -1,17 +1,64 @@
 import { MatchEngine } from "./engine/MatchEngine";
-import type { EngineOrder, Trade } from "./engine/types";
-import type { OrderEvent } from "./types";
+import type { EngineOrder, OrderEvent, Trade } from "./types";
 import Decimal from "decimal.js";
 import { createConsumer } from "@repo/kafka/src/consumer";
+import { producer } from "@repo/kafka/src/producer";
+import { TOPICS } from "@repo/kafka/src/topics";
+
+await producer.connect();
 
 interface OrderbookData {
   engine: MatchEngine;
   lastTrades: Trade[];
 }
 
-// Global order index for efficient lookups
 const orderIndex = new Map<string, { pair: string; side: "BUY" | "SELL" }>();
 const orderbookMap: Map<string, OrderbookData> = new Map();
+
+
+const sendTradeToKafka = async (trade: Trade) => {
+
+  const event = {
+    ...trade,
+    eventType: "TRADE_EXECUTED",
+    executedAt : Date.now(),
+  }
+
+  await producer.send({
+    topic : TOPICS.TRADE_EXECUTED,
+    messages: [
+      {
+        key : trade.timestamp.toString(),
+        value : JSON.stringify(event)
+      }
+    ]
+  })
+};
+
+const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
+   const event = {
+    eventType: "ORDER_UPDATED",
+    orderId: order.id,
+    pair: order.pair,
+    userId: order.userId,
+    side: order.side,
+    status: order.status,
+    filledQuantity: order.filled.toString(),
+    remainingQuantity: order.quantity.sub(order.filled).toString(),
+    updatedAt: Date.now()
+  };
+  
+  await producer.send({
+    topic : TOPICS.ORDER_UPDATED,
+    messages: [
+      {
+        key : order.id,
+        value : JSON.stringify(event)
+      }
+    ]
+  })
+};
+
 
 const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   if (orderbookMap.has(pair)) {
@@ -20,10 +67,9 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
 
   const engine = new MatchEngine();
 
-  // Set up trade event listener
-  engine.on("trade", (trade: Trade) => {
-    console.log(`Trade executed on ${pair}:`, trade);
-
+  engine.on("trade", async (trade: Trade) => {
+    await sendTradeToKafka(trade);
+    
     // Add to recent trades
     const orderbookData = orderbookMap.get(pair);
     if (orderbookData) {
@@ -32,6 +78,10 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
         orderbookData.lastTrades = orderbookData.lastTrades.slice(0, 100);
       }
     }
+  });
+
+  engine.on("order_updated", async (order: EngineOrder) => {
+    await sendUpdatedOrderToKafka(order);
   });
 
   const orderbookData: OrderbookData = {
@@ -52,9 +102,11 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
       userId: data.userId,
       side: data.side,
       price: data.type === "MARKET" ? null : new Decimal(data.price),
-      quantity: new Decimal(data.quantity),
-      filled: new Decimal(0),
-      createdAt: data.timestamp
+      quantity: new Decimal(data.originalQuantity),
+      pair: data.pair,
+      filled: new Decimal(data.originalQuantity).sub(new Decimal(data.remainingQuantity)),
+      createdAt: data.timestamp,
+      status: data.status
     };
   }
   return null;
@@ -184,9 +236,10 @@ async function main() {
     eachMessage: async ({ topic, message }) => {
       const event = JSON.parse(message.value?.toString() || "");
       console.log("Received message:", event);
-      MatchingEngineService.processOrderEvent(event);
-      console.log("Orderbook:", MatchingEngineService.getOrderbook(event.pair));
-      console.log("Recent trades:", MatchingEngineService.getRecentTrades(event.pair));
+      const result = MatchingEngineService.processOrderEvent(event);
+      console.log("Result:", result);
+      console.log("Orderbook:", JSON.stringify(MatchingEngineService.getOrderbook(event.pair), null, 2));
+      console.log("Recent trades:", JSON.stringify(MatchingEngineService.getRecentTrades(event.pair), null, 2));
       console.log("Active pairs:", MatchingEngineService.getActivePairs());
     }
   });

@@ -1,5 +1,5 @@
 import Orderbook from "./Orderbook";
-import type { EngineOrder, Trade, Side } from "./types";
+import type { EngineOrder, Trade, Side } from "../types";
 import { EventEmitter } from "events";
 
 export class MatchEngine extends EventEmitter {
@@ -17,6 +17,16 @@ export class MatchEngine extends EventEmitter {
             this.matchSellOrder(order);
         }
     }
+    
+    private updateOrderStatus(order: EngineOrder) {
+        if (order.filled.equals(0)) {
+            order.status = "OPEN";
+        } else if (order.filled.lessThan(order.quantity)) {
+            order.status = "PARTIALLY_FILLED";
+        } else {
+            order.status = "FILLED";
+        }
+    }
 
     private matchBuyOrder(buyOrder: EngineOrder): void {
         while (buyOrder.filled.lessThan(buyOrder.quantity)) {
@@ -26,11 +36,15 @@ export class MatchEngine extends EventEmitter {
             if (!bestAsk) {
                 if (buyOrder.price === null) {
                     // Market order with no liquidity - cancel remaining quantity
+                    buyOrder.status = "CANCELLED";
+                    this.emit("order_updated", buyOrder);
                     console.log(`Market BUY order ${buyOrder.id} cancelled due to no liquidity`);
                     return;
                 } else {
                     // Limit order - add to orderbook
+                    buyOrder.status = "OPEN";
                     this.orderbook.addOrder(buyOrder);
+                    this.emit("order_updated", buyOrder);
                     break;
                 }
             }
@@ -38,7 +52,9 @@ export class MatchEngine extends EventEmitter {
             // Market orders ignore price limits, limit orders respect their price
             if (buyOrder.price && bestAsk.price.greaterThan(buyOrder.price)) {
                 // Limit order with price too high - add to orderbook
+                buyOrder.status = "OPEN";
                 this.orderbook.addOrder(buyOrder);
+                this.emit("order_updated", buyOrder);
                 break;
             }
 
@@ -79,11 +95,15 @@ export class MatchEngine extends EventEmitter {
             if (!bestBid) {
                 if (sellOrder.price === null) {
                     // Market order with no liquidity - cancel remaining quantity
+                    sellOrder.status = "CANCELLED";
+                    this.emit("order_updated", sellOrder);
                     console.log(`Market SELL order ${sellOrder.id} cancelled due to no liquidity`);
                     return;
                 } else {
                     // Limit order - add to orderbook
+                    sellOrder.status = "OPEN";
                     this.orderbook.addOrder(sellOrder);
+                    this.emit("order_updated", sellOrder);
                     break;
                 }
             }
@@ -91,7 +111,9 @@ export class MatchEngine extends EventEmitter {
             // Market orders ignore price limits, limit orders respect their price
             if (sellOrder.price && bestBid.price.lessThan(sellOrder.price)) {
                 // Limit order with price too low - add to orderbook
+                sellOrder.status = "OPEN";
                 this.orderbook.addOrder(sellOrder);
+                this.emit("order_updated", sellOrder);
                 break;
             }
 
@@ -128,6 +150,12 @@ export class MatchEngine extends EventEmitter {
         // Update filled quantities
         buyOrder.filled = buyOrder.filled.plus(quantity);
         sellOrder.filled = sellOrder.filled.plus(quantity);
+
+        this.updateOrderStatus(buyOrder);
+        this.updateOrderStatus(sellOrder);
+
+        this.emit("order_updated", buyOrder);
+        this.emit("order_updated", sellOrder);
 
         // Create trade event
         const trade: Trade = {

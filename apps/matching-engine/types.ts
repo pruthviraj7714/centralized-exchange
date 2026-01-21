@@ -1,10 +1,32 @@
-import type WebSocket from "ws";
-import type Orderbook from "./orderbook";
+import type Orderbook from "./engine/Orderbook";
+import type Decimal from "decimal.js"
 
 export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 
+export type Side = "BUY" | "SELL";
+
+export type EngineOrder = {
+  id: string;
+  userId: string;
+  side: Side;
+  price: Decimal | null; // null for MARKET
+  quantity: Decimal;
+  pair : string;
+  filled: Decimal;
+  status: ORDER_STATUS;
+  createdAt: number;
+};
+
+export type Trade = {
+  buyOrderId: string
+  sellOrderId: string
+  price: Decimal
+  quantity: Decimal
+  timestamp: number
+}
+
 export interface IOrder {
-  id : string;
+  id: string;
   type: "LIMIT" | "MARKET";
   side: "BUY" | "SELL";
   price: number;
@@ -35,10 +57,9 @@ export interface IOrderResponse {
   id?: string;
   requestId: string;
   userId: string;
-  side: "BUY" | "SELL";
+  side:Side;
   pair: string;
   price: number;
-  quantity: number;
   filledQuantity: number;
   createdAt: number;
   orderId?: string;
@@ -51,26 +72,29 @@ export interface IOrderResponse {
 
 export type OrderEvent =
   | {
-      event: "CREATE_ORDER";
-      requestId: string;
-      side: "BUY" | "SELL";
-      type: "LIMIT" | "MARKET";
-      userId: string;
-      id: string;
-      streamId?: string;
-      quantity: string;
-      price: string;
-      orderId?: never;
-      pair: string;
-      timestamp: number;
-    }
+    marketId: string
+    status: "OPEN",
+    originalQuantity: string,
+    remainingQuantity: string,
+    createdAt: string,
+    updatedAt: string,
+    event: "CREATE_ORDER",
+    side: "BUY" | "SELL";
+    type: "LIMIT" | "MARKET";
+    userId: string;
+    id: string;
+    streamId?: string;
+    price: string;
+    orderId?: never;
+    pair: string;
+    timestamp: number;
+  }
   | {
-      event: "CANCEL_ORDER";
-      requestId: string;
-      userId: string;
-      orderId: string;
-      timestamp: number;
-      streamId?: string;
-      side?: never;
-      pair?: never;
-    };
+    event: "CANCEL_ORDER";
+    userId: string;
+    orderId: string;
+    timestamp: number;
+    streamId?: string;
+    side?: never;
+    pair?: never;
+  };

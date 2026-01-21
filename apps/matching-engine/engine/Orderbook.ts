@@ -1,5 +1,5 @@
 import { OrderQueue } from "./OrderQueue";
-import type { EngineOrder, Side } from "./types";
+import type { EngineOrder, Side } from "../types";
 import Decimal from "decimal.js";
 
 class Orderbook {

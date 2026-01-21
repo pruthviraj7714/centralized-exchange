@@ -1,4 +1,4 @@
-import type { EngineOrder } from "./types";
+import type { EngineOrder } from "../types";
 
 export class OrderQueue {
     private orders: EngineOrder[] = [];
