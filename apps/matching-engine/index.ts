@@ -1,4 +1,4 @@
-import { MatchEngine } from "./engine/MatchEngine";
+import { MatchEngine } from "@repo/matching-engine-core";
 import type { EngineOrder, OrderEvent, Trade } from "./types";
 import Decimal from "decimal.js";
 import { createConsumer } from "@repo/kafka/src/consumer";
@@ -20,7 +20,7 @@ const sendTradeToKafka = async (trade: Trade) => {
 
   const event = {
     ...trade,
-    eventType: "TRADE_EXECUTED",
+    event: "TRADE_EXECUTED",
     executedAt : Date.now(),
   }
 
@@ -28,7 +28,7 @@ const sendTradeToKafka = async (trade: Trade) => {
     topic : TOPICS.TRADE_EXECUTED,
     messages: [
       {
-        key : trade.timestamp.toString(),
+        key : trade.pair,
         value : JSON.stringify(event)
       }
     ]
@@ -37,7 +37,7 @@ const sendTradeToKafka = async (trade: Trade) => {
 
 const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
    const event = {
-    eventType: "ORDER_UPDATED",
+    event: "ORDER_UPDATED",
     orderId: order.id,
     pair: order.pair,
     userId: order.userId,
@@ -52,13 +52,12 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
     topic : TOPICS.ORDER_UPDATED,
     messages: [
       {
-        key : order.id,
+        key : order.pair,
         value : JSON.stringify(event)
       }
     ]
   })
 };
-
 
 const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   if (orderbookMap.has(pair)) {
@@ -67,8 +66,8 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
 
   const engine = new MatchEngine();
 
-  engine.on("trade", async (trade: Trade) => {
-    await sendTradeToKafka(trade);
+  engine.on("trade", (trade: Trade) => {
+    sendTradeToKafka(trade);
     
     // Add to recent trades
     const orderbookData = orderbookMap.get(pair);
@@ -80,8 +79,11 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
     }
   });
 
-  engine.on("order_updated", async (order: EngineOrder) => {
-    await sendUpdatedOrderToKafka(order);
+  engine.on("order_updated",  (order: EngineOrder) => {
+    if (order.status === "FILLED" || order.status === "CANCELLED") {
+      orderIndex.delete(order.id);
+    }
+    sendUpdatedOrderToKafka(order);
   });
 
   const orderbookData: OrderbookData = {
@@ -101,6 +103,7 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
       id: data.id,
       userId: data.userId,
       side: data.side,
+      marketId : data.marketId,
       price: data.type === "MARKET" ? null : new Decimal(data.price),
       quantity: new Decimal(data.originalQuantity),
       pair: data.pair,
@@ -232,7 +235,7 @@ async function main() {
   await consumer.subscribe({ topic: "orders.create" });
   await consumer.subscribe({ topic: "orders.cancel" });
 
-  await consumer.run({
+  consumer.run({
     eachMessage: async ({ topic, message }) => {
       const event = JSON.parse(message.value?.toString() || "");
       console.log("Received message:", event);

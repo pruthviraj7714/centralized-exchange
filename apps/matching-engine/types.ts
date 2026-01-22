@@ -1,4 +1,4 @@
-import type Orderbook from "./engine/Orderbook";
+import type Orderbook from "../../packages/matching-engine-core/engine/Orderbook";
 import type Decimal from "decimal.js"
 
 export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
@@ -12,6 +12,7 @@ export type EngineOrder = {
   price: Decimal | null; // null for MARKET
   quantity: Decimal;
   pair : string;
+  marketId : string;
   filled: Decimal;
   status: ORDER_STATUS;
   createdAt: number;
@@ -21,6 +22,8 @@ export type Trade = {
   buyOrderId: string
   sellOrderId: string
   price: Decimal
+  marketId: string
+  pair: string
   quantity: Decimal
   timestamp: number
 }
@@ -53,23 +56,6 @@ export interface ITrade {
   executedAt: number;
 }
 
-export interface IOrderResponse {
-  id?: string;
-  requestId: string;
-  userId: string;
-  side:Side;
-  pair: string;
-  price: number;
-  filledQuantity: number;
-  createdAt: number;
-  orderId?: string;
-  updatedAt: number;
-  streamId: string;
-  event?: "CREATE_ORDER" | "CANCEL_ORDER" | "ERROR";
-  type: "LIMIT" | "MARKET";
-  status: ORDER_STATUS;
-}
-
 export type OrderEvent =
   | {
     marketId: string
@@ -83,7 +69,6 @@ export type OrderEvent =
     type: "LIMIT" | "MARKET";
     userId: string;
     id: string;
-    streamId?: string;
     price: string;
     orderId?: never;
     pair: string;
@@ -94,7 +79,6 @@ export type OrderEvent =
     userId: string;
     orderId: string;
     timestamp: number;
-    streamId?: string;
     side?: never;
     pair?: never;
   };

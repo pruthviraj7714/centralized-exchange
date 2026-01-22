@@ -106,6 +106,9 @@
     },
     "apps/settlement-service": {
       "name": "settlement-service",
+      "dependencies": {
+        "decimal.js": "^10.6.0",
+      },
       "devDependencies": {
         "@repo/redisclient": "*",
         "@types/bun": "latest",
@@ -148,6 +151,10 @@
     },
     "apps/ws-gateway": {
       "name": "ws-gateway",
+      "dependencies": {
+        "@types/ws": "^8.18.1",
+        "ws": "^8.19.0",
+      },
       "devDependencies": {
         "@repo/common": "*",
         "@repo/kafka": "*",
@@ -207,6 +214,15 @@
       "dependencies": {
         "kafkajs": "^2.2.4",
       },
+      "devDependencies": {
+        "@types/bun": "latest",
+      },
+      "peerDependencies": {
+        "typescript": "^5",
+      },
+    },
+    "packages/matching-engine-core": {
+      "name": "@repo/matching-engine-core",
       "devDependencies": {
         "@types/bun": "latest",
       },
@@ -459,6 +475,8 @@
     "@repo/eslint-config": ["@repo/eslint-config@workspace:packages/eslint-config"],
 
     "@repo/kafka": ["@repo/kafka@workspace:packages/kafka"],
+
+    "@repo/matching-engine-core": ["@repo/matching-engine-core@workspace:packages/matching-engine-core"],
 
     "@repo/redisclient": ["@repo/redisclient@workspace:packages/redisClient"],
 
@@ -1450,7 +1468,7 @@
 
     "wrappy": ["wrappy@1.0.2", "", {}, "sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ=="],
 
-    "ws": ["ws@8.18.3", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="],
+    "ws": ["ws@8.19.0", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg=="],
 
     "ws-gateway": ["ws-gateway@workspace:apps/ws-gateway"],
 
