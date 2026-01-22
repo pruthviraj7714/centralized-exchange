@@ -10,9 +10,12 @@
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@repo/redisclient" : "*"
+    "@repo/redisclient": "*"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
   }
 }

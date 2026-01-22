@@ -1,22 +1,39 @@
 import { createConsumer } from "@repo/kafka/src/consumer";
 import prisma from "@repo/db";
+import Decimal from "decimal.js";
+import type { OrderEvent, TradeEvent } from "./types";
 
-const settleExectuedTrades = async () => {
-  console.log('executed trade in db');
+const settleExectuedTrades = async (trade: TradeEvent) => {
+  try {
+    await prisma.trade.create({
+      data: {
+        makerFee: new Decimal(0), //for now
+        price: trade.price,
+        quantity: trade.quantity,
+        takerFee: new Decimal(0), //for now
+        marketId: trade.marketId,
+        buyOrderId: trade.buyOrderId,
+        sellOrderId: trade.sellOrderId,
+        executedAt: new Date(trade.executedAt),
+      }
+    })
+    console.log('executed trade in db');
+  } catch (error) {
+    console.error('Error settling executed trade:', error);
+  }
+
 }
 
-const settleUpdatedOrders = async (order: string) => {
+const settleUpdatedOrders = async (order: OrderEvent) => {
   try {
-    const orderData = JSON.parse(order);
     const updatedOrder = await prisma.order.update({
       where: {
-        id: orderData.id
+        id: order.orderId
       },
       data: {
-        status: orderData.status,
-        updatedAt: orderData.updatedAt,
-        remainingQuantity: orderData.remainingQuantity,
-
+        status: order.status,
+        updatedAt: new Date(order.updatedAt),
+        remainingQuantity: order.remainingQuantity,
       }
     })
     console.log('updated order in db', updatedOrder);
@@ -39,17 +56,19 @@ async function main() {
   await consumer.run({
     eachMessage: async ({ message }) => {
       if (!message.value) {
+        console.log('No message value');
         return;
       }
       try {
-        const eventType = JSON.parse(message.value.toString()).eventType;
+        const event = JSON.parse(message.value.toString());
 
-        switch (eventType) {
+        console.log('Received message:', event);
+        switch (event.event) {
           case "ORDER_UPDATED":
-            settleUpdatedOrders(message.value.toString());
+            await settleUpdatedOrders(event);
             break;
           case "TRADE_EXECUTED":
-            settleExectuedTrades();
+            await settleExectuedTrades(event);
             break;
         }
 
