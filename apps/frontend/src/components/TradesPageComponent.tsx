@@ -1,6 +1,6 @@
 "use client";
 
-import useSocket from "@/hooks/useSocket";
+import useSocket from "@/hooks/useOrderbook";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
@@ -19,6 +19,7 @@ import {
 import { Card } from "./ui/card";
 import { fetchMarketMetadata } from "@repo/common"
 import Decimal from "decimal.js";
+import useOrderbook from "@/hooks/useOrderbook";
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 interface IOrderResponse {
@@ -118,12 +119,12 @@ const getIntervalSec = (interval: string) => {
 };
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
-  const { isConnected, socket } = useSocket(ticker);
+  const { isConnected, socket, orderbook, recentTrades } = useOrderbook(ticker);
   const [interval, setInterval] = useState<Interval>("1m");
   const [currentTab, setCurrentTab] = useState<"BUY" | "SELL">("BUY");
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
-  const [bids, setBids] = useState<IOrderResponse[]>([]);
-  const [asks, setAsks] = useState<IOrderResponse[]>([]);
+  const [bids, setBids] = useState<any[]>([]);
+  const [asks, setAsks] = useState<any[]>([]);
   const [lastPrice, setLastPrice] = useState<number | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const lastCandleRef = useRef<Candle | null>(null);
@@ -131,6 +132,44 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [quantity, setQuantity] = useState<Decimal>(new Decimal(0));
   const [price, setPrice] = useState<Decimal>(new Decimal(0));
   const { data } = useSession();
+
+  // Update bids and asks when orderbook changes
+  useEffect(() => {
+    if (orderbook) {
+      console.log('Updating orderbook display:', orderbook);
+      
+      // Transform bids data for display
+      const transformedBids = orderbook.bids.map((level, index) => ({
+        price: parseFloat(level.price),
+        quantity: parseFloat(level.totalQuantity),
+        total: (index + 1) * parseFloat(level.totalQuantity), // Cumulative total
+        requestId: `bid-${index}`,
+        orderCount: level.orderCount
+      }));
+      
+      // Transform asks data for display
+      const transformedAsks = orderbook.asks.map((level, index) => ({
+        price: parseFloat(level.price),
+        quantity: parseFloat(level.totalQuantity),
+        total: (index + 1) * parseFloat(level.totalQuantity), // Cumulative total
+        requestId: `ask-${index}`,
+        orderCount: level.orderCount
+      }));
+      
+      setBids(transformedBids);
+      setAsks(transformedAsks);
+      
+      // Update last price from recent trades
+      if (recentTrades.length > 0) {
+        setLastPrice(parseFloat(recentTrades[0].price));
+      }
+    }
+  }, [orderbook, recentTrades]);
+
+  // Update price when user clicks on orderbook
+  const handlePriceClick = (priceValue: number) => {
+    setPrice(new Decimal(priceValue));
+  };
 
   // const fetchChartData = async () => {
   //   if (!data || !data.accessToken) return;
@@ -277,43 +316,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   //   };
   // }, [ticker, interval, data]);
 
-  useEffect(() => {
-    if (socket && isConnected) {
-      socket.send(
-        JSON.stringify({
-          type: "GET_ORDERBOOK",
-        })
-      );
-    }
-  }, [socket, isConnected, ticker]);
+  // Remove duplicate WebSocket logic since it's handled in useOrderbook hook
 
-  // useEffect(() => {
-  //   if (!socket) return;
-
-  //   socket.onmessage = ({ data }) => {
-  //     const payload = JSON.parse(data.toString());
-
-  //     switch (payload.type) {
-  //       case "ORDERBOOK_SNAPSHOT": {
-  //         setBids(payload.bids);
-  //         setAsks(payload.asks);
-  //         setLastPrice(payload.lastPrice);
-  //         processTick(payload.lastPrice, payload.timestamp);
-  //         break;
-  //       }
-  //       case "ORDERBOOK_UPDATE": {
-  //         setBids(payload.bids);
-  //         setAsks(payload.asks);
-  //         setLastPrice(payload.lastPrice);
-  //         processTick(payload.lastPrice, payload.timestamp);
-  //         break;
-  //       }
-  //     }
-  //   };
-  // }, [socket, isConnected]);
-
-  const transformedBids = useMemo(() => transformOrderbook(bids).slice(0,8), bids);
-  const transformedAsks = useMemo(() => transformOrderbook(asks).slice(0,8), asks);
+  // Remove old transform function since we handle transformation in useEffect
   const marketData = fetchMarketMetadata(ticker);
 
   return (
@@ -414,22 +419,23 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                     <span>Total (SOL)</span>
                   </div>
                   <div className="space-y-1">
-                    {transformedAsks
+                    {asks
                       .slice(0, 8)
                       .reverse()
-                      .map((ask) => (
+                      .map((ask, index) => (
                         <div
-                          key={ask.requestId}
-                          className="flex items-center justify-between text-sm hover:bg-red-900/10 px-2 py-1 rounded"
+                          key={`ask-${index}`}
+                          className="flex items-center justify-between text-sm hover:bg-red-900/10 px-2 py-1 rounded cursor-pointer"
+                          onClick={() => handlePriceClick(ask.price)}
                         >
                           <span className="text-red-400 font-mono">
                             {ask.price.toFixed(2)}
                           </span>
                           <span className="text-slate-300 font-mono">
-                            {ask.size}
+                            {ask.quantity.toFixed(4)}
                           </span>
                           <span className="text-slate-300 font-mono">
-                            {ask.total}
+                            {ask.total.toFixed(4)}
                           </span>
                         </div>
                       ))}
@@ -438,28 +444,34 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                 <div className="text-center py-2 border-y border-slate-800">
                   <div className="text-lg font-bold text-emerald-400">
-                        {lastPrice}
+                    {lastPrice || '---'}
                   </div>
-                  <div className="text-xs text-slate-400">Spread: {asks[0]?.price - bids[0]?.price || 0}</div>
+                  <div className="text-xs text-slate-400">
+                    Spread: {asks[0]?.price && bids[0]?.price ? (asks[0].price - bids[0].price).toFixed(2) : '---'}
+                  </div>
+                  <div className="text-xs text-slate-400">
+                    Status: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+                  </div>
                 </div>
 
                 <div>
                   <div className="space-y-1">
-                    {transformedBids
+                    {bids
                       .slice(0, 8)
-                      .map((bid) => (
+                      .map((bid, index) => (
                         <div
-                          key={bid.requestId}
-                          className="flex items-center justify-between text-sm hover:bg-emerald-900/10 px-2 py-1 rounded"
+                          key={`bid-${index}`}
+                          className="flex items-center justify-between text-sm hover:bg-emerald-900/10 px-2 py-1 rounded cursor-pointer"
+                          onClick={() => handlePriceClick(bid.price)}
                         >
                           <span className="text-emerald-400 font-mono">
                             {bid.price.toFixed(2)}
                           </span>
                           <span className="text-slate-300 font-mono">
-                            {bid.size}
+                            {bid.quantity.toFixed(4)}
                           </span>
                           <span className="text-slate-300 font-mono">
-                            {bid.total}
+                            {bid.total.toFixed(4)}
                           </span>
                         </div>
                       ))}

@@ -1,4 +1,4 @@
-import { MatchEngine } from "@repo/matching-engine-core";
+import { MatchEngine, OrderQueue } from "@repo/matching-engine-core";
 import type { EngineOrder, OrderEvent, Trade } from "./types";
 import Decimal from "decimal.js";
 import { createConsumer } from "@repo/kafka/src/consumer";
@@ -14,6 +14,25 @@ interface OrderbookData {
 
 const orderIndex = new Map<string, { pair: string; side: "BUY" | "SELL" }>();
 const orderbookMap: Map<string, OrderbookData> = new Map();
+
+function debugOrderBook(ob:  {
+    bids: Map<string, OrderQueue>;
+    asks: Map<string, OrderQueue>;
+} | null) {
+  console.log("---- ORDERBOOK ----");
+
+  console.log("BIDS:");
+  for (const [price, queue] of ob?.bids.entries() || []) {
+    console.log(`  ${price} -> ${queue.size()} orders`);
+  }
+
+  console.log("ASKS:");
+  for (const [price, queue] of ob?.asks.entries() || []) {
+    console.log(`  ${price} -> ${queue.size()} orders`);
+  }
+
+  console.log("-------------------");
+}
 
 
 const sendTradeToKafka = async (trade: Trade) => {
@@ -41,6 +60,7 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
     orderId: order.id,
     pair: order.pair,
     userId: order.userId,
+    price : order.price,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -69,7 +89,6 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   engine.on("trade", (trade: Trade) => {
     sendTradeToKafka(trade);
     
-    // Add to recent trades
     const orderbookData = orderbookMap.get(pair);
     if (orderbookData) {
       orderbookData.lastTrades.unshift(trade);
@@ -107,7 +126,7 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
       price: data.type === "MARKET" ? null : new Decimal(data.price),
       quantity: new Decimal(data.originalQuantity),
       pair: data.pair,
-      filled: new Decimal(data.originalQuantity).sub(new Decimal(data.remainingQuantity)),
+      filled: new Decimal(0),
       createdAt: data.timestamp,
       status: data.status
     };
@@ -121,7 +140,6 @@ function processOrder(data: OrderEvent): boolean {
       const engineOrder = parseOrderEvent(data);
       if (!engineOrder) return false;
 
-      // Add to order index for efficient lookup
       orderIndex.set(data.id, {
         pair: data.pair,
         side: data.side
@@ -135,7 +153,6 @@ function processOrder(data: OrderEvent): boolean {
     }
 
     if (data.event === "CANCEL_ORDER") {
-      // Use order index for efficient lookup
       const meta = orderIndex.get(data.orderId);
       if (!meta) {
         console.log(`Order ${data.orderId} not found in index`);
@@ -167,44 +184,36 @@ function processOrder(data: OrderEvent): boolean {
   }
 }
 
-// Public API for the matching engine
 export class MatchingEngineService {
-  // Process a single order event
   static processOrderEvent(data: OrderEvent): boolean {
     return processOrder(data);
   }
 
-  // Get current orderbook state for a pair
   static getOrderbook(pair: string) {
     const orderbookData = orderbookMap.get(pair);
     return orderbookData ? orderbookData.engine.getOrderbook() : null;
   }
 
-  // Get recent trades for a pair
   static getRecentTrades(pair: string): Trade[] {
     const orderbookData = orderbookMap.get(pair);
     return orderbookData ? orderbookData.lastTrades : [];
   }
 
-  // Get all active pairs
   static getActivePairs(): string[] {
     return Array.from(orderbookMap.keys());
   }
 
-  // Subscribe to trade events for a specific pair
   static subscribeToTrades(pair: string, callback: (trade: Trade) => void): () => void {
     const { engine } = getOrCreateOrderbookData(pair);
     engine.on("trade", callback);
     return () => engine.off("trade", callback);
   }
 
-  // Add order directly (for testing)
   static addOrder(pair: string, order: EngineOrder): void {
     const orderbookData = getOrCreateOrderbookData(pair);
     orderbookData.engine.addOrder(order);
   }
 
-  // Cancel order directly (for testing)
   static cancelOrder(pair: string, orderId: string, side: "BUY" | "SELL"): boolean {
     const orderbookData = orderbookMap.get(pair);
     if (!orderbookData) return false;
@@ -216,13 +225,11 @@ export class MatchingEngineService {
     return cancelled;
   }
 
-  // Clear all data (for testing)
   static clearAll(): void {
     orderbookMap.clear();
     orderIndex.clear();
   }
 
-  // Get order index size (for monitoring)
   static getOrderIndexSize(): number {
     return orderIndex.size;
   }
@@ -241,8 +248,9 @@ async function main() {
       console.log("Received message:", event);
       const result = MatchingEngineService.processOrderEvent(event);
       console.log("Result:", result);
-      console.log("Orderbook:", JSON.stringify(MatchingEngineService.getOrderbook(event.pair), null, 2));
-      console.log("Recent trades:", JSON.stringify(MatchingEngineService.getRecentTrades(event.pair), null, 2));
+      const ob = MatchingEngineService.getOrderbook(event.pair);
+
+      debugOrderBook(ob);
       console.log("Active pairs:", MatchingEngineService.getActivePairs());
     }
   });
