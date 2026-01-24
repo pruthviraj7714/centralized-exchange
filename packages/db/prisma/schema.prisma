@@ -103,6 +103,31 @@ model Market {
   symbol     String @unique // BTC_USDT
   baseAsset  String // BTC
   quoteAsset String // USDT
+  logo       String
+
+  price      Decimal? @db.Decimal(38, 18)
+
+  high24h    Decimal? @db.Decimal(38, 18)
+  low24h     Decimal? @db.Decimal(38, 18)
+  open24h    Decimal? @db.Decimal(38, 18)
+
+  volume24h       Decimal? @db.Decimal(38, 18) // base asset
+  quoteVolume24h  Decimal? @db.Decimal(38, 18)
+
+  change24h       Decimal? @db.Decimal(10, 6)  // percentage
+  priceChange     Decimal? @db.Decimal(38, 18)
+
+  marketCap       Decimal? @db.Decimal(38, 18)
+
+  minOrderSize Decimal @db.Decimal(38, 18)
+  maxOrderSize Decimal @db.Decimal(38, 18)
+  tickSize     Decimal @db.Decimal(38, 18)
+  lotSize      Decimal @db.Decimal(38, 18)
+
+  sparkline7d Decimal[] // store scaled values or prices
+
+  isActive    Boolean @default(true)
+  isFeatured  Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -110,6 +135,7 @@ model Market {
   orders Order[]
   trades Trade[]
 }
+
 
 model FeeAccount {
   id      String  @id @default(uuid())
