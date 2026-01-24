@@ -1,33 +1,11 @@
 import prisma from "@repo/db";
 import redisClient from "@repo/redisclient";
 import request, { type Response } from "supertest";
+import { SUPPORTED_MARKETS } from "@repo/common";
 
 export const BACKEND_URL = "http://localhost:3001";
 
 type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
-
-const SUPPORTED_PAIRS = [
-  "BTC-SOL",
-  "BTC-USDT",
-  "BTC-USDC",
-  "BTC-ETH",
-  "SOL-BTC",
-  "SOL-USDT",
-  "SOL-USDC",
-  "SOL-ETH",
-  "USDT-BTC",
-  "USDT-SOL",
-  "USDT-USDC",
-  "USDT-ETH",
-  "USDC-BTC",
-  "USDC-SOL",
-  "USDC-USDT",
-  "USDC-ETH",
-  "ETH-BTC",
-  "ETH-SOL",
-  "ETH-USDT",
-  "ETH-USDC",
-];
 
 export const generateRandomUser = async () => {
   const uniqueId = `${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -63,7 +41,7 @@ export const placeRandomOrder = async (
   const side = iSide ? iSide : sides[Math.floor(Math.random() * sides.length)];
   const randomPair = pair
     ? pair
-    : SUPPORTED_PAIRS[Math.floor(Math.random() * SUPPORTED_PAIRS.length)];
+    : SUPPORTED_MARKETS[Math.floor(Math.random() * SUPPORTED_MARKETS.length)];
   const price = randomInt(1, 10);
   const quantity = randomInt(1, 10);
   const types = ["LIMIT", "MARKET"];

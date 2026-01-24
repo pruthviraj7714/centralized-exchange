@@ -1,7 +1,7 @@
 import { RequestOTPSchema, VerifyOTPSchema } from "@repo/common";
 import type { Request, Response } from "express";
 import prisma from '@repo/db';
-import { DefaultAssets } from "@repo/common";
+import { SUPPORTED_TOKENS } from "@repo/common";
 import redisClient from "@repo/redisclient";
 import Decimal from "decimal.js";
 import { sign } from "jsonwebtoken";
@@ -47,7 +47,7 @@ const requestOTPController = async (req: Request, res: Response) => {
 
         if (!user.wallets || user.wallets.length === 0) {
             await prisma.wallet.createMany({
-                data: DefaultAssets.map((a) => ({
+                data: SUPPORTED_TOKENS.map((a) => ({
                     asset: a,
                     available: new Decimal(0),
                     locked: new Decimal(0),

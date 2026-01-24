@@ -5,6 +5,7 @@ import orderRouter from './routes/order.routes';
 import marketRouter from './routes/market.routes';
 import cors from 'cors';
 import klinesRouter from './routes/klines.routes';
+import usersRouter from './routes/user.routes';
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.get('/', (req,res) => {
 })
 
 app.use('/auth', authRouter);
+app.use('/users', usersRouter);
 app.use('/markets', marketRouter);
 app.use('/wallets', walletsRouter);
 app.use('/orders', orderRouter);

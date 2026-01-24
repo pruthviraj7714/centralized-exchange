@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { BACKEND_URL } from "@/lib/config"
-import { SUPPORTED_TOEKNS } from "@repo/common"
+import { SUPPORTED_TOKENS } from "@repo/common"
 import axios from "axios"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -102,7 +102,7 @@ export default function AssetsPage() {
                     onChange={handleValueChange}
                     className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
                   >
-                    {SUPPORTED_TOEKNS.map((t) => (
+                    {SUPPORTED_TOKENS.map((t) => (
                       <option key={t} value={t} className="bg-slate-800 text-white">
                         {t}
                       </option>

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import prisma from "@repo/db";
-import { DefaultAssets } from "@repo/common";
+import { SUPPORTED_TOKENS } from "@repo/common";
 
 const fetchLedgers = async (req: Request, res: Response) => {
     try {
@@ -76,7 +76,7 @@ const depositFunds = async (req: Request, res: Response) => {
             return;
         }
 
-        if (!DefaultAssets.includes(asset)) {
+        if (!SUPPORTED_TOKENS.includes(asset)) {
             res.status(400).json({
                 message: "Unsupported asset"
             })
