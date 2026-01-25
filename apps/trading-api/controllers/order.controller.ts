@@ -29,13 +29,12 @@ const placeOrderController = async (req: Request, res: Response) => {
 
     const { pair, price, quantity, side, type } = validationResult.data;
 
-    const [baseAsset, quoteAsset] = pair.split("_");
+    const [baseAsset, quoteAsset] = pair.split("-");
 
     let order;
     const market = await prisma.market.findFirst({
       where: {
-        baseAsset,
-        quoteAsset,
+        symbol: pair,
       },
     });
 

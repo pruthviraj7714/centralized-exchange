@@ -149,7 +149,6 @@ export const TOKEN_METADATA = {
   },
 } as const;
 
-// Market seed data with comprehensive information
 export const SEED_MARKETS = [
   // BTC Markets
   {

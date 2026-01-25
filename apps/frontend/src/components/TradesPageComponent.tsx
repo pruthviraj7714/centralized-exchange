@@ -132,8 +132,8 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
       })
 
       toast.success("Order placed successfully", {position : "top-center"});
-    } catch (error) {
-      toast.error("Error placing order", {position : "top-center"});
+    } catch (error : any) {
+      toast.error(`${error.response.data.message}`, {position : "top-center"});
     }
 
   };
