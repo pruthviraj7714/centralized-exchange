@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import z from "zod";
+import z, { symbol } from "zod";
 
 export const OrderSchema = z.object({
   pair: z.string(),
@@ -48,18 +48,18 @@ export const SUPPORTED_MARKETS = [
 ] as const;
 
 export const SUPPORTED_TOKENS = [
-  "BTC",
-  "ETH",
-  "SOL",
-  "USDC",
-  "USDT",
-  "BNB",
-  "XRP",
-  "ADA",
-  "AVAX",
-  "DOGE",
-  "MATIC",
-  "DOT",
+  {symbol: "BTC", name: "Bitcoin"},
+  {symbol: "ETH", name: "Ethereum"},
+  {symbol: "SOL", name: "Solana"},
+  {symbol: "USDC", name: "USD Coin"},
+  {symbol: "USDT", name: "Tether"},
+  {symbol: "BNB", name: "BNB"},
+  {symbol: "XRP", name: "XRP"},
+  {symbol: "ADA", name: "Cardano"},
+  {symbol: "AVAX", name: "Avalanche"},
+  {symbol: "DOGE", name: "Dogecoin"},
+  {symbol: "MATIC", name: "Polygon"},
+  {symbol: "DOT", name: "Polkadot"},
 ] as const;
 
 export const TOKEN_METADATA = {

@@ -35,11 +35,11 @@ export default function Appbar() {
         {isLoggedIn && (
           <div className="flex gap-4 items-center">
             <Button
-              onClick={() => router.push("/assets")}
+              onClick={() => router.push("/portfolio")}
               variant={"ghost"}
               className="bg-gradient-to-r from-amber-500 to-amber-400  hover:from-amber-600 hover:to-amber-500 text-white hover:text-white cursor-pointer px-6 py-2 rounded-xl shadow-lg shadow-amber-500/25 transition-all duration-200 hover:shadow-amber-500/40"
             >
-              Assets
+              Portfolio
             </Button>
             <Button
               onClick={async () => {

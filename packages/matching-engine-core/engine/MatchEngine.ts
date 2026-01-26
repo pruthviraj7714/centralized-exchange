@@ -43,8 +43,8 @@ export class MatchEngine extends EventEmitter {
                 } else {
                     // Limit order - add to orderbook
                     buyOrder.status = "OPEN";
-                    this.orderbook.addOrder(buyOrder);
                     this.emit("order_updated", buyOrder);
+                    this.orderbook.addOrder(buyOrder);
                     break;
                 }
             }
@@ -53,8 +53,8 @@ export class MatchEngine extends EventEmitter {
             if (buyOrder.price && bestAsk.price.greaterThan(buyOrder.price)) {
                 // Limit order with price too high - add to orderbook
                 buyOrder.status = "OPEN";
-                this.orderbook.addOrder(buyOrder);
                 this.emit("order_updated", buyOrder);
+                this.orderbook.addOrder(buyOrder);
                 break;
             }
 
@@ -102,8 +102,8 @@ export class MatchEngine extends EventEmitter {
                 } else {
                     // Limit order - add to orderbook
                     sellOrder.status = "OPEN";
-                    this.orderbook.addOrder(sellOrder);
                     this.emit("order_updated", sellOrder);
+                    this.orderbook.addOrder(sellOrder);
                     break;
                 }
             }
@@ -112,8 +112,8 @@ export class MatchEngine extends EventEmitter {
             if (sellOrder.price && bestBid.price.lessThan(sellOrder.price)) {
                 // Limit order with price too low - add to orderbook
                 sellOrder.status = "OPEN";
-                this.orderbook.addOrder(sellOrder);
                 this.emit("order_updated", sellOrder);
+                this.orderbook.addOrder(sellOrder);
                 break;
             }
 
@@ -129,7 +129,6 @@ export class MatchEngine extends EventEmitter {
             const neededQuantity = sellOrder.quantity.minus(sellOrder.filled);
             const tradeQuantity = availableQuantity.lessThan(neededQuantity) ? availableQuantity : neededQuantity;
 
-            // Execute trade
             this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
 
             // Remove fully filled orders
@@ -157,7 +156,6 @@ export class MatchEngine extends EventEmitter {
         this.emit("order_updated", buyOrder);
         this.emit("order_updated", sellOrder);
 
-        // Create trade event
         const trade: Trade = {
             buyOrderId: buyOrder.id,
             sellOrderId: sellOrder.id,
@@ -168,7 +166,6 @@ export class MatchEngine extends EventEmitter {
             timestamp: Date.now()
         };
 
-        // Emit trade event
         this.emit("trade", trade);
     }
 

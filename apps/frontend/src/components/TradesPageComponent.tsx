@@ -9,8 +9,6 @@ import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
 import useOrderbook from "@/hooks/useOrderbook";
 
-type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
-
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
 
@@ -33,42 +31,6 @@ interface IMarketData {
   isFeatured : boolean;
 }
 
-
-// Mock orderbook data
-const generateMockOrderbook = () => {
-  const lastPrice = 207.85;
-  const bids = Array.from({ length: 15 }, (_, i) => ({
-    price: lastPrice - (i + 1) * 0.25,
-    quantity: Math.random() * 50 + 10,
-    total: 0,
-    requestId: `bid-${i}`,
-    orderCount: Math.floor(Math.random() * 5) + 1
-  }));
-
-  const asks = Array.from({ length: 15 }, (_, i) => ({
-    price: lastPrice + (i + 1) * 0.25,
-    quantity: Math.random() * 50 + 10,
-    total: 0,
-    requestId: `ask-${i}`,
-    orderCount: Math.floor(Math.random() * 5) + 1
-  }));
-
-  // Calculate cumulative totals
-  let cumulativeBid = 0;
-  bids.forEach(bid => {
-    cumulativeBid += bid.quantity;
-    bid.total = cumulativeBid;
-  });
-
-  let cumulativeAsk = 0;
-  asks.forEach(ask => {
-    cumulativeAsk += ask.quantity;
-    ask.total = cumulativeAsk;
-  });
-
-  return { bids, asks };
-};
-
 export default function TradesPageComponent({ticker} : {ticker : string}) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
@@ -76,13 +38,14 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
   const [price, setPrice] = useState<Decimal>(new Decimal(0));
   const [activeTab, setActiveTab] = useState<"BUY" | "SELL">("BUY");
   const [marketData, setMarketData] = useState<IMarketData | null>(null); 
-  const [userBalances, setUserBalances] = useState<{baseAsset : string, quoteAsset : string, available : string, locked : string}[]>([]);
+  const [userBalances, setUserBalances] = useState<{baseAssetWallet : {available : string, locked : string}, quoteAssetWallet : {available : string, locked : string}} | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const { data, status } = useSession();
   const [bids, setBids] = useState<{price: Decimal; quantity: Decimal; total: Decimal; requestId: string; orderCount: number}[]>([]);
   const [asks, setAsks] = useState<{price: Decimal; quantity: Decimal; total: Decimal; requestId: string; orderCount: number}[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const {  isConnected, orderbook, recentTrades, socket} = useOrderbook(ticker);
+  const [baseAsset, quoteAsset] = ticker.split("-");
+  const {  isConnected, orderbook, recentTrades, error} = useOrderbook(ticker);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -100,9 +63,25 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
     }
   }
 
+  const fetchUserBalances = async () => {
+    try {
+      const res = await axios.get(`${BACKEND_URL}/users/balances?market=${ticker}`, {
+        headers: {
+          authorization: `Bearer ${data?.accessToken}`,
+        },
+      });
+      setUserBalances(res.data);
+    } catch (error) {
+      toast.error("Error while fetching user balances", {position : "top-center"});
+    }
+  }
+
   useEffect(() => {
     fetchMarketData();
-  }, [ticker]);
+    if (status === "authenticated") {
+      fetchUserBalances();
+    }
+  }, [ticker, status]);
 
   const handlePriceClick = (priceValue: Decimal) => {
     setPrice(priceValue);
@@ -138,26 +117,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
 
   };
 
-  // const fetchUserBalances = async () => {
-  //   try {
-  //     const res = await axios.get(`${BACKEND_URL}/users/balances`, {
-  //       headers : {
-  //         Authorization : `Bearer ${data?.accessToken}`
-  //       }
-  //     })
-  //     setUserBalances(res.data);
-  //   } catch (error) {
-  //     console.log(error);
-  //     toast.error("Error fetching user balances", {position : "top-center"});
-  //   }
-  // }
-
-  // useEffect(() => {
-  //   if(status === "authenticated") {
-  //     fetchUserBalances();
-  //   }
-  // }, [status])
-
   useEffect(() => {
     if (orderbook) {
       console.log('Updating orderbook display:', orderbook);
@@ -189,6 +148,11 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
     }
   }, [orderbook, recentTrades]);
 
+  useEffect(() => {
+    if(error) {
+      toast.error(error, {position : "top-center"})
+    }
+  }, [error])
 
   const spread = asks[0] && bids[0] ? (asks[0].price.sub(bids[0].price)).toFixed(2) : "0.00";
   const spreadPercent = asks[0] && bids[0] ? (((asks[0].price.sub(bids[0].price)).div(bids[0].price)).mul(100)).toFixed(3) : "0.000";
@@ -202,6 +166,8 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
   const maxBidDepth = Math.max(...bids.map(b => b.total.toNumber()));
   const maxAskDepth = Math.max(...asks.map(a => a.total.toNumber()));
   const maxDepth = Math.max(maxBidDepth, maxAskDepth);
+  const baseAssetBalance = userBalances?.baseAssetWallet.available;
+  const quoteAssetBalance = userBalances?.quoteAssetWallet.available;
 
   if(!marketData) {
     return <div>Loading...</div>
@@ -209,7 +175,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white">
-      {/* Header */}
       <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="mx-auto px-4 py-3">
           <div className="flex items-center justify-between flex-wrap gap-4">
@@ -270,11 +235,9 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
         </div>
       </div>
 
-      {/* Main Content */}
       <div className="max-w-[1920px] mx-auto p-4 lg:p-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[calc(100vh-120px)]">
           
-          {/* Chart Section */}
           <div className="lg:col-span-6 xl:col-span-7">
             <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
               <div className="p-4 border-b border-slate-800 bg-slate-900/50">
@@ -316,7 +279,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
             </div>
           </div>
 
-          {/* Order Book */}
           <div className="lg:col-span-2 xl:col-span-2">
             <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden flex flex-col">
               <div className="p-4 border-b border-slate-800 bg-slate-900/50">
@@ -327,17 +289,15 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
               </div>
 
               <div className="flex-1 overflow-hidden flex flex-col">
-                {/* Column Headers */}
                 <div className="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
                   <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 font-medium">
-                    <span>Price (USD)</span>
-                    <span className="text-right">Size (SOL)</span>
+                    <span>Price ({quoteAsset})</span>
+                    <span className="text-right">Size ({baseAsset})</span>
                     <span className="text-right">Total</span>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                  {/* Asks (Sell Orders) */}
                   <div className="px-4 py-2">
                     {asks.slice(0, 10).reverse().map((ask, index) => {
                       const depthPercent = (ask.total.toNumber() / maxDepth) * 100;
@@ -359,7 +319,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                     })}
                   </div>
 
-                  {/* Spread */}
                   <div className="px-4 py-3 border-y border-slate-800 bg-slate-900/30 sticky top-0 z-10">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-emerald-400 mb-1">
@@ -372,7 +331,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                     </div>
                   </div>
 
-                  {/* Bids (Buy Orders) */}
                   <div className="px-4 py-2">
                     {bids.slice(0, 10).map((bid, index) => {
                       const depthPercent = (bid.total.toNumber() / maxDepth) * 100;
@@ -398,7 +356,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
             </div>
           </div>
 
-          {/* Trading Panel */}
           <div className="lg:col-span-3 xl:col-span-3">
             <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden flex flex-col">
               <div className="p-4 border-b border-slate-800 bg-slate-900/50">
@@ -427,7 +384,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
               </div>
 
               <div className="flex-1 p-4 space-y-4 overflow-y-auto">
-                {/* Buy/Sell Tabs */}
                 <div className="grid grid-cols-2 gap-2 p-1 bg-slate-900/50 rounded-lg">
                   <button
                     className={`py-2 text-sm font-semibold rounded transition-all ${
@@ -451,7 +407,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                   </button>
                 </div>
 
-                {/* Available Balance */}
                 <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-800">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs text-slate-400 flex items-center gap-1">
@@ -459,16 +414,15 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                       Available
                     </span>
                     <span className="text-sm font-semibold text-white">
-                      {activeTab === "BUY" ? "12,450.00 USD" : "58.3421 SOL"}
+                      {activeTab === "BUY" ? quoteAssetBalance : baseAssetBalance}
                     </span>
                   </div>
                 </div>
 
-                {/* Price Input */}
                 {orderType === "LIMIT" && (
                   <div className="space-y-2">
                     <label className="text-sm text-slate-300 font-medium">
-                      Price (USD)
+                      Price ({quoteAsset})
                     </label>
                     <input
                       type="number"
@@ -480,10 +434,9 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                   </div>
                 )}
 
-                {/* Quantity Input */}
                 <div className="space-y-2">
                   <label className="text-sm text-slate-300 font-medium">
-                    Quantity (SOL)
+                    Quantity ({baseAsset})
                   </label>
                   <input
                     type="number"
@@ -494,11 +447,10 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                   />
                   <div className="text-xs text-orange-400 flex items-center gap-1">
                     <span>⚠</span>
-                    <span>Minimum: 0.01 SOL</span>
+                    <span>Minimum: 0.01 {baseAsset}</span>
                   </div>
                 </div>
 
-                {/* Quick Amount Buttons */}
                 <div className="grid grid-cols-4 gap-2">
                   {["25%", "50%", "75%", "100%"].map((percent) => (
                     <button
@@ -510,7 +462,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                   ))}
                 </div>
 
-                {/* Order Summary */}
                 <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-800 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-400">Total Value</span>
@@ -524,7 +475,6 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                   )}
                 </div>
 
-                {/* Place Order Button */}
                 <button
                   onClick={handlePlaceOrder}
                   className={`w-full py-4 text-base font-bold rounded-lg transition-all shadow-lg ${

@@ -11,6 +11,8 @@ interface OrderbookLevel {
 interface OrderbookData {
     bids: OrderbookLevel[];
     asks: OrderbookLevel[];
+    pair: string;
+    timestamp: number;
 }
 
 interface TradeData {
@@ -27,14 +29,28 @@ const useOrderbook = (pair: string) => {
     const [isConnected, setIsConnected] = useState<boolean>(false);
     const [orderbook, setOrderbook] = useState<OrderbookData | null>(null);
     const [recentTrades, setRecentTrades] = useState<TradeData[]>([]);
+    const [error, setError] = useState<null | string>(null);
 
-    const subscribeToOrderbook = useCallback(() => {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({
-                type: "SUBSCRIBE_ORDERBOOK"
-            }));
-        }
-    }, [socket]);
+    const applyOrderbookUpdate = useCallback(
+        (prev: OrderbookData | null, update: any): OrderbookData => {
+            if (!prev) {
+                return {
+                    bids: update.bids || [],
+                    asks: update.asks || [],
+                    pair: update.pair,
+                    timestamp: update.timestamp,
+                };
+            }
+
+            return {
+                ...prev,
+                bids: update.bids || prev.bids,
+                asks: update.asks || prev.asks,
+                timestamp: update.timestamp,
+            };
+        },
+        []
+    );
 
     useEffect(() => {
         const ws = new WebSocket(`${WS_URL}?pair=${pair}`);
@@ -43,8 +59,7 @@ const useOrderbook = (pair: string) => {
             console.log('WebSocket connected for pair:', pair);
             setSocket(ws);
             setIsConnected(true);
-            
-            // Subscribe to orderbook updates
+
             ws.send(JSON.stringify({
                 type: "SUBSCRIBE_ORDERBOOK"
             }));
@@ -60,24 +75,24 @@ const useOrderbook = (pair: string) => {
                         console.log('Orderbook snapshot received:', data);
                         setOrderbook({
                             bids: data.bids || [],
-                            asks: data.asks || []
+                            asks: data.asks || [],
+                            pair: data.pair,
+                            timestamp: data.timestamp,
                         });
                         break;
 
                     case "ORDERBOOK_UPDATE":
                         console.log('Orderbook update received:', data);
-                        setOrderbook({
-                            bids: data.bids || [],
-                            asks: data.asks || []
-                        });
+                        setOrderbook((prev) => applyOrderbookUpdate(prev, data))
                         break;
 
                     case "TRADE_EXECUTED":
                         console.log('Trade executed:', data.trade);
-                        setRecentTrades(prev => [data.trade, ...prev.slice(0, 19)]); // Keep last 20 trades
+                        setRecentTrades(prev => [data.trade, ...prev.slice(0, 19)]); 
                         break;
 
                     case "ERROR":
+                        setError(data.message);
                         console.error('WebSocket error:', data.message);
                         break;
 
@@ -112,7 +127,7 @@ const useOrderbook = (pair: string) => {
         isConnected,
         orderbook,
         recentTrades,
-        subscribeToOrderbook
+        error
     };
 };
 
