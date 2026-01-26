@@ -39,10 +39,10 @@ async function initializeKafka() {
         await consumer.run({
             eachMessage: async ({ message }: any) => {
                 try {
-                    if (!message.value) return;
-                    
                     console.log('received message', message.value.toString());
                     const event = JSON.parse(message.value.toString());
+
+                    console.log(event);
                     
                     if (!event.pair) {
                         console.warn("Message missing pair:", event);
@@ -91,7 +91,7 @@ const getPairFromQuery = (req: IncomingMessage) => {
     if (!pair) {
         throw new Error("Missing pair parameter");
     }
-    return pair.replace('-', '_');
+    return pair;
   } catch (error) {
     console.error("Error parsing pair from query:", error);
     return null;

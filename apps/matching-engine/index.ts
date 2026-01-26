@@ -34,7 +34,6 @@ function debugOrderBook(ob:  {
   console.log("-------------------");
 }
 
-
 const sendTradeToKafka = async (trade: Trade) => {
 
   const event = {
@@ -234,7 +233,6 @@ export class MatchingEngineService {
     return orderIndex.size;
   }
 }
-
 
 async function main() {
   const consumer = createConsumer("matching-engine");

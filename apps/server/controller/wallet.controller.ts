@@ -76,7 +76,9 @@ const depositFunds = async (req: Request, res: Response) => {
             return;
         }
 
-        if (!SUPPORTED_TOKENS.includes(asset)) {
+        const isValidAsset = SUPPORTED_TOKENS.some(t => t.symbol === asset);
+            
+        if (!isValidAsset) {
             res.status(400).json({
                 message: "Unsupported asset"
             })

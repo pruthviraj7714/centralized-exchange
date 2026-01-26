@@ -48,7 +48,7 @@ const requestOTPController = async (req: Request, res: Response) => {
         if (!user.wallets || user.wallets.length === 0) {
             await prisma.wallet.createMany({
                 data: SUPPORTED_TOKENS.map((a) => ({
-                    asset: a,
+                    asset: a.symbol,
                     available: new Decimal(0),
                     locked: new Decimal(0),
                     userId: user.id,
@@ -137,7 +137,7 @@ const verifyOTPController = async (req: Request, res: Response) => {
       const jwt = sign({ sub: user.id }, JWT_SECRET);
 
       res.status(200).json({
-        message: "sucessfully verified otp",
+        message: "successfully verified otp",
         jwt,
         id : user.id,
         success: true,
