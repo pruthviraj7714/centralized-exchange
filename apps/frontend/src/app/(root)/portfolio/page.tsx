@@ -1,65 +1,109 @@
 "use client";
 
-import { useState } from "react";
-import { Wallet, Plus, Minus, DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Eye, EyeOff, RefreshCw } from "lucide-react";
-import { SUPPORTED_TOKENS, TOKEN_METADATA } from "@repo/common"
+import { useEffect, useState } from "react";
+import {
+  Wallet,
+  Plus,
+  Minus,
+  DollarSign,
+  TrendingUp,
+  ArrowUpRight,
+  ArrowDownRight,
+  Eye,
+  EyeOff,
+  RefreshCw,
+} from "lucide-react";
+import { SUPPORTED_TOKENS, TOKEN_METADATA } from "@repo/common";
+import { toast } from "sonner";
+import axios from "axios";
+import { BACKEND_URL } from "@/lib/config";
+import { useSession } from "next-auth/react";
+import Decimal from "decimal.js";
 
-const mockBalances = [
-  { 
-    asset: "BTC", 
-    available: 0.5234, 
-    locked: 0.0120,
-    usdValue: 22650.50,
-    change24h: 2.45
-  },
-  { 
-    asset: "ETH", 
-    available: 3.2156, 
-    locked: 0.5000,
-    usdValue: 7335.20,
-    change24h: 3.12
-  },
-  { 
-    asset: "SOL", 
-    available: 125.50, 
-    locked: 15.25,
-    usdValue: 26085.68,
-    change24h: 5.67
-  },
-  { 
-    asset: "USDC", 
-    available: 5420.00, 
-    locked: 0,
-    usdValue: 5420.00,
-    change24h: 0.00
-  },
-  { 
-    asset: "USDT", 
-    available: 1250.50, 
-    locked: 250.00,
-    usdValue: 1500.50,
-    change24h: 0.01
-  },
-];
+interface IBalance {
+  asset : string;
+  available : Decimal;
+  locked : Decimal;
+  usdValue : Decimal;
+  change24h: Decimal
+}
 
 export default function PortfolioPage() {
   const [selectedAsset, setSelectedAsset] = useState("BTC");
   const [amount, setAmount] = useState<number>(0);
-  const [balances] = useState(mockBalances);
+  const [balances, setBalances] = useState<IBalance[]>([]);
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [hideBalances, setHideBalances] = useState(false);
+  const { data, status } = useSession();
 
-  const handleDeposit = () => {
-    alert(`Depositing ${amount} ${selectedAsset}`);
+  const normalizeBalances = (raw: any[]): IBalance[] =>
+  raw.map((b) => ({
+    ...b,
+    available: new Decimal(b.available),
+    locked: new Decimal(b.locked),
+    usdValue: new Decimal(b.usdValue),
+    change24h: new Decimal(b.change24h),
+  }));
+
+
+  const handleDeposit = async () => {
+    if(!data?.accessToken) {
+      toast.warning("Please login to deposit");
+      return;
+    }
+    try {
+       await axios.post(`${BACKEND_URL}/wallets/deposit`, {
+        asset: selectedAsset,
+        amount: amount,
+      }, {
+        headers : {
+          Authorization : `Bearer ${data?.accessToken}`
+        }
+      });
+
+      fetchPortfolio();
+
+      toast.success(`Successfully Deposited ${amount} ${selectedAsset}`, { position : "top-center"});
+    } catch (error : any) {
+      toast.error(error.response.data.message || error.message);
+      
+    }
   };
 
   const handleWithdraw = () => {
-    alert(`Withdrawing ${amount} ${selectedAsset}`);
+    toast.success(`Withdrawing ${amount} ${selectedAsset}`, {position : "top-center"});
   };
 
-  const totalUSDValue = balances.reduce((sum, b) => sum + b.usdValue, 0);
-  const totalChange24h = balances.reduce((sum, b) => sum + (b.usdValue * b.change24h / 100), 0);
-  const totalChangePercent = (totalChange24h / totalUSDValue) * 100;
+  const fetchPortfolio = async () => {
+    try {
+      const res = await axios.get(`${BACKEND_URL}/users/portfolio`, {
+        headers: {
+          Authorization: `Bearer ${data?.accessToken}`,
+        },
+      });
+
+      const balances = normalizeBalances(res.data.portfolio);
+      setBalances(balances);
+    } catch (error: any) {
+      toast.error(error.response.data.message || error.message);
+    }
+  };
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      fetchPortfolio();
+    }
+  }, [status]);
+
+  const totalUSDValue = balances.reduce((sum, b) => sum.plus(b.usdValue) , new Decimal(0));
+  const totalChange24h = balances.reduce(
+    (sum, b) => sum.plus(b.usdValue.mul(b.change24h)).div(100),
+    new Decimal(0),
+  );
+
+  const totalChangePercent = totalChange24h.div(totalUSDValue).mul(100);
+
+  const totalAvailableBalanceInUSD = balances.reduce((sum, asset) => sum.plus(asset.available.div(asset.available.plus(asset.locked)).mul(asset.usdValue)), new Decimal(0)); 
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -74,7 +118,9 @@ export default function PortfolioPage() {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
                   Assets & Wallet
                 </h1>
-                <p className="text-xs text-slate-400">Manage your crypto portfolio</p>
+                <p className="text-xs text-slate-400">
+                  Manage your crypto portfolio
+                </p>
               </div>
             </div>
 
@@ -90,10 +136,14 @@ export default function PortfolioPage() {
           <div className="md:col-span-2 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-500/20 rounded-2xl p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <p className="text-sm text-slate-400 mb-1">Total Portfolio Value</p>
+                <p className="text-sm text-slate-400 mb-1">
+                  Total Portfolio Value
+                </p>
                 <div className="flex items-center gap-3">
                   <h2 className="text-4xl font-bold text-white">
-                    {hideBalances ? "••••••" : `$${totalUSDValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    {hideBalances
+                      ? "••••••"
+                      : `$${totalUSDValue}`}
                   </h2>
                   <button
                     onClick={() => setHideBalances(!hideBalances)}
@@ -109,16 +159,24 @@ export default function PortfolioPage() {
               </div>
               <div className="text-right">
                 <p className="text-sm text-slate-400 mb-1">24h Change</p>
-                <div className={`flex items-center gap-1 text-xl font-bold ${totalChangePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {totalChangePercent >= 0 ? (
+                <div
+                  className={`flex items-center gap-1 text-xl font-bold ${totalChangePercent.greaterThan(0) ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {totalChangePercent.greaterThan(0) ? (
                     <TrendingUp className="w-5 h-5" />
                   ) : (
                     <ArrowDownRight className="w-5 h-5" />
                   )}
-                  <span>{totalChangePercent >= 0 ? '+' : ''}{totalChangePercent.toFixed(2)}%</span>
+                  <span>
+                    {totalChangePercent.greaterThan(0) ? "+" : ""}
+                    {totalChangePercent.toFixed(2)}%
+                  </span>
                 </div>
-                <p className={`text-sm ${totalChangePercent >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {totalChangePercent >= 0 ? '+' : ''}${Math.abs(totalChange24h).toFixed(2)}
+                <p
+                  className={`text-sm ${totalChangePercent.greaterThan(0) ? "text-emerald-400" : "text-red-400"}`}
+                >
+                  {totalChangePercent.greaterThan(0) ? "+" : ""}$
+                  {totalChange24h.toString()}
                 </p>
               </div>
             </div>
@@ -127,24 +185,38 @@ export default function PortfolioPage() {
               <div>
                 <p className="text-xs text-slate-500 mb-1">Available Balance</p>
                 <p className="text-lg font-semibold text-white">
-                  ${balances.reduce((sum, b) => sum + (b.available / (b.available + b.locked)) * b.usdValue, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  $ 
+                  {Decimal(totalAvailableBalanceInUSD).toFixed(2)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">In Orders</p>
                 <p className="text-lg font-semibold text-white">
-                  ${balances.reduce((sum, b) => sum + (b.locked / (b.available + b.locked)) * b.usdValue, 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  $
+                  {balances
+                    .reduce(
+                      (sum, b) =>
+                        sum.plus(
+                          b.locked.div(b.available.plus(b.locked)).mul(b.usdValue)
+                        ),
+                      new Decimal(0),
+                    )
+                    .toFixed(2)}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 mb-1">Total Assets</p>
-                <p className="text-lg font-semibold text-white">{balances.length}</p>
+                <p className="text-lg font-semibold text-white">
+                  {balances.length}
+                </p>
               </div>
             </div>
           </div>
 
           <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-6">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4">Quick Actions</h3>
+            <h3 className="text-sm font-semibold text-slate-300 mb-4">
+              Quick Actions
+            </h3>
             <div className="space-y-3">
               <button
                 onClick={() => setActiveTab("deposit")}
@@ -223,14 +295,28 @@ export default function PortfolioPage() {
                       className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3.5 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all appearance-none cursor-pointer"
                     >
                       {SUPPORTED_TOKENS.map((token) => (
-                        <option key={token.symbol} value={token.symbol} className="bg-slate-800 text-white">
+                        <option
+                          key={token.symbol}
+                          value={token.symbol}
+                          className="bg-slate-800 text-white"
+                        >
                           {token.symbol} - {TOKEN_METADATA[token.symbol].name}
                         </option>
                       ))}
                     </select>
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      <svg
+                        className="w-5 h-5 text-slate-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
                       </svg>
                     </div>
                   </div>
@@ -238,19 +324,28 @@ export default function PortfolioPage() {
 
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-sm font-medium text-slate-300">Amount</label>
+                    <label className="text-sm font-medium text-slate-300">
+                      Amount
+                    </label>
                     {activeTab === "deposit" && (
-                      <span className="text-xs text-slate-500">Min: 0.001 {selectedAsset}</span>
+                      <span className="text-xs text-slate-500">
+                        Min: 0.001 {selectedAsset}
+                      </span>
                     )}
                     {activeTab === "withdraw" && (
                       <span className="text-xs text-emerald-400 cursor-pointer hover:text-emerald-300">
-                        Available: {balances.find(b => b.asset === selectedAsset)?.available || 0} {selectedAsset}
+                        Available:{" "}
+                        {(balances.find((b) => b.asset === selectedAsset)
+                          ?.available || new Decimal(0)).toString()}{" "}
+                        {selectedAsset}
                       </span>
                     )}
                   </div>
                   <div className="relative">
                     <input
-                      onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                      onChange={(e) =>
+                        setAmount(parseFloat(e.target.value) || 0)
+                      }
                       type="number"
                       step="0.0001"
                       placeholder="0.00"
@@ -277,7 +372,9 @@ export default function PortfolioPage() {
                 )}
 
                 <button
-                  onClick={activeTab === "deposit" ? handleDeposit : handleWithdraw}
+                  onClick={
+                    activeTab === "deposit" ? handleDeposit : handleWithdraw
+                  }
                   className={`w-full font-semibold py-4 rounded-xl transition-all duration-200 shadow-lg flex items-center justify-center gap-2 ${
                     activeTab === "deposit"
                       ? "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white shadow-emerald-500/25"
@@ -299,7 +396,8 @@ export default function PortfolioPage() {
 
                 {activeTab === "deposit" && (
                   <div className="text-xs text-slate-500 text-center">
-                    Send only {selectedAsset} to this address. Other assets will be lost.
+                    Send only {selectedAsset} to this address. Other assets will
+                    be lost.
                   </div>
                 )}
               </div>
@@ -310,9 +408,13 @@ export default function PortfolioPage() {
             <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-2xl overflow-hidden">
               <div className="px-6 py-4 border-b border-slate-800/50 bg-slate-900/50">
                 <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold text-white">Wallet Balances</h2>
+                  <h2 className="text-xl font-semibold text-white">
+                    Wallet Balances
+                  </h2>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">{balances.length} Assets</span>
+                    <span className="text-sm text-slate-400">
+                      {balances.length} Assets
+                    </span>
                   </div>
                 </div>
               </div>
@@ -320,9 +422,12 @@ export default function PortfolioPage() {
               <div className="divide-y divide-slate-800/30">
                 {balances && balances.length > 0 ? (
                   balances.map((balance) => {
-                    const metadata = TOKEN_METADATA[balance.asset as keyof typeof TOKEN_METADATA];
-                    const totalAmount = balance.available + balance.locked;
-                    const availablePercent = (balance.available / totalAmount) * 100;
+                    const metadata =
+                      TOKEN_METADATA[
+                        balance.asset as keyof typeof TOKEN_METADATA
+                      ];
+                    const totalAmount = balance.available.plus(balance.locked);
+                    const availablePercent = balance.available.div(totalAmount).mul(100);
 
                     return (
                       <div
@@ -340,39 +445,58 @@ export default function PortfolioPage() {
                               <h3 className="font-semibold text-white text-lg group-hover:text-emerald-400 transition-colors">
                                 {balance.asset}
                               </h3>
-                              <p className="text-sm text-slate-400">{metadata.name}</p>
+                              <p className="text-sm text-slate-400">
+                                {metadata.name}
+                              </p>
                             </div>
                           </div>
 
                           <div className="text-right">
                             <p className="text-2xl font-bold text-white">
-                              {hideBalances ? "••••" : totalAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                              {hideBalances
+                                ? "••••"
+                                : totalAmount.toString()}
                             </p>
                             <p className="text-sm text-slate-400">
-                              {hideBalances ? "••••" : `≈ $${balance.usdValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                              {hideBalances
+                                ? "••••"
+                                : `≈ $${balance.usdValue}`}
                             </p>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-3 gap-4">
                           <div className="p-3 bg-slate-800/30 rounded-lg">
-                            <p className="text-xs text-slate-500 mb-1">Available</p>
+                            <p className="text-xs text-slate-500 mb-1">
+                              Available
+                            </p>
                             <p className="text-sm font-semibold text-emerald-400">
-                              {hideBalances ? "••••" : balance.available.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                              {hideBalances
+                                ? "••••"
+                                : balance.available.toString()}
                             </p>
                           </div>
 
                           <div className="p-3 bg-slate-800/30 rounded-lg">
-                            <p className="text-xs text-slate-500 mb-1">In Orders</p>
+                            <p className="text-xs text-slate-500 mb-1">
+                              In Orders
+                            </p>
                             <p className="text-sm font-semibold text-orange-400">
-                              {hideBalances ? "••••" : balance.locked.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                              {hideBalances
+                                ? "••••"
+                                : balance.locked.toString()}
                             </p>
                           </div>
 
                           <div className="p-3 bg-slate-800/30 rounded-lg">
-                            <p className="text-xs text-slate-500 mb-1">24h Change</p>
-                            <p className={`text-sm font-semibold ${balance.change24h >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                              {balance.change24h >= 0 ? '+' : ''}{balance.change24h.toFixed(2)}%
+                            <p className="text-xs text-slate-500 mb-1">
+                              24h Change
+                            </p>
+                            <p
+                              className={`text-sm font-semibold ${balance.change24h.greaterThanOrEqualTo(0) ? "text-emerald-400" : "text-red-400"}`}
+                            >
+                              {balance.change24h.greaterThanOrEqualTo(0) ? "+" : ""}
+                              {balance.change24h.toFixed(2)}%
                             </p>
                           </div>
                         </div>
@@ -393,8 +517,12 @@ export default function PortfolioPage() {
                     <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Wallet className="w-10 h-10 text-slate-500" />
                     </div>
-                    <p className="text-slate-400 text-lg mb-2">No balances found</p>
-                    <p className="text-sm text-slate-500">Make your first deposit to get started</p>
+                    <p className="text-slate-400 text-lg mb-2">
+                      No balances found
+                    </p>
+                    <p className="text-sm text-slate-500">
+                      Make your first deposit to get started
+                    </p>
                   </div>
                 )}
               </div>

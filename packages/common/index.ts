@@ -34,7 +34,6 @@ export const SUPPORTED_MARKETS = [
   "ETH-BTC",
   "SOL-BTC",
   "SOL-ETH",
-  "USDC-USDT",
   "BNB-USDT",
   "BNB-USDC",
   "XRP-USDT",

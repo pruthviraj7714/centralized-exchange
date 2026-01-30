@@ -42,8 +42,8 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
     const remainingBuyOrderQty = buyOrder.remainingQuantity.minus(trade.quantity);
     const remainingSellOrderQty = sellOrder.remainingQuantity.minus(trade.quantity);
 
-    const boughtAmount = trade.quantity.mul(trade.price);
-    const soldQty = trade.quantity;
+    const boughtAmount = new Decimal(trade.quantity).mul(trade.price);
+    const soldQty = new Decimal(trade.quantity);
 
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
