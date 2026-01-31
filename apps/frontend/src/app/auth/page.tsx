@@ -1,39 +1,34 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { BACKEND_URL } from "@/lib/config";
-import axios from "axios";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import OTPDialog from "@/components/OTPComponent";
 import { signIn } from "next-auth/react";
+import { useMutation } from "@tanstack/react-query";
+import { requestOTP } from "@/lib/api/user.api";
 
 export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [isOTPSent, setIsOTPSent] = useState<boolean>(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const router = useRouter();
+  const { mutate: requestOTPMutate, isPending: isOTPMutating } = useMutation({
+    mutationFn: () => requestOTP(email),
+    mutationKey: ["requestOTP"],
+  });
 
   const handleLogin = async () => {
     if (!email || email.length === 0) {
       toast.warning("please provide email to send otp");
       return;
     }
-    try {
-      const res = await axios.post(`${BACKEND_URL}/auth/request-otp`, {
-        email,
-      });
-      if (res.status === 200) {
-        toast.success("OTP successfully sent to email", {
-          description: "Please Enter OTP for verification",
-        });
-        setIsOTPSent(true);
-      }
-    } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message);
-      setIsOTPSent(false);
-    }
+    requestOTPMutate();
+    toast.success("OTP successfully sent to email", {
+      description: "Please Enter OTP for verification",
+    });
+    setIsOTPSent(true);
   };
 
   const verifyOTP = async (otpString: string) => {
@@ -49,7 +44,7 @@ export default function AuthPage() {
         otp: otpString,
       });
 
-      router.push('/dashboard');
+      router.push("/dashboard");
     } catch (error: any) {
       toast.error(error.response.data.message ?? error.message);
     } finally {

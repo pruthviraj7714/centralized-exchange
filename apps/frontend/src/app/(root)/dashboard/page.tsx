@@ -6,6 +6,8 @@ import axios from "axios";
 import { BACKEND_URL } from "@/lib/config";
 import { useRouter } from "next/navigation";
 import { Decimal } from "decimal.js";
+import { useQuery } from "@tanstack/react-query";
+import { fetchMarkets } from "@/lib/api/market.api";
 
 interface IMarketData {
   id: string;
@@ -28,25 +30,18 @@ export default function MarketDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "price" | "change24h" | "marketCap">("marketCap");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const [marketData, setMarketData] = useState<IMarketData[]>([]);
   const [filteredData, setFilteredData] = useState<IMarketData[]>([]);
   const router = useRouter();
+  const { data, isLoading, isError } = useQuery<{markets : IMarketData[]}>({
+    queryFn : () => fetchMarkets(),
+    queryKey : ["markets"],
+  })
 
-  const fetchMarkets = async () => {
-    try {
-      const response = await axios.get(`${BACKEND_URL}/markets`);
-      setMarketData(response.data.markets);
-    } catch (error) {
-      toast.error("Failed to fetch markets");
+  useEffect(() => {
+    if(!data || isLoading || isError){
+      return;
     }
-  }
-
-  useEffect(() => {
-    fetchMarkets();
-  }, []);
-
-  useEffect(() => {
-    let filtered = marketData.filter(coin =>
+    let filtered = data.markets.filter(coin =>
       coin.baseAsset.toLowerCase().includes(searchTerm.toLowerCase()) ||
       coin.symbol.toLowerCase().includes(searchTerm.toLowerCase())
     );
@@ -83,7 +78,7 @@ export default function MarketDashboard() {
     });
 
     setFilteredData(filtered);
-  }, [searchTerm, sortBy, sortOrder, marketData]);
+  }, [searchTerm, sortBy, sortOrder, data]);
 
   const formatPrice = (price: string) => {
     if (price == null) return "-";
@@ -139,20 +134,20 @@ export default function MarketDashboard() {
   };
 
   const getNewCoins = () => {
-    return [...marketData]
+    return [...data?.markets || []]
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 5);
   };
 
   const getTopGainers = () => {
-    return [...marketData]
+    return [...data?.markets || []]
       .filter(coin => coin.change24h !== null && Decimal(coin.change24h || "0").toNumber() > 0)
       .sort((a, b) => (Decimal(b.change24h || "0").toNumber() - Decimal(a.change24h || "0").toNumber()))
       .slice(0, 5);
   };
 
   const getPopular = () => {
-    return [...marketData]
+    return [...data?.markets || []]
       .sort((a, b) => (Decimal(b.marketCap || "0").toNumber() - Decimal(a.marketCap || "0").toNumber()))
       .slice(0, 5);
   };
@@ -198,6 +193,14 @@ export default function MarketDashboard() {
       setSortOrder("desc");
     }
   };
+
+  if(isLoading){
+    return <div>Loading...</div>
+  }
+
+  if(isError){
+    return <div>Error</div>
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "sonner";
-import { AuthProvider } from "@/components/AuthProvider";
 import { Footer } from "@/components/Footer";
+import Providers from "@/components/Providers";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +21,6 @@ export const metadata: Metadata = {
     "A high-performance centralized crypto exchange platform featuring real-time order books, live trades, and secure trading experience.",
 };
 
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -32,10 +31,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
-        {children}
-        <Footer />
-        </AuthProvider>
+        <Providers>
+          {children}
+          <Footer />
+        </Providers>
         <Toaster />
       </body>
     </html>

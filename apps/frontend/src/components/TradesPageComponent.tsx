@@ -8,28 +8,13 @@ import { BACKEND_URL } from "@/lib/config";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
 import useOrderbook from "@/hooks/useOrderbook";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { fetchMarketData } from "@/lib/api/market.api";
+import { fetchUserBalanceForMarket } from "@/lib/api/user.api";
+import { placeOrder } from "@/lib/api/order.api";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
-
-interface IMarketData {
-  logo : string;
-  symbol: string;
-  baseAsset : string;
-  quoteAsset : string;
-  id : string
-  price : Decimal;
-  low24h : Decimal;
-  high24h : Decimal;
-  open24h : Decimal;
-  volume24h : Decimal;
-  quoteVolume24h : Decimal;
-  change24h : string;
-  priceChange : string;
-  sparkline7d : string[];
-  isActive : boolean;
-  isFeatured : boolean;
-}
 
 export default function TradesPageComponent({ticker} : {ticker : string}) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
@@ -37,58 +22,50 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
   const [quantity, setQuantity] = useState<Decimal>(new Decimal(0));
   const [price, setPrice] = useState<Decimal>(new Decimal(0));
   const [activeTab, setActiveTab] = useState<"BUY" | "SELL">("BUY");
-  const [marketData, setMarketData] = useState<IMarketData | null>(null); 
-  const [userBalances, setUserBalances] = useState<{baseAssetWallet : {available : string, locked : string}, quoteAssetWallet : {available : string, locked : string}} | null>(null);
   const chartRef = useRef<HTMLDivElement>(null);
   const { data, status } = useSession();
+  const isReady = status === "authenticated" && !!data?.accessToken;
   const [bids, setBids] = useState<{price: Decimal; quantity: Decimal; total: Decimal; requestId: string; orderCount: number}[]>([]);
   const [asks, setAsks] = useState<{price: Decimal; quantity: Decimal; total: Decimal; requestId: string; orderCount: number}[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [baseAsset, quoteAsset] = ticker.split("-");
   const {  isConnected, orderbook, recentTrades, error} = useOrderbook(ticker);
+  const { data : marketData, isLoading : marketDataLoading, isError : marketDataError } = useQuery({
+    queryFn : () => fetchMarketData(ticker),
+    queryKey : ["market-data", ticker],
+    enabled : !!ticker,
+    refetchInterval : 10000
+  })
+  const { data : userBalancesData, isLoading : userBalancesLoading, isError : userBalancesError } = useQuery({
+    queryKey : ["user-balances", ticker],
+    queryFn : () => fetchUserBalanceForMarket(ticker, data?.accessToken!),
+    enabled : !!ticker && isReady,
+    refetchInterval : 10000
+  })
+  const { mutateAsync : placeOrderMutation } = useMutation({
+    mutationFn : () => placeOrder(ticker, activeTab, price, quantity, orderType, data?.accessToken!),
+    mutationKey : ["place-order", ticker, activeTab, price, quantity, orderType],
+    onSuccess : (data) => {
+      toast.success(data.message ? data.message : "Order placed successfully", {position : "top-center"});
+    },
+    onError : (error : any) => {
+      toast.error(error.response.data.message ? error.response.data.message : "Failed to place order", {position : "top-center"});
+    }
+  })
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
-
-  const fetchMarketData = async () => {
-    try {
-      const res = await axios.get(`${BACKEND_URL}/markets/${ticker}`);
-      setMarketData(res.data);
-    } catch (error) {
-      toast.error("Error while fetching market data", {position : "top-center"});
-    }
-  }
-
-  const fetchUserBalances = async () => {
-    try {
-      const res = await axios.get(`${BACKEND_URL}/users/balances?market=${ticker}`, {
-        headers: {
-          authorization: `Bearer ${data?.accessToken}`,
-        },
-      });
-      setUserBalances(res.data);
-    } catch (error) {
-      toast.error("Error while fetching user balances", {position : "top-center"});
-    }
-  }
-
-  useEffect(() => {
-    fetchMarketData();
-    if (status === "authenticated") {
-      fetchUserBalances();
-    }
-  }, [ticker, status]);
+  }, []); 
 
   const handlePriceClick = (priceValue: Decimal) => {
     setPrice(priceValue);
   };
 
   const handlePlaceOrder = async () => {
-    if (!data?.accessToken) {
+    if (!isReady) {
       toast.error("Please login to place an order", {position : "top-center"});
       return;
     }
@@ -96,25 +73,7 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
       toast.error("Please fill in all required fields", {position : "top-center"});
       return;
     }
-
-    try {
-        await axios.post(`${BACKEND_URL}/orders`, {
-        pair : ticker,
-        side : activeTab,
-        price : price,
-        quantity : quantity,
-        type : orderType
-      }, {
-        headers : {
-          Authorization : `Bearer ${data.accessToken}`
-        }
-      })
-
-      toast.success("Order placed successfully", {position : "top-center"});
-    } catch (error : any) {
-      toast.error(`${error.response.data.message}`, {position : "top-center"});
-    }
-
+    await placeOrderMutation();
   };
 
   useEffect(() => {
@@ -166,11 +125,13 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
   const maxBidDepth = Math.max(...bids.map(b => b.total.toNumber()));
   const maxAskDepth = Math.max(...asks.map(a => a.total.toNumber()));
   const maxDepth = Math.max(maxBidDepth, maxAskDepth);
-  const baseAssetBalance = userBalances?.baseAssetWallet.available;
-  const quoteAssetBalance = userBalances?.quoteAssetWallet.available;
 
-  if(!marketData) {
+  if(marketDataLoading) {
     return <div>Loading...</div>
+  }
+
+  if(marketDataError) {
+    return <div>Error fetching market data</div>
   }
 
   return (
@@ -414,7 +375,9 @@ export default function TradesPageComponent({ticker} : {ticker : string}) {
                       Available
                     </span>
                     <span className="text-sm font-semibold text-white">
-                      {activeTab === "BUY" ? quoteAssetBalance : baseAssetBalance}
+                      {userBalancesLoading ? (
+                        <div className="w-20 h-5 bg-slate-800/50 rounded animate-pulse"></div>
+                      ) : activeTab === "BUY" ? userBalancesData?.quoteAssetWallet.available : userBalancesData?.baseAssetWallet.available}
                     </span>
                   </div>
                 </div>

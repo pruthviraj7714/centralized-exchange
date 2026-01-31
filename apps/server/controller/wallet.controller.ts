@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import prisma from "@repo/db";
 import { SUPPORTED_TOKENS } from "@repo/common";
+import Decimal from "decimal.js";
 
 const fetchLedgers = async (req: Request, res: Response) => {
     try {
@@ -64,12 +65,11 @@ const fetchWallets = async (req: Request, res: Response) => {
 
 const depositFunds = async (req: Request, res: Response) => {
     try {
-
         const userId = req.userId!;
 
         const { asset, amount } = req.body;
 
-        if (!asset || typeof amount !== "number" || !amount || amount <= 0) {
+        if (!asset || !amount || new Decimal(amount).lte(0)) {
             res.status(400).json({
                 message: "Invalid Inputs"
             });

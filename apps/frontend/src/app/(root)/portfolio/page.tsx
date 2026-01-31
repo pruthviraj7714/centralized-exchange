@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Wallet,
   Plus,
@@ -15,87 +15,89 @@ import {
 } from "lucide-react";
 import { SUPPORTED_TOKENS, TOKEN_METADATA } from "@repo/common";
 import { toast } from "sonner";
-import axios from "axios";
-import { BACKEND_URL } from "@/lib/config";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { fetchPortfolio } from "@/lib/api/user.api";
+import { depositAsset } from "@/lib/api/wallet.api";
 
 interface IBalance {
-  asset : string;
-  available : Decimal;
-  locked : Decimal;
-  usdValue : Decimal;
-  change24h: Decimal
+  asset: string;
+  available: Decimal;
+  locked: Decimal;
+  usdValue: Decimal;
+  change24h: Decimal;
 }
 
 export default function PortfolioPage() {
   const [selectedAsset, setSelectedAsset] = useState("BTC");
-  const [amount, setAmount] = useState<number>(0);
-  const [balances, setBalances] = useState<IBalance[]>([]);
+  const [amount, setAmount] = useState<Decimal>(new Decimal(0));
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [hideBalances, setHideBalances] = useState(false);
   const { data, status } = useSession();
+  const {
+    data: portfolioData,
+    isLoading: portfolioLoading,
+    isError: portfolioError,
+  } = useQuery<{ portfolio: IBalance[] }>({
+    queryFn: () => fetchPortfolio(data?.accessToken!),
+    queryKey: ["portfolio"],
+    enabled: !!data?.accessToken,
+  });
+  const { mutate } = useMutation({
+    mutationFn : () => depositAsset(selectedAsset, amount, data?.accessToken!),
+    mutationKey : ["deposit"],
+    onError : () => {
+      toast.error("Error while depositing", {position : "top-center"});
+    },
+    onSuccess : () => {
+      queryClient.invalidateQueries({
+        queryKey : ["portfolio"],
+      })
+    }
+  });
+  const queryClient = useQueryClient();
 
   const normalizeBalances = (raw: any[]): IBalance[] =>
-  raw.map((b) => ({
-    ...b,
-    available: new Decimal(b.available),
-    locked: new Decimal(b.locked),
-    usdValue: new Decimal(b.usdValue),
-    change24h: new Decimal(b.change24h),
-  }));
-
+    raw.map((b) => ({
+      ...b,
+      available: new Decimal(b.available),
+      locked: new Decimal(b.locked),
+      usdValue: new Decimal(b.usdValue),
+      change24h: new Decimal(b.change24h),
+    }));
 
   const handleDeposit = async () => {
-    if(!data?.accessToken) {
+    if (!data?.accessToken) {
       toast.warning("Please login to deposit");
       return;
     }
-    try {
-       await axios.post(`${BACKEND_URL}/wallets/deposit`, {
-        asset: selectedAsset,
-        amount: amount,
-      }, {
-        headers : {
-          Authorization : `Bearer ${data?.accessToken}`
-        }
-      });
-
-      fetchPortfolio();
-
-      toast.success(`Successfully Deposited ${amount} ${selectedAsset}`, { position : "top-center"});
-    } catch (error : any) {
-      toast.error(error.response.data.message || error.message);
-      
-    }
+    mutate();
+    toast.success(`Successfully Deposited ${amount} ${selectedAsset}`, {
+      position: "top-center",
+    });
   };
 
   const handleWithdraw = () => {
-    toast.success(`Withdrawing ${amount} ${selectedAsset}`, {position : "top-center"});
+    toast.success(`Withdrawing ${amount} ${selectedAsset}`, {
+      position: "top-center",
+    });
   };
 
-  const fetchPortfolio = async () => {
-    try {
-      const res = await axios.get(`${BACKEND_URL}/users/portfolio`, {
-        headers: {
-          Authorization: `Bearer ${data?.accessToken}`,
-        },
-      });
+  if (portfolioLoading) {
+    return <div>Loading...</div>;
+  }
 
-      const balances = normalizeBalances(res.data.portfolio);
-      setBalances(balances);
-    } catch (error: any) {
-      toast.error(error.response.data.message || error.message);
-    }
-  };
+  if(portfolioError) {
+    return <div>Error while fetching portfolio</div>;
+  }
 
-  useEffect(() => {
-    if (status === "authenticated") {
-      fetchPortfolio();
-    }
-  }, [status]);
+  const balances = normalizeBalances(portfolioData?.portfolio || []);
 
-  const totalUSDValue = balances.reduce((sum, b) => sum.plus(b.usdValue) , new Decimal(0));
+  const totalUSDValue = balances.reduce(
+    (sum, b) => sum.plus(b.usdValue),
+    new Decimal(0),
+  );
   const totalChange24h = balances.reduce(
     (sum, b) => sum.plus(b.usdValue.mul(b.change24h)).div(100),
     new Decimal(0),
@@ -103,7 +105,15 @@ export default function PortfolioPage() {
 
   const totalChangePercent = totalChange24h.div(totalUSDValue).mul(100);
 
-  const totalAvailableBalanceInUSD = balances.reduce((sum, asset) => sum.plus(asset.available.div(asset.available.plus(asset.locked)).mul(asset.usdValue)), new Decimal(0)); 
+  const totalAvailableBalanceInUSD = balances.reduce(
+    (sum, asset) =>
+      sum.plus(
+        asset.available
+          .div(asset.available.plus(asset.locked))
+          .mul(asset.usdValue),
+      ),
+    new Decimal(0),
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
@@ -141,9 +151,7 @@ export default function PortfolioPage() {
                 </p>
                 <div className="flex items-center gap-3">
                   <h2 className="text-4xl font-bold text-white">
-                    {hideBalances
-                      ? "••••••"
-                      : `$${totalUSDValue}`}
+                    {hideBalances ? "••••••" : `$${totalUSDValue}`}
                   </h2>
                   <button
                     onClick={() => setHideBalances(!hideBalances)}
@@ -185,8 +193,7 @@ export default function PortfolioPage() {
               <div>
                 <p className="text-xs text-slate-500 mb-1">Available Balance</p>
                 <p className="text-lg font-semibold text-white">
-                  $ 
-                  {Decimal(totalAvailableBalanceInUSD).toFixed(2)}
+                  ${Decimal(totalAvailableBalanceInUSD).toFixed(2)}
                 </p>
               </div>
               <div>
@@ -197,7 +204,9 @@ export default function PortfolioPage() {
                     .reduce(
                       (sum, b) =>
                         sum.plus(
-                          b.locked.div(b.available.plus(b.locked)).mul(b.usdValue)
+                          b.locked
+                            .div(b.available.plus(b.locked))
+                            .mul(b.usdValue),
                         ),
                       new Decimal(0),
                     )
@@ -335,8 +344,10 @@ export default function PortfolioPage() {
                     {activeTab === "withdraw" && (
                       <span className="text-xs text-emerald-400 cursor-pointer hover:text-emerald-300">
                         Available:{" "}
-                        {(balances.find((b) => b.asset === selectedAsset)
-                          ?.available || new Decimal(0)).toString()}{" "}
+                        {(
+                          balances.find((b) => b.asset === selectedAsset)
+                            ?.available || new Decimal(0)
+                        ).toString()}{" "}
                         {selectedAsset}
                       </span>
                     )}
@@ -344,7 +355,7 @@ export default function PortfolioPage() {
                   <div className="relative">
                     <input
                       onChange={(e) =>
-                        setAmount(parseFloat(e.target.value) || 0)
+                        setAmount(new Decimal(e.target.value))
                       }
                       type="number"
                       step="0.0001"
@@ -427,7 +438,9 @@ export default function PortfolioPage() {
                         balance.asset as keyof typeof TOKEN_METADATA
                       ];
                     const totalAmount = balance.available.plus(balance.locked);
-                    const availablePercent = balance.available.div(totalAmount).mul(100);
+                    const availablePercent = balance.available
+                      .div(totalAmount)
+                      .mul(100);
 
                     return (
                       <div
@@ -453,14 +466,10 @@ export default function PortfolioPage() {
 
                           <div className="text-right">
                             <p className="text-2xl font-bold text-white">
-                              {hideBalances
-                                ? "••••"
-                                : totalAmount.toString()}
+                              {hideBalances ? "••••" : totalAmount.toString()}
                             </p>
                             <p className="text-sm text-slate-400">
-                              {hideBalances
-                                ? "••••"
-                                : `≈ $${balance.usdValue}`}
+                              {hideBalances ? "••••" : `≈ $${balance.usdValue}`}
                             </p>
                           </div>
                         </div>
@@ -495,7 +504,9 @@ export default function PortfolioPage() {
                             <p
                               className={`text-sm font-semibold ${balance.change24h.greaterThanOrEqualTo(0) ? "text-emerald-400" : "text-red-400"}`}
                             >
-                              {balance.change24h.greaterThanOrEqualTo(0) ? "+" : ""}
+                              {balance.change24h.greaterThanOrEqualTo(0)
+                                ? "+"
+                                : ""}
                               {balance.change24h.toFixed(2)}%
                             </p>
                           </div>

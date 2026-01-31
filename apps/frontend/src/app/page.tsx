@@ -1,61 +1,56 @@
-"use client"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { BACKEND_URL } from "@/lib/config"
-import axios from "axios"
-import { useState } from "react"
-import { toast } from "sonner"
-import { useRouter } from "next/navigation"
-import OTPDialog from "@/components/OTPComponent"
-import { signIn } from "next-auth/react"
+"use client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import OTPDialog from "@/components/OTPComponent";
+import { signIn } from "next-auth/react";
+import { useMutation } from "@tanstack/react-query";
+import { requestOTP } from "@/lib/api/user.api";
 
 export default function LandingPage() {
-  const [email, setEmail] = useState("")
-  const [isOTPSent, setIsOTPSent] = useState<boolean>(false)
-  const [isVerifying, setIsVerifying] = useState(false)
-  const [showAuth, setShowAuth] = useState(false)
-  const router = useRouter()
+  const [email, setEmail] = useState("");
+  const [isOTPSent, setIsOTPSent] = useState<boolean>(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const { mutate: requestOTPMutate, isPending: isOTPMutating } = useMutation({
+    mutationFn: () => requestOTP(email),
+    mutationKey: ["requestOTP"],
+  });
+  const router = useRouter();
 
   const handleLogin = async () => {
     if (!email || email.length === 0) {
-      toast.warning("please provide email to send otp")
-      return
+      toast.warning("please provide email to send otp");
+      return;
     }
-    try {
-      const res = await axios.post(`${BACKEND_URL}/auth/request-otp`, {
-        email,
-      })
-      if (res.status === 200) {
-        toast.success("OTP successfully sent to email", {
-          description: "Please Enter OTP for verification",
-        })
-        setIsOTPSent(true)
-      }
-    } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message)
-      setIsOTPSent(false)
-    }
-  }
+    requestOTPMutate();
+    toast.success("OTP successfully sent to email", {
+      description: "Please Enter OTP for verification",
+    });
+    setIsOTPSent(true);
+  };
 
   const verifyOTP = async (otpString: string) => {
     if (!otpString || otpString.length < 6) {
-      toast.warning("Please Provide OTP Properly")
-      return
+      toast.warning("Please Provide OTP Properly");
+      return;
     }
-    setIsVerifying(true)
+    setIsVerifying(true);
     try {
       await signIn("credentials", {
         redirect: false,
         email,
         otp: otpString,
       });
-      router.push('/dashboard')
+      router.push("/dashboard");
     } catch (error: any) {
-      toast.error(error.response.data.message ?? error.message)
+      toast.error(error.response.data.message ?? error.message);
     } finally {
-      setIsVerifying(false)
+      setIsVerifying(false);
     }
-  }
+  };
 
   if (showAuth) {
     return (
@@ -67,17 +62,27 @@ export default function LandingPage() {
         <div className="relative z-10 w-full max-w-md">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-r from-red-500 to-red-400 rounded-2xl mb-6 shadow-lg shadow-red-500/25">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-8 h-8 text-white"
+                fill="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
               </svg>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Welcome Back</h1>
-            <p className="text-slate-400">Enter your email to access your account</p>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              Welcome to CEX
+            </h1>
+            <p className="text-slate-400">
+              Enter your email to access your account
+            </p>
           </div>
           <div className="bg-slate-900/50 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 shadow-2xl">
             <div className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Email Address</label>
+                <label className="text-sm font-medium text-slate-300">
+                  Email Address
+                </label>
                 <Input
                   type="email"
                   onChange={(e) => setEmail(e.target.value)}
@@ -98,21 +103,31 @@ export default function LandingPage() {
 
             <div className="mt-6 pt-6 border-t border-slate-800/50">
               <p className="text-xs text-slate-500 text-center">
-                By continuing, you agree to our Terms of Service and Privacy Policy
+                By continuing, you agree to our Terms of Service and Privacy
+                Policy
               </p>
             </div>
           </div>
 
           <div className="text-center mt-6">
-            <Button variant="ghost" onClick={() => setShowAuth(false)} className="text-slate-400 hover:text-white">
+            <Button
+              variant="ghost"
+              onClick={() => setShowAuth(false)}
+              className="text-slate-400 hover:text-white"
+            >
               ← Back to Home
             </Button>
           </div>
         </div>
 
-        <OTPDialog isOTPSent={isOTPSent} isVerifying={isVerifying} setIsOTPSent={setIsOTPSent} verifyOTP={verifyOTP} />
+        <OTPDialog
+          isOTPSent={isOTPSent}
+          isVerifying={isVerifying}
+          setIsOTPSent={setIsOTPSent}
+          verifyOTP={verifyOTP}
+        />
       </div>
-    )
+    );
   }
 
   return (
@@ -125,17 +140,27 @@ export default function LandingPage() {
       <header className="relative z-10 flex items-center justify-between p-6 border-b border-slate-800/50 backdrop-blur-xl">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-gradient-to-r from-red-500 to-red-400 rounded-xl flex items-center justify-center shadow-lg shadow-red-500/25">
-            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <svg
+              className="w-6 h-6 text-white"
+              fill="currentColor"
+              viewBox="0 0 24 24"
+            >
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
           </div>
           <span className="text-xl font-bold text-white">Exchange</span>
         </div>
         <div className="flex items-center space-x-4">
-          <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800/50">
+          <Button
+            variant="ghost"
+            className="text-slate-300 hover:text-white hover:bg-slate-800/50"
+          >
             About
           </Button>
-          <Button variant="ghost" className="text-slate-300 hover:text-white hover:bg-slate-800/50">
+          <Button
+            variant="ghost"
+            className="text-slate-300 hover:text-white hover:bg-slate-800/50"
+          >
             Features
           </Button>
           <Button
@@ -163,8 +188,9 @@ export default function LandingPage() {
           </h1>
 
           <p className="text-xl text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-            Experience lightning-fast trades, institutional-grade security, and advanced trading tools. Join thousands
-            of traders who trust our platform for their crypto journey.
+            Experience lightning-fast trades, institutional-grade security, and
+            advanced trading tools. Join thousands of traders who trust our
+            platform for their crypto journey.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -203,28 +229,49 @@ export default function LandingPage() {
       <section className="relative z-10 py-20 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-white mb-4">Why Choose Our Platform</h2>
+            <h2 className="text-4xl font-bold text-white mb-4">
+              Why Choose Our Platform
+            </h2>
             <p className="text-xl text-slate-400 max-w-2xl mx-auto">
-              Built for traders, by traders. Experience the future of crypto trading.
+              Built for traders, by traders. Experience the future of crypto
+              trading.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 hover:border-emerald-500/30 transition-all duration-300">
               <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-xl flex items-center justify-center mb-6">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Lightning Fast</h3>
+              <h3 className="text-xl font-semibold text-white mb-4">
+                Lightning Fast
+              </h3>
               <p className="text-slate-400">
-                Execute trades in milliseconds with our high-performance matching engine.
+                Execute trades in milliseconds with our high-performance
+                matching engine.
               </p>
             </div>
 
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 hover:border-blue-500/30 transition-all duration-300">
               <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-400 rounded-xl flex items-center justify-center mb-6">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -233,13 +280,23 @@ export default function LandingPage() {
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Bank-Grade Security</h3>
-              <p className="text-slate-400">Your funds are protected with multi-signature wallets and cold storage.</p>
+              <h3 className="text-xl font-semibold text-white mb-4">
+                Bank-Grade Security
+              </h3>
+              <p className="text-slate-400">
+                Your funds are protected with multi-signature wallets and cold
+                storage.
+              </p>
             </div>
 
             <div className="bg-slate-900/30 backdrop-blur-xl border border-slate-800/50 rounded-2xl p-8 hover:border-red-500/30 transition-all duration-300">
               <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-red-400 rounded-xl flex items-center justify-center mb-6">
-                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg
+                  className="w-6 h-6 text-white"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -248,14 +305,17 @@ export default function LandingPage() {
                   />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-white mb-4">Advanced Tools</h3>
+              <h3 className="text-xl font-semibold text-white mb-4">
+                Advanced Tools
+              </h3>
               <p className="text-slate-400">
-                Professional charting, algorithmic trading, and portfolio management tools.
+                Professional charting, algorithmic trading, and portfolio
+                management tools.
               </p>
             </div>
           </div>
         </div>
       </section>
     </div>
-  )
+  );
 }
