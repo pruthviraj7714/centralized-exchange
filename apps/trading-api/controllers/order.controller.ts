@@ -27,7 +27,21 @@ const placeOrderController = async (req: Request, res: Response) => {
       return;
     }
 
-    const { pair, price, quantity, side, type } = validationResult.data;
+    const { pair, price, quantity, side, type, quoteAmount } = validationResult.data;
+
+    if (type === "LIMIT" && (!price || price === undefined || price.lte(0))) {
+      res.status(400).json({
+        message: "Price is required for limit orders and must be greater than 0",
+      });
+      return;
+    }
+
+    if (type === "MARKET" && side === "BUY" && !quoteAmount) {
+      res.status(400).json({
+        message: "Spend amount is required for market buy orders",
+      });
+      return;
+    }
 
     const [baseAsset, quoteAsset] = pair.split("-");
 
@@ -48,7 +62,7 @@ const placeOrderController = async (req: Request, res: Response) => {
     if (type === "LIMIT") {
 
       if (side === "BUY") {
-        const totalAmount = price.mul(quantity);
+        const totalAmount = price!.mul(quantity);
 
         const wallet = await prisma.wallet.findFirst({
           where: {
@@ -157,11 +171,122 @@ const placeOrderController = async (req: Request, res: Response) => {
         });
       }
     } else {
-      //TODO: Implement Market Order
-      res.status(400).json({
-        message: "Invalid Order Type",
-      });
-      return;
+      if (side === "BUY") {
+        const spendAmount = quoteAmount!;
+        const wallet = await prisma.wallet.findFirst({
+          where: {
+            asset: quoteAsset,
+            userId,
+          },
+        });
+
+        if (!wallet) {
+          res.status(400).json({
+            message: "Invalid Wallet",
+          });
+          return;
+        }
+
+        if (wallet.available.lt(spendAmount)) {
+          res.status(400).json({
+            message: "Insufficient Balance",
+          });
+          return;
+        }
+
+
+        order = await prisma.$transaction(async (tx) => {
+
+          await tx.wallet.update({
+            where: {
+              id: wallet.id
+            },
+            data: {
+              available: {
+                decrement: spendAmount
+              },
+              locked: {
+                increment: spendAmount
+              }
+            }
+
+          })
+
+          const order = await tx.order.create({
+            data: {
+              originalQuantity: spendAmount!,
+              remainingQuantity: spendAmount!,
+              price: null,
+              side: side,
+              type: type,
+              status: "OPEN",
+              userId: userId,
+              marketId: market.id,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+          })
+
+          return order;
+        })
+
+      } else {
+        const qtyToSell = quantity;
+
+        const wallet = await prisma.wallet.findFirst({
+          where: {
+            asset: baseAsset,
+            userId,
+          },
+        });
+
+        if (!wallet) {
+          res.status(400).json({
+            message: "Invalid Wallet",
+          });
+          return;
+        }
+
+        if (wallet.available.lt(qtyToSell)) {
+          res.status(400).json({
+            message: "Insufficient Balance",
+          });
+          return;
+        }
+
+        order = await prisma.$transaction(async (tx) => {
+
+          await tx.wallet.update({
+            where: {
+              id: wallet.id
+            },
+            data: {
+              available: {
+                decrement: qtyToSell
+              },
+              locked: {
+                increment: qtyToSell
+              }
+            }
+          })
+
+          const order = await tx.order.create({
+            data: {
+              originalQuantity: qtyToSell,
+              remainingQuantity: qtyToSell,
+              price: null,
+              side: side,
+              type: type,
+              status: "OPEN",
+              userId: userId,
+              marketId: market.id,
+            }
+          })
+
+          return order;
+        })
+
+      }
     }
 
     const result = await producer.send({
@@ -257,7 +382,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
       messages: [
         {
           key: order.id,
-          value: JSON.stringify({ orderId : order.id, event: "CANCEL_ORDER" }),
+          value: JSON.stringify({ orderId: order.id, event: "CANCEL_ORDER" }),
         },
       ],
     });
