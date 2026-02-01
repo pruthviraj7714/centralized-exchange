@@ -5,10 +5,7 @@ export const OrderSchema = z.object({
   pair: z.string(),
   side: z.enum(["BUY", "SELL"]),
   price: z.string().transform((val) => new Decimal(val)).optional(),
-  quantity: z.string().transform((val) => new Decimal(val)).refine(
-    (val) => val.greaterThan(0),
-    "Quantity must be greater than 0"
-  ),
+  quantity: z.string().transform((val) => new Decimal(val)).optional(),
   quoteAmount : z.string().transform((val) => new Decimal(val)).optional(),
   type: z.enum(["LIMIT", "MARKET"]),
 });

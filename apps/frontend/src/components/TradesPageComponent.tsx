@@ -72,10 +72,11 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       placeOrder(
         ticker,
         activeTab,
-        orderType === "MARKET" ? spendAmount : price,
-        quantity,
         orderType,
         data?.accessToken!,
+        quantity,
+        spendAmount,
+        price,
       ),
     mutationKey: ["place-order", ticker, activeTab, price, quantity, orderType],
     onSuccess: (data) => {
@@ -122,7 +123,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       });
       return;
     }
-    
+
     await placeOrderMutation();
   };
 

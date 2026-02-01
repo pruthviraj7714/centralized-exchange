@@ -36,9 +36,23 @@ const placeOrderController = async (req: Request, res: Response) => {
       return;
     }
 
+    if(type === "LIMIT" && (!quantity || quantity === undefined || quantity.lte(0))) {
+      res.status(400).json({
+        message : "Quantity is required for limit orders and must be greater than 0"
+      });
+      return; 
+    }
+
     if (type === "MARKET" && side === "BUY" && !quoteAmount) {
       res.status(400).json({
         message: "Spend amount is required for market buy orders",
+      });
+      return;
+    }
+    
+    if (type === "MARKET" && side === "SELL" && !quantity) {
+      res.status(400).json({
+        message: "Quantity is required for market sell orders",
       });
       return;
     }
@@ -61,8 +75,10 @@ const placeOrderController = async (req: Request, res: Response) => {
 
     if (type === "LIMIT") {
 
+      const qty = quantity!;
+
       if (side === "BUY") {
-        const totalAmount = price!.mul(quantity);
+        const totalAmount = price!.mul(qty);
 
         const wallet = await prisma.wallet.findFirst({
           where: {
@@ -102,8 +118,8 @@ const placeOrderController = async (req: Request, res: Response) => {
 
           const order = await tx.order.create({
             data: {
-              originalQuantity: quantity,
-              remainingQuantity: quantity,
+              originalQuantity: qty,
+              remainingQuantity: qty,
               side,
               status: "OPEN",
               type,
@@ -116,7 +132,7 @@ const placeOrderController = async (req: Request, res: Response) => {
           return order;
         });
       } else {
-        const qtyToSell = quantity;
+        const qtyToSell = quantity!;
 
         const wallet = await prisma.wallet.findFirst({
           where: {
@@ -231,7 +247,7 @@ const placeOrderController = async (req: Request, res: Response) => {
         })
 
       } else {
-        const qtyToSell = quantity;
+        const qtyToSell = quantity!;
 
         const wallet = await prisma.wallet.findFirst({
           where: {
