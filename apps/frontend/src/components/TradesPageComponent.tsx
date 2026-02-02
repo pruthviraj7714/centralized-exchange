@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { TrendingUp, TrendingDown, Activity, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { TrendingUp, Activity, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import axios from "axios";
-import { BACKEND_URL } from "@/lib/config";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
 import useOrderbook from "@/hooks/useOrderbook";
@@ -12,6 +10,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { fetchMarketData } from "@/lib/api/market.api";
 import { fetchUserBalanceForMarket } from "@/lib/api/user.api";
 import { placeOrder } from "@/lib/api/order.api";
+import { Button } from "./ui/button";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
@@ -44,6 +43,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       orderCount: number;
     }[]
   >([]);
+  const [orderBookTab, setOrderBookTab] = useState("ORDER_BOOK");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [baseAsset, quoteAsset] = ticker.split("-");
   const { isConnected, orderbook, recentTrades, error } = useOrderbook(ticker);
@@ -125,6 +125,74 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
 
     await placeOrderMutation();
+
+    setQuantity(new Decimal(0));
+    setPrice(new Decimal(0));
+    setSpendAmount(new Decimal(0));
+  };
+
+  const handlePlaceOrderDisabled = () => {
+    if (!isReady || !quantity || (orderType === "LIMIT" && !price)) return true;
+    if (
+      orderType === "LIMIT" &&
+      (!price || price.eq(0)) &&
+      (!quantity || quantity.eq(0))
+    )
+      return true;
+    if (
+      orderType === "MARKET" &&
+      activeTab === "BUY" &&
+      (!spendAmount || spendAmount.eq(0))
+    )
+      return true;
+    if (
+      orderType === "MARKET" &&
+      activeTab === "SELL" &&
+      (!quantity || quantity.eq(0))
+    )
+      return true;
+    return false;
+  };
+
+  const handleSetQuantity = (percent: string) => {
+    const baseAssetBalance =
+      userBalancesData?.baseAssetWallet.available || new Decimal(0);
+    const quoteAssetBalance =
+      userBalancesData?.quoteAssetWallet.available || new Decimal(0);
+
+    if (orderType === "LIMIT" && activeTab === "BUY") {
+      if (percent === "max") {
+        setPrice(quoteAssetBalance);
+        return;
+      }
+      const percentage = new Decimal(percent.replace("%", ""));
+      const total = quoteAssetBalance.mul(percentage).div(100);
+      setPrice(total);
+    } else if (orderType === "LIMIT" && activeTab === "SELL") {
+      if (percent === "max") {
+        setQuantity(baseAssetBalance);
+        return;
+      }
+      const percentage = new Decimal(percent.replace("%", ""));
+      const total = baseAssetBalance.mul(percentage).div(100);
+      setQuantity(total);
+    } else if (orderType === "MARKET" && activeTab === "BUY") {
+      if (percent === "max") {
+        setSpendAmount(quoteAssetBalance);
+        return;
+      }
+      const percentage = new Decimal(percent.replace("%", ""));
+      const total = quoteAssetBalance.mul(percentage).div(100);
+      setSpendAmount(total);
+    } else if (orderType === "MARKET" && activeTab === "SELL") {
+      if (percent === "max") {
+        setQuantity(baseAssetBalance);
+        return;
+      }
+      const percentage = new Decimal(percent.replace("%", ""));
+      const total = baseAssetBalance.mul(percentage).div(100);
+      setQuantity(total);
+    }
   };
 
   useEffect(() => {
@@ -134,16 +202,15 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       const transformedBids = orderbook.bids.map((level, index) => ({
         price: Decimal(level.price),
         quantity: Decimal(level.totalQuantity),
-        total: Decimal(level.totalQuantity).mul(index + 1), // Cumulative total
+        total: Decimal(level.totalQuantity).mul(index + 1),
         requestId: `bid-${index}`,
         orderCount: level.orderCount,
       }));
 
-      // Transform asks data for display
       const transformedAsks = orderbook.asks.map((level, index) => ({
         price: Decimal(level.price),
         quantity: Decimal(level.totalQuantity),
-        total: Decimal(level.totalQuantity).mul(index + 1), // Cumulative total
+        total: Decimal(level.totalQuantity).mul(index + 1), 
         requestId: `ask-${index}`,
         orderCount: level.orderCount,
       }));
@@ -151,7 +218,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       setBids(transformedBids);
       setAsks(transformedAsks);
 
-      // Update last price from recent trades
       if (recentTrades.length > 0) {
         setPrice(Decimal(recentTrades[0].price));
       }
@@ -173,7 +239,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
   const totalValue =
     orderType === "LIMIT" && price && quantity
-      ? price.mul(quantity).toFixed(2)
+      ? new Decimal(price).mul(quantity).toFixed(2)
       : orderType === "MARKET" && quantity
         ? (new Decimal(marketData?.price) ?? new Decimal(0))
             .mul(quantity)
@@ -316,95 +382,170 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
           <div className="lg:col-span-2 xl:col-span-2">
             <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-slate-800 bg-slate-900/50">
-                <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></div>
-                  Order Book
-                </h2>
+              <div className="p-4 border-b flex items-center justify-start border-slate-800 bg-slate-900/50">
+                <Button
+                  disabled={orderBookTab === "ORDER_BOOK"}
+                  onClick={() => setOrderBookTab("ORDER_BOOK")}
+                  className={`mr-2 hover:bg-slate-800/20 cursor-pointer ${orderBookTab === "ORDER_BOOK" ? "bg-slate-800/20" : ""}`}
+                >
+                  <h2 className="text-md font-semibold text-white flex items-center gap-2">
+                    Order Book
+                  </h2>
+                </Button>
+                <Button
+                  disabled={orderBookTab === "TRADES"}
+                  onClick={() => setOrderBookTab("TRADES")}
+                  className={`mr-2 hover:bg-slate-800/20 cursor-pointer ${orderBookTab === "TRADES" ? "bg-slate-800/20" : ""}`}
+                >
+                  <h2 className="text-md font-semibold text-white flex items-center gap-2">
+                    Trades
+                  </h2>
+                </Button>
               </div>
 
-              <div className="flex-1 overflow-hidden flex flex-col">
-                <div className="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
-                  <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 font-medium">
-                    <span>Price ({quoteAsset})</span>
-                    <span className="text-right">Size ({baseAsset})</span>
-                    <span className="text-right">Total</span>
+              {orderBookTab === "ORDER_BOOK" ? (
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <div className="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+                    <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 font-medium">
+                      <span>Price ({quoteAsset})</span>
+                      <span className="text-right">Size ({baseAsset})</span>
+                      <span className="text-right">Total</span>
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-                  <div className="px-4 py-2">
-                    {asks
-                      .slice(0, 10)
-                      .reverse()
-                      .map((ask, index) => {
+                  <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                    <div className="px-4 py-2">
+                      {asks
+                        .slice(0, 10)
+                        .reverse()
+                        .map((ask, index) => {
+                          const depthPercent =
+                            (ask.total.toNumber() / maxDepth) * 100;
+                          return (
+                            <div
+                              key={`ask-${index}`}
+                              className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-red-500/10 cursor-pointer rounded transition-colors group"
+                              onClick={() => handlePriceClick(ask.price)}
+                            >
+                              <div
+                                className="absolute right-0 top-0 bottom-0 bg-red-500/10 transition-all group-hover:bg-red-500/15"
+                                style={{ width: `${depthPercent}%` }}
+                              />
+                              <span className="text-red-400 font-mono relative z-10">
+                                {ask.price.toFixed(2)}
+                              </span>
+                              <span className="text-slate-300 font-mono text-right relative z-10">
+                                {ask.quantity.toFixed(4)}
+                              </span>
+                              <span className="text-slate-500 font-mono text-right text-xs relative z-10">
+                                {ask.total.toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    <div className="px-4 py-3 border-y border-slate-800 bg-slate-900/30 sticky top-0 z-10">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-emerald-400 mb-1">
+                          ${marketData.price.toString()}
+                        </div>
+                        <div className="flex items-center justify-center gap-3 text-xs text-slate-400">
+                          <span>Spread: ${spread}</span>
+                          <span>({spreadPercent}%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="px-4 py-2">
+                      {bids.slice(0, 10).map((bid, index) => {
                         const depthPercent =
-                          (ask.total.toNumber() / maxDepth) * 100;
+                          (bid.total.toNumber() / maxDepth) * 100;
                         return (
                           <div
-                            key={`ask-${index}`}
-                            className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-red-500/10 cursor-pointer rounded transition-colors group"
-                            onClick={() => handlePriceClick(ask.price)}
+                            key={`bid-${index}`}
+                            className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-emerald-500/10 cursor-pointer rounded transition-colors group"
+                            onClick={() => handlePriceClick(bid.price)}
                           >
                             <div
-                              className="absolute right-0 top-0 bottom-0 bg-red-500/10 transition-all group-hover:bg-red-500/15"
+                              className="absolute right-0 top-0 bottom-0 bg-emerald-500/10 transition-all group-hover:bg-emerald-500/15"
                               style={{ width: `${depthPercent}%` }}
                             />
-                            <span className="text-red-400 font-mono relative z-10">
-                              {ask.price.toFixed(2)}
+                            <span className="text-emerald-400 font-mono relative z-10">
+                              {bid.price.toFixed(2)}
                             </span>
                             <span className="text-slate-300 font-mono text-right relative z-10">
-                              {ask.quantity.toFixed(4)}
+                              {bid.quantity.toFixed(4)}
                             </span>
                             <span className="text-slate-500 font-mono text-right text-xs relative z-10">
-                              {ask.total.toFixed(2)}
+                              {bid.total.toFixed(2)}
                             </span>
                           </div>
                         );
                       })}
+                    </div>
                   </div>
-
-                  <div className="px-4 py-3 border-y border-slate-800 bg-slate-900/30 sticky top-0 z-10">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-emerald-400 mb-1">
-                        ${marketData.price.toString()}
-                      </div>
-                      <div className="flex items-center justify-center gap-3 text-xs text-slate-400">
-                        <span>Spread: ${spread}</span>
-                        <span>({spreadPercent}%)</span>
-                      </div>
+                </div>
+              ) : (
+                <div className="flex-1 overflow-hidden flex flex-col">
+                  <div className="px-4 py-2 bg-slate-900/50 border-b border-slate-800">
+                    <div className="grid grid-cols-3 gap-2 text-xs text-slate-400 font-medium">
+                      <span>Price</span>
+                      <span className="text-right">Size</span>
+                      <span className="text-right">Time</span>
                     </div>
                   </div>
 
-                  <div className="px-4 py-2">
-                    {bids.slice(0, 10).map((bid, index) => {
-                      const depthPercent =
-                        (bid.total.toNumber() / maxDepth) * 100;
-                      return (
-                        <div
-                          key={`bid-${index}`}
-                          className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-emerald-500/10 cursor-pointer rounded transition-colors group"
-                          onClick={() => handlePriceClick(bid.price)}
-                        >
+                  <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                    <div className="px-4 py-2 space-y-0.5">
+                      {recentTrades && recentTrades.length > 0 ? recentTrades.map((trade, index) => {
+                        const prevPrice = recentTrades[index - 1]?.price;
+                        const price = Number(trade.price);
+
+                        const priceColor =
+                          prevPrice == null
+                            ? "text-slate-300"
+                            : price > Number(prevPrice)
+                              ? "text-emerald-400"
+                              : price < Number(prevPrice)
+                                ? "text-red-400"
+                                : "text-slate-300";
+
+                        return (
                           <div
-                            className="absolute right-0 top-0 bottom-0 bg-emerald-500/10 transition-all group-hover:bg-emerald-500/15"
-                            style={{ width: `${depthPercent}%` }}
-                          />
-                          <span className="text-emerald-400 font-mono relative z-10">
-                            {bid.price.toFixed(2)}
-                          </span>
-                          <span className="text-slate-300 font-mono text-right relative z-10">
-                            {bid.quantity.toFixed(4)}
-                          </span>
-                          <span className="text-slate-500 font-mono text-right text-xs relative z-10">
-                            {bid.total.toFixed(2)}
-                          </span>
+                            key={`${trade.buyOrderId}-${trade.sellOrderId}`}
+                            className="grid grid-cols-3 gap-2 text-sm py-1 rounded hover:bg-slate-800/40 transition-colors"
+                          >
+                            <span className={`font-mono ${priceColor}`}>
+                              {price.toFixed(2)}
+                            </span>
+
+                            <span className="font-mono text-slate-300 text-right">
+                              {Number(trade.quantity).toFixed(4)}
+                            </span>
+
+                            <span className="font-mono text-slate-500 text-right text-xs">
+                              {new Date(trade.timestamp).toLocaleTimeString(
+                                [],
+                                {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  second: "2-digit",
+                                  hour12: false,
+                                },
+                              )}
+                            </span>
+                          </div>
+                        );
+                      }) : (
+                        <div className="flex-1 flex mt-4 items-center justify-center">
+                          <p className="text-slate-400">No trades available</p>
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
 
@@ -509,7 +650,8 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                   </div>
                 )}
 
-                {orderType === "MARKET" && activeTab === "SELL" && (
+                {((orderType === "MARKET" && activeTab === "SELL") ||
+                  orderType === "LIMIT") && (
                   <div className="space-y-2">
                     <label className="text-sm text-slate-300 font-medium">
                       Quantity ({baseAsset})
@@ -525,10 +667,11 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                 )}
 
                 <div className="grid grid-cols-4 gap-2">
-                  {["25%", "50%", "75%", "100%"].map((percent) => (
+                  {["25%", "50%", "75%", "max"].map((percent) => (
                     <button
                       key={percent}
                       className="py-2 text-xs font-medium text-slate-400 bg-slate-900/50 border border-slate-700 rounded hover:border-emerald-500 hover:text-emerald-400 transition-all"
+                      onClick={() => handleSetQuantity(percent)}
                     >
                       {percent}
                     </button>
@@ -552,10 +695,13 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                 <button
                   onClick={handlePlaceOrder}
+                  disabled={handlePlaceOrderDisabled()}
                   className={`w-full py-4 text-base font-bold rounded-lg transition-all shadow-lg ${
-                    activeTab === "BUY"
-                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/30"
-                      : "bg-red-600 hover:bg-red-500 text-white shadow-red-500/30"
+                    handlePlaceOrderDisabled()
+                      ? "bg-slate-600 cursor-not-allowed"
+                      : activeTab === "BUY"
+                        ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-500/30"
+                        : "bg-red-600 hover:bg-red-500 text-white shadow-red-500/30"
                   }`}
                 >
                   {activeTab === "BUY" ? "Place Buy Order" : "Place Sell Order"}
