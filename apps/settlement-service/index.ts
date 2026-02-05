@@ -124,6 +124,8 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
 
       await tx.trade.create({
         data: {
+          makerId: buyOrder.userId,
+          takerId: sellOrder.userId,
           makerFee: new Decimal(0), //for now
           price: trade.price,
           quantity: trade.quantity,

@@ -6,14 +6,46 @@ import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
 import useOrderbook from "@/hooks/useOrderbook";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchMarketData } from "@/lib/api/market.api";
-import { fetchUserBalanceForMarket } from "@/lib/api/user.api";
+import {
+  fetchUserBalanceForMarket,
+  fetchUserOpenOrders,
+  fetchUserOrdersHistory,
+  fetchUserTrades,
+} from "@/lib/api/user.api";
 import { placeOrder } from "@/lib/api/order.api";
 import { Button } from "./ui/button";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
+
+type BottomTab = "OPEN_ORDERS" | "ORDER_HISTORY" | "TRADE_HISTORY";
+
+interface IOrder {
+  createdAt: Date;
+  id: string;
+  marketId: string;
+  originalQuantity: string;
+  price: string;
+  remainingQuantity: string;
+  side: "BUY" | "SELL";
+  status: "OPEN" | "FILLED" | "CANCELLED";
+  type: "LIMIT" | "MARKET";
+  updatedAt: Date;
+  userId: string;
+}
+
+const sideColor = {
+  BUY: "text-green-500",
+  SELL: "text-red-500",
+};
+
+const statusColor = {
+  OPEN: "text-yellow-400",
+  FILLED: "text-green-500",
+  CANCELLED: "text-gray-400",
+};
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
@@ -44,9 +76,11 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }[]
   >([]);
   const [orderBookTab, setOrderBookTab] = useState("ORDER_BOOK");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("OPEN_ORDERS");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [baseAsset, quoteAsset] = ticker.split("-");
   const { isConnected, orderbook, recentTrades, error } = useOrderbook(ticker);
+  const queryClient = useQueryClient();
   const {
     data: marketData,
     isLoading: marketDataLoading,
@@ -67,6 +101,28 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     enabled: !!ticker && isReady,
     refetchInterval: 10000,
   });
+
+  const { data: userOrdersData } = useQuery<IOrder[]>({
+    queryKey: ["user-orders", ticker],
+    queryFn: () => fetchUserOpenOrders(marketData.id, data?.accessToken!),
+    enabled: !!ticker && !!marketData && isReady,
+    refetchInterval: 10000,
+  });
+
+  const { data: userOrdersHistoryData } = useQuery<IOrder[]>({
+    queryKey: ["user-orders-history", ticker],
+    queryFn: () => fetchUserOrdersHistory(marketData.id, data?.accessToken!),
+    enabled: !!ticker && !!marketData && isReady,
+    refetchInterval: 10000,
+  });
+
+  const { data: userTradesData } = useQuery({
+    queryKey: ["user-trades", ticker],
+    queryFn: () => fetchUserTrades(marketData.id, data?.accessToken!),
+    enabled: !!ticker && !!marketData && isReady,
+    refetchInterval: 10000,
+  });
+
   const { mutateAsync: placeOrderMutation } = useMutation({
     mutationFn: () =>
       placeOrder(
@@ -80,6 +136,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       ),
     mutationKey: ["place-order", ticker, activeTab, price, quantity, orderType],
     onSuccess: (data) => {
+      queryClient.invalidateQueries({
+        queryKey: ["user-orders", ticker],
+      });
       toast.success(data.message ? data.message : "Order placed successfully", {
         position: "top-center",
       });
@@ -195,6 +254,8 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
   };
 
+  const cancelOrder = (orderId: string) => {};
+
   useEffect(() => {
     if (orderbook) {
       console.log("Updating orderbook display:", orderbook);
@@ -210,7 +271,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       const transformedAsks = orderbook.asks.map((level, index) => ({
         price: Decimal(level.price),
         quantity: Decimal(level.totalQuantity),
-        total: Decimal(level.totalQuantity).mul(index + 1), 
+        total: Decimal(level.totalQuantity).mul(index + 1),
         requestId: `ask-${index}`,
         orderCount: level.orderCount,
       }));
@@ -336,7 +397,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       </div>
 
       <div className="max-w-[1920px] mx-auto p-4 lg:p-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[calc(100vh-120px)]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[calc(80vh-120px)]">
           <div className="lg:col-span-6 xl:col-span-7">
             <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
               <div className="p-4 border-b border-slate-800 bg-slate-900/50">
@@ -498,46 +559,48 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                   <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
                     <div className="px-4 py-2 space-y-0.5">
-                      {recentTrades && recentTrades.length > 0 ? recentTrades.map((trade, index) => {
-                        const prevPrice = recentTrades[index - 1]?.price;
-                        const price = Number(trade.price);
+                      {recentTrades && recentTrades.length > 0 ? (
+                        recentTrades.map((trade, index) => {
+                          const prevPrice = recentTrades[index - 1]?.price;
+                          const price = Number(trade.price);
 
-                        const priceColor =
-                          prevPrice == null
-                            ? "text-slate-300"
-                            : price > Number(prevPrice)
-                              ? "text-emerald-400"
-                              : price < Number(prevPrice)
-                                ? "text-red-400"
-                                : "text-slate-300";
+                          const priceColor =
+                            prevPrice == null
+                              ? "text-slate-300"
+                              : price > Number(prevPrice)
+                                ? "text-emerald-400"
+                                : price < Number(prevPrice)
+                                  ? "text-red-400"
+                                  : "text-slate-300";
 
-                        return (
-                          <div
-                            key={`${trade.buyOrderId}-${trade.sellOrderId}`}
-                            className="grid grid-cols-3 gap-2 text-sm py-1 rounded hover:bg-slate-800/40 transition-colors"
-                          >
-                            <span className={`font-mono ${priceColor}`}>
-                              {price.toFixed(2)}
-                            </span>
+                          return (
+                            <div
+                              key={`${trade.buyOrderId}-${trade.sellOrderId}`}
+                              className="grid grid-cols-3 gap-2 text-sm py-1 rounded hover:bg-slate-800/40 transition-colors"
+                            >
+                              <span className={`font-mono ${priceColor}`}>
+                                {price.toFixed(2)}
+                              </span>
 
-                            <span className="font-mono text-slate-300 text-right">
-                              {Number(trade.quantity).toFixed(4)}
-                            </span>
+                              <span className="font-mono text-slate-300 text-right">
+                                {Number(trade.quantity).toFixed(4)}
+                              </span>
 
-                            <span className="font-mono text-slate-500 text-right text-xs">
-                              {new Date(trade.timestamp).toLocaleTimeString(
-                                [],
-                                {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                  second: "2-digit",
-                                  hour12: false,
-                                },
-                              )}
-                            </span>
-                          </div>
-                        );
-                      }) : (
+                              <span className="font-mono text-slate-500 text-right text-xs">
+                                {new Date(trade.timestamp).toLocaleTimeString(
+                                  [],
+                                  {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                    second: "2-digit",
+                                    hour12: false,
+                                  },
+                                )}
+                              </span>
+                            </div>
+                          );
+                        })
+                      ) : (
                         <div className="flex-1 flex mt-4 items-center justify-center">
                           <p className="text-slate-400">No trades available</p>
                         </div>
@@ -707,6 +770,163 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                   {activeTab === "BUY" ? "Place Buy Order" : "Place Sell Order"}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+        <div className="max-w-[1920px] mx-auto mt-4">
+          <div className="bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
+            <div className="flex gap-2 p-3 border-b border-slate-800 bg-slate-900/50">
+              {["OPEN_ORDERS", "ORDER_HISTORY", "TRADE_HISTORY"].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setBottomTab(tab as BottomTab)}
+                  className={`px-4 py-2 text-sm font-semibold rounded transition-all ${
+                    bottomTab === tab
+                      ? "bg-slate-800 text-white"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                  }`}
+                >
+                  {tab.replace("_", " ")}
+                </button>
+              ))}
+            </div>
+
+            <div className="h-[260px] overflow-y-auto">
+              {bottomTab === "OPEN_ORDERS" && (
+                <div className="h-[260px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-[#0f172a] text-gray-400">
+                      <tr>
+                        <th className="text-left p-2">Time</th>
+                        <th className="text-left p-2">Side</th>
+                        <th className="text-right p-2">Price</th>
+                        <th className="text-right p-2">Qty</th>
+                        <th className="text-right p-2">Remaining</th>
+                        <th className="text-center p-2">Type</th>
+                        <th className="text-center p-2">Action</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {userOrdersData?.map((order) => (
+                        <tr
+                          key={order.id}
+                          className="border-b border-gray-800 hover:bg-white/5"
+                        >
+                          <td className="p-2 text-gray-400">
+                            {new Date(order.createdAt).toLocaleTimeString()}
+                          </td>
+
+                          <td
+                            className={`p-2 font-medium ${sideColor[order.side]}`}
+                          >
+                            {order.side}
+                          </td>
+
+                          <td className="p-2 text-right">{order.price}</td>
+
+                          <td className="p-2 text-right">
+                            {order.originalQuantity}
+                          </td>
+
+                          <td className="p-2 text-right">
+                            {order.remainingQuantity}
+                          </td>
+
+                          <td className="p-2 text-center text-gray-300">
+                            {order.type}
+                          </td>
+
+                          <td className="p-2 text-center">
+                            <button
+                              onClick={() => cancelOrder(order.id)}
+                              className="text-xs px-3 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20"
+                            >
+                              Cancel
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                      {userOrdersData?.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="text-center py-6 text-gray-500"
+                          >
+                            No open orders
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {bottomTab === "ORDER_HISTORY" && (
+                <div className="h-[260px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-[#0f172a] text-gray-400">
+                      <tr>
+                        <th className="text-left p-2">Time</th>
+                        <th className="text-left p-2">Side</th>
+                        <th className="text-right p-2">Price</th>
+                        <th className="text-right p-2">Qty</th>
+                        <th className="text-center p-2">Type</th>
+                        <th className="text-center p-2">Status</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {userOrdersHistoryData?.map((order) => (
+                        <tr
+                          key={order.id}
+                          className="border-b border-gray-800 hover:bg-white/5"
+                        >
+                          <td className="p-2 text-gray-400">
+                            {new Date(order.createdAt).toLocaleString()}
+                          </td>
+
+                          <td
+                            className={`p-2 font-medium ${sideColor[order.side]}`}
+                          >
+                            {order.side}
+                          </td>
+
+                          <td className="p-2 text-right">{order.price}</td>
+
+                          <td className="p-2 text-right">
+                            {order.originalQuantity}
+                          </td>
+
+                          <td className="p-2 text-center text-gray-300">
+                            {order.type}
+                          </td>
+
+                          <td
+                            className={`p-2 text-center font-medium ${statusColor[order.status]}`}
+                          >
+                            {order.status}
+                          </td>
+                        </tr>
+                      ))}
+
+                      {userOrdersHistoryData?.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="text-center py-6 text-gray-500"
+                          >
+                            No order history
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {bottomTab === "TRADE_HISTORY" && <div>trade history here</div>}
             </div>
           </div>
         </div>

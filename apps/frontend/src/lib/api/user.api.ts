@@ -27,4 +27,31 @@ const fetchUserBalanceForMarket = async (ticker : string, token : string) => {
     return data;
 }
 
-export { requestOTP, fetchPortfolio, fetchUserBalanceForMarket }
+const fetchUserOpenOrders = async (marketId : string, token : string) => {
+    const { data } = await api.get(`/users/orders?market=${marketId}`, {
+        headers : {
+            Authorization : `Bearer ${token}`
+        }
+    })
+    return data;
+}
+
+const fetchUserOrdersHistory = async (marketId : string, token : string) => {
+    const { data } = await api.get(`/users/orders-history?market=${marketId}`, {
+        headers : {
+            Authorization : `Bearer ${token}`
+        }
+    })
+    return data;
+}
+
+const fetchUserTrades = async (marketId : string, token : string) => {
+    const { data } = await api.get(`/users/trades?market=${marketId}`, {
+        headers : {
+            Authorization : `Bearer ${token}`
+        }
+    })
+    return data;
+}
+
+export { requestOTP, fetchPortfolio, fetchUserBalanceForMarket, fetchUserOpenOrders, fetchUserOrdersHistory, fetchUserTrades }

@@ -20,6 +20,8 @@ model User {
 
   wallets Wallet[]
   orders  Order[]
+  tradesAsMaker Trade[] @relation("Maker")
+  tradesAsTaker Trade[] @relation("Taker")
 }
 
 model WalletLedger {
@@ -83,6 +85,9 @@ model Trade {
   buyOrderId  String
   sellOrderId String
 
+  makerId String
+  takerId String
+
   price    Decimal @db.Decimal(36, 18)
   quantity Decimal @db.Decimal(36, 18)
 
@@ -94,6 +99,8 @@ model Trade {
   market    Market @relation(fields: [marketId], references: [id])
   buyOrder  Order  @relation("BuyTrades", fields: [buyOrderId], references: [id])
   sellOrder Order  @relation("SellTrades", fields: [sellOrderId], references: [id])
+  maker     User   @relation("Maker", fields: [makerId], references: [id])
+  taker     User   @relation("Taker", fields: [takerId], references: [id])
 
   @@index([marketId, executedAt])
 }

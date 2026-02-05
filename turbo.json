@@ -7,6 +7,18 @@
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**"]
     },
+    "db:migrate": {
+      "dependsOn": ["^db:migrate"]
+    },
+    "db:generate": {
+      "dependsOn": ["^db:generate"]
+    },
+    "db:push": {
+      "dependsOn": ["^db:push"]
+    },
+    "db:seed": {
+      "dependsOn": ["^db:seed"]
+    },
     "lint": {
       "dependsOn": ["^lint"]
     },

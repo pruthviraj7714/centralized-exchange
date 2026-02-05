@@ -6,6 +6,7 @@ import marketRouter from './routes/market.routes';
 import cors from 'cors';
 import klinesRouter from './routes/klines.routes';
 import usersRouter from './routes/user.routes';
+import { PORT } from './utils/config';
 
 const app = express();
 
@@ -25,6 +26,6 @@ app.use('/wallets', walletsRouter);
 app.use('/orders', orderRouter);
 app.use('/klines', klinesRouter);
 
-app.listen(3001, () => {
-    console.log("server is running on port 3001");
+app.listen(PORT, () => {
+    console.log(`server is running on port ${PORT}`);
 })
