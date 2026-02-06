@@ -14,7 +14,7 @@ import {
   fetchUserOrdersHistory,
   fetchUserTrades,
 } from "@/lib/api/user.api";
-import { placeOrder } from "@/lib/api/order.api";
+import { cancelOrder, placeOrder } from "@/lib/api/order.api";
 import { Button } from "./ui/button";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
@@ -153,6 +153,27 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     },
   });
 
+  const { mutateAsync: cancelOrderMutation } = useMutation({
+    mutationFn: (orderId: string) => cancelOrder(orderId, data?.accessToken!),
+    mutationKey: ["cancel-order", ticker],
+    onSuccess: (data : { message?: string }) => {
+      queryClient.invalidateQueries({
+        queryKey: ["user-orders", ticker],
+      });
+      toast.success(data.message ? data.message : "Order cancelled successfully", {
+        position: "top-center",
+      });
+    },
+    onError: (error: any) => {
+      toast.error(
+        error.response.data.message
+          ? error.response.data.message
+          : "Failed to cancel order",
+        { position: "top-center" },
+      );
+    },
+  });
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -253,8 +274,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       setQuantity(total);
     }
   };
-
-  const cancelOrder = (orderId: string) => {};
 
   useEffect(() => {
     if (orderbook) {
@@ -839,7 +858,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
                           <td className="p-2 text-center">
                             <button
-                              onClick={() => cancelOrder(order.id)}
+                              onClick={() => cancelOrderMutation(order.id)}
                               className="text-xs px-3 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20"
                             >
                               Cancel

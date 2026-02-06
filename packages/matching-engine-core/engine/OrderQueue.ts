@@ -22,4 +22,13 @@ export class OrderQueue {
     size(): number {
         return this.orders.length;
     }
+    
+    getOrder(orderId: string): EngineOrder | undefined {
+        return this.orders.find(order => order.id === orderId);
+    }
+
+    removeOrder(orderId : string): void {
+        this.orders = this.orders.filter(order => order.id !== orderId);
+    }
+
 }

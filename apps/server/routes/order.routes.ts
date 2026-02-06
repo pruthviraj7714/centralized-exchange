@@ -6,7 +6,7 @@ const orderRouter: Router = Router();
 
 orderRouter.post("/",authMiddleware, proxyToTradingAPIServer);
 
-orderRouter.post("/:id/cancel", authMiddleware, proxyOrderCancelAPI);
+orderRouter.delete("/:id/cancel", authMiddleware, proxyOrderCancelAPI);
 
 orderRouter.get('/', authMiddleware, fetchOrdersController);
 

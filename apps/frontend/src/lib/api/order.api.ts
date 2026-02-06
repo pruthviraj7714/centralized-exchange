@@ -18,4 +18,14 @@ const placeOrder = async (ticker: string, side: "BUY" | "SELL", type: "LIMIT" | 
     return data;
 }
 
-export { placeOrder }
+const cancelOrder = async (orderId : string, token : string) => {
+    const { data } = await api.delete(`/orders/${orderId}/cancel`, {
+        headers: {
+            Authorization: `Bearer ${token}`
+        }
+    })
+
+    return data;
+}
+
+export { placeOrder, cancelOrder }

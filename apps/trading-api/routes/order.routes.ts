@@ -6,6 +6,6 @@ const orderRouter = Router();
 
 orderRouter.post('/', rateLimiter, placeOrderController);
 
-orderRouter.post('/:id/cancel', cancelOrderController);
+orderRouter.delete('/:id/cancel', cancelOrderController);
 
 export default orderRouter;

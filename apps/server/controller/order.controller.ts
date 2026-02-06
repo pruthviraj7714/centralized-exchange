@@ -37,7 +37,7 @@ const proxyOrderCancelAPI = async (req: Request, res: Response) => {
         const orderId = req.params.id!;
 
         const response = await fetch(`${TRADING_API_SERVER_URL}/orders/${orderId}/cancel`, {
-            method: "POST",
+            method: "DELETE",
             headers: {
                 "Content-Type": "application/json",
             },

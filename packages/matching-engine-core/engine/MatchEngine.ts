@@ -170,9 +170,15 @@ export class MatchEngine extends EventEmitter {
     }
 
     cancelOrder(orderId: string, side: Side): boolean {
-        // Implementation for order cancellation
-        // This would require tracking orders by ID
-        return false;
+        const order = this.orderbook.getOrder(orderId);
+
+        if(!order) {
+            return false;
+        }
+
+        this.orderbook.removeOrder(orderId, side);
+
+        return true;
     }
 
     getOrderbook() {

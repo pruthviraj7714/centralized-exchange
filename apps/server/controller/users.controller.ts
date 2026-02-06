@@ -127,6 +127,9 @@ const fetchUserOrders = async (req: Request, res: Response) => {
                     { status: ORDER_STATUS.OPEN },
                     { status: ORDER_STATUS.PARTIALLY_FILLED }
                 ]
+            },
+            orderBy : {
+                createdAt : "desc"
             }
         })
 
@@ -166,6 +169,9 @@ const fetchUserOrdersHistory = async (req: Request, res: Response) => {
                         status: ORDER_STATUS.CANCELLED
                     }
                 ]
+            },
+            orderBy: {
+                createdAt: "desc"
             }
         })
 
@@ -204,6 +210,9 @@ const fetchUserTrades = async (req: Request, res: Response) => {
                     }
                 ],
                 marketId: market as string
+            },
+            orderBy: {
+                executedAt: "desc"
             }
         });
 

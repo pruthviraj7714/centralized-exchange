@@ -72,6 +72,45 @@ class Orderbook {
             this.asks.delete(price);
         }
     }
+
+    getOrder(orderId: string): EngineOrder | null {
+        for (const queue of this.bids.values()) {
+            const order = queue.getOrder(orderId);
+            if (order) return order;
+        }
+        
+        for (const queue of this.asks.values()) {
+            const order = queue.getOrder(orderId);
+            if (order) return order;
+        }
+        
+        return null;
+    }
+
+    removeOrder(orderId: string, side: Side): void {
+        if (side === "BUY") {
+            for (const [price, queue] of this.bids.entries()) {
+                if (queue.getOrder(orderId)) {
+                    queue.removeOrder(orderId);
+                    if (queue.isEmpty()) {
+                        this.bids.delete(price);
+                    }
+                    return;
+                }
+            }
+        } else {
+            for (const [price, queue] of this.asks.entries()) {
+                if (queue.getOrder(orderId)) {
+                    queue.removeOrder(orderId);
+                    if (queue.isEmpty()) {
+                        this.asks.delete(price);
+                    }
+                    return;
+                }
+            }
+        }
+    }
+
 }
 
 export default Orderbook;
