@@ -36,31 +36,33 @@ export class MatchEngine extends EventEmitter {
             if (!bestAsk) {
                 if (buyOrder.price === null) {
                     // Market order with no liquidity - cancel remaining quantity
-                    buyOrder.status = "CANCELLED";
+                    this.updateOrderStatus(buyOrder)
                     this.emit("order_updated", buyOrder);
                     console.log(`Market BUY order ${buyOrder.id} cancelled due to no liquidity`);
                     return;
                 } else {
                     // Limit order - add to orderbook
                     buyOrder.status = "OPEN";
-                    this.emit("order_updated", buyOrder);
                     this.orderbook.addOrder(buyOrder);
+                    this.emit("order_updated", buyOrder);
                     break;
                 }
             }
 
             // Market orders ignore price limits, limit orders respect their price
-            if (buyOrder.price && bestAsk.price.greaterThan(buyOrder.price)) {
+            if (buyOrder.price !== null && bestAsk.price.greaterThan(buyOrder.price)) {
                 // Limit order with price too high - add to orderbook
                 buyOrder.status = "OPEN";
-                this.emit("order_updated", buyOrder);
                 this.orderbook.addOrder(buyOrder);
+                this.emit("order_updated", buyOrder);
                 break;
             }
 
             const sellOrder = bestAsk.queue.peek();
             if (!sellOrder) {
-                bestAsk.queue.dequeue();
+                if(bestAsk.queue.isEmpty()) {
+                    this.orderbook.removePriceLevel("SELL", bestAsk.price.toString());
+                }
                 continue;
             }
 
@@ -95,31 +97,33 @@ export class MatchEngine extends EventEmitter {
             if (!bestBid) {
                 if (sellOrder.price === null) {
                     // Market order with no liquidity - cancel remaining quantity
-                    sellOrder.status = "CANCELLED";
+                    this.updateOrderStatus(sellOrder);
                     this.emit("order_updated", sellOrder);
                     console.log(`Market SELL order ${sellOrder.id} cancelled due to no liquidity`);
                     return;
                 } else {
                     // Limit order - add to orderbook
-                    sellOrder.status = "OPEN";
-                    this.emit("order_updated", sellOrder);
+                    this.updateOrderStatus(sellOrder);
                     this.orderbook.addOrder(sellOrder);
+                    this.emit("order_updated", sellOrder);
                     break;
                 }
             }
 
             // Market orders ignore price limits, limit orders respect their price
-            if (sellOrder.price && bestBid.price.lessThan(sellOrder.price)) {
+            if (sellOrder.price !== null && bestBid.price.lessThan(sellOrder.price)) {
                 // Limit order with price too low - add to orderbook
-                sellOrder.status = "OPEN";
-                this.emit("order_updated", sellOrder);
+                this.updateOrderStatus(sellOrder);
                 this.orderbook.addOrder(sellOrder);
+                this.emit("order_updated", sellOrder);
                 break;
             }
 
             const buyOrder = bestBid.queue.peek();
             if (!buyOrder) {
-                bestBid.queue.dequeue();
+                if(bestBid.queue.isEmpty()) {
+                    this.orderbook.removePriceLevel("BUY", bestBid.price.toString());
+                }
                 continue;
             }
 
@@ -131,12 +135,12 @@ export class MatchEngine extends EventEmitter {
 
             this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
 
-            // Remove fully filled orders
             if (buyOrder.filled.equals(buyOrder.quantity)) {
                 bestBid.queue.dequeue();
                 if (bestBid.queue.isEmpty()) {
                     this.orderbook.removePriceLevel("BUY", bestBid.price.toString());
                 }
+                continue;
             }
 
             if (sellOrder.filled.equals(sellOrder.quantity)) {
@@ -176,7 +180,14 @@ export class MatchEngine extends EventEmitter {
             return false;
         }
 
+        if(order.status === "FILLED" || order.status === "CANCELLED") {
+            return false;
+        }
+
         this.orderbook.removeOrder(orderId, side);
+
+        order.status = "CANCELLED";
+        this.emit("order_removed", order);
 
         return true;
     }

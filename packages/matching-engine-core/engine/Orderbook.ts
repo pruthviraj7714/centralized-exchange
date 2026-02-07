@@ -12,7 +12,11 @@ class Orderbook {
     }
 
     addOrder(order: EngineOrder): void {
-        const priceKey = order.price?.toString() || "";
+        if (order.price === null) {
+            throw new Error("Market orders must never be added to orderbook");
+        }
+
+        const priceKey = order.price.toString();
         
         if(order.side === "BUY") {
             if (!this.bids.has(priceKey)) {

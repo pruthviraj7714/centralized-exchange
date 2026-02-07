@@ -78,6 +78,31 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
   })
 };
 
+const sendCanceledOrderToKafka = async (order: EngineOrder) => {
+   const event = {
+    event: "ORDER_CANCELED",
+    orderId: order.id,
+    pair: order.pair,
+    userId: order.userId,
+    price : order.price,
+    side: order.side,
+    status: order.status,
+    filledQuantity: order.filled.toString(),
+    remainingQuantity: order.quantity.sub(order.filled).toString(),
+    updatedAt: Date.now()
+  };
+  
+  await producer.send({
+    topic : TOPICS.ORDER_CANCEL,
+    messages: [
+      {
+        key : order.pair,
+        value : JSON.stringify(event)
+      }
+    ]
+  })
+};
+
 const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   if (orderbookMap.has(pair)) {
     return orderbookMap.get(pair)!;
@@ -102,6 +127,11 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
       orderIndex.delete(order.id);
     }
     sendUpdatedOrderToKafka(order);
+  });
+
+  engine.on("order_removed",  (order: EngineOrder) => {
+    orderIndex.delete(order.id);
+    sendCanceledOrderToKafka(order);
   });
 
   const orderbookData: OrderbookData = {

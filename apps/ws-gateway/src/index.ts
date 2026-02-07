@@ -71,6 +71,18 @@ async function initializeKafka() {
                             timestamp: Date.now()
                         }));
                     }
+
+                    if(event.event === "ORDER_CANCELED") {
+                        book?.applyOrderCancel(event);
+                        broadcastToPair(event.pair, JSON.stringify({
+                            type: "ORDERBOOK_UPDATE",
+                            pair: event.pair,
+                            bids: book?.snapshot().bids || [],
+                            asks: book?.snapshot().asks || [],
+                            timestamp: Date.now()
+                        }));
+                    }
+
                 } catch (error) {
                     console.error("Error processing Kafka message:", error);
                 }

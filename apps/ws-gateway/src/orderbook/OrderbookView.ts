@@ -118,6 +118,11 @@ export class OrderbookView {
         });
     }
 
+    applyOrderCancel(order: OrderEvent) {
+        this.bids.forEach(level => level.delete(order.orderId));
+        this.asks.forEach(level => level.delete(order.orderId));
+    }
+
     snapshot() {
         return {
             bids: this.serialize(this.bids),
