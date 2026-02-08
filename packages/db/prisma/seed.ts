@@ -2,9 +2,22 @@ import { Decimal } from "@prisma/client/runtime/client";
 import prisma from "..";
 import { SEED_MARKETS } from "@repo/common";
 
+const smallNumber = () => {
+  return Math.floor(Math.random() * 100);
+}
+
+const largeNumber = () => {
+  return Math.floor(Math.random() * 1000000);
+}
+
 async function main() {
   console.log("🌱 Seeding Market data...");
 
+  await prisma.trade.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.walletLedger.deleteMany();
+  await prisma.wallet.deleteMany();
+  await prisma.user.deleteMany();
   await prisma.market.deleteMany();
 
   await prisma.market.createMany({
@@ -13,19 +26,19 @@ async function main() {
       baseAsset: market.baseAsset,
       quoteAsset: market.quoteAsset,
       logo: market.logo,
-      price: new Decimal(0),
-      high24h: new Decimal(0),
-      low24h: new Decimal(0),
-      open24h: new Decimal(0),
-      volume24h: new Decimal(0),
-      quoteVolume24h: new Decimal(0),
-      change24h: new Decimal(0),
-      priceChange: new Decimal(0),
-      marketCap: new Decimal(0),
-      minOrderSize: new Decimal(0),
-      maxOrderSize: new Decimal(0),
-      tickSize: new Decimal(0),
-      lotSize: new Decimal(0),
+      price: new Decimal(largeNumber()),
+      high24h: new Decimal(largeNumber()),
+      low24h: new Decimal(largeNumber()),
+      open24h: new Decimal(largeNumber()),
+      volume24h: new Decimal(largeNumber()),
+      quoteVolume24h: new Decimal(largeNumber()),
+      change24h: new Decimal(smallNumber()),
+      priceChange: new Decimal(smallNumber()),
+      marketCap: new Decimal(largeNumber()),
+      minOrderSize: new Decimal(smallNumber()),
+      maxOrderSize: new Decimal(largeNumber()),
+      tickSize: new Decimal(smallNumber()),
+      lotSize: new Decimal(smallNumber()),
       sparkline7d: [],
       isActive: true,
       isFeatured: false,

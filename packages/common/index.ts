@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import z, { symbol } from "zod";
+import z from "zod";
 
 export const OrderSchema = z.object({
   pair: z.string(),
@@ -20,25 +20,16 @@ export const VerifyOTPSchema = z.object({
 });
 
 export const SUPPORTED_MARKETS = [
-  "BTC-USDT",
   "BTC-USDC",
-  "ETH-USDT",
   "ETH-USDC",
-  "SOL-USDT",
   "SOL-USDC",
-  "ETH-BTC",
-  "SOL-BTC",
-  "SOL-ETH",
-  "BNB-USDT",
   "BNB-USDC",
-  "XRP-USDT",
   "XRP-USDC",
-  "ADA-USDT",
   "ADA-USDC",
-  "AVAX-USDT",
-  "DOGE-USDT",
-  "MATIC-USDT",
-  "DOT-USDT",
+  "AVAX-USDC",
+  "DOGE-USDC",
+  "MATIC-USDC",
+  "DOT-USDC",
 ] as const;
 
 export const SUPPORTED_TOKENS = [
@@ -46,7 +37,6 @@ export const SUPPORTED_TOKENS = [
   {symbol: "ETH", name: "Ethereum"},
   {symbol: "SOL", name: "Solana"},
   {symbol: "USDC", name: "USD Coin"},
-  {symbol: "USDT", name: "Tether"},
   {symbol: "BNB", name: "BNB"},
   {symbol: "XRP", name: "XRP"},
   {symbol: "ADA", name: "Cardano"},
@@ -84,13 +74,6 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
     decimals: 6,
     color: "#2775CA",
-  },
-  USDT: {
-    name: "Tether",
-    symbol: "USDT",
-    logo: "https://cryptologos.cc/logos/tether-usdt-logo.png",
-    decimals: 6,
-    color: "#26A17B",
   },
   BNB: {
     name: "BNB",
@@ -144,19 +127,6 @@ export const TOKEN_METADATA = {
 } as const;
 
 export const SEED_MARKETS = [
-  // BTC Markets
-  {
-    ticker: "BTC-USDT",
-    baseAsset: "BTC",
-    quoteAsset: "USDT",
-    symbol: "BTCUSDT",
-    name: "Bitcoin",
-    logo: TOKEN_METADATA.BTC.logo,
-    minOrderSize: 0.0001,
-    maxOrderSize: 1000,
-    tickSize: 0.01,
-    lotSize: 0.00001,
-  },
   {
     ticker: "BTC-USDC",
     baseAsset: "BTC",
@@ -168,20 +138,6 @@ export const SEED_MARKETS = [
     maxOrderSize: 1000,
     tickSize: 0.01,
     lotSize: 0.00001,
-  },
-
-  // ETH Markets
-  {
-    ticker: "ETH-USDT",
-    baseAsset: "ETH",
-    quoteAsset: "USDT",
-    symbol: "ETHUSDT",
-    name: "Ethereum",
-    logo: TOKEN_METADATA.ETH.logo,
-    minOrderSize: 0.001,
-    maxOrderSize: 10000,
-    tickSize: 0.01,
-    lotSize: 0.0001,
   },
   {
     ticker: "ETH-USDC",
@@ -196,32 +152,6 @@ export const SEED_MARKETS = [
     lotSize: 0.0001,
   },
   {
-    ticker: "ETH-BTC",
-    baseAsset: "ETH",
-    quoteAsset: "BTC",
-    symbol: "ETHBTC",
-    name: "Ethereum",
-    logo: TOKEN_METADATA.ETH.logo,
-    minOrderSize: 0.001,
-    maxOrderSize: 10000,
-    tickSize: 0.000001,
-    lotSize: 0.0001,
-  },
-
-  // SOL Markets
-  {
-    ticker: "SOL-USDT",
-    baseAsset: "SOL",
-    quoteAsset: "USDT",
-    symbol: "SOLUSDT",
-    name: "Solana",
-    logo: TOKEN_METADATA.SOL.logo,
-    minOrderSize: 0.01,
-    maxOrderSize: 100000,
-    tickSize: 0.01,
-    lotSize: 0.001,
-  },
-  {
     ticker: "SOL-USDC",
     baseAsset: "SOL",
     quoteAsset: "USDC",
@@ -230,44 +160,6 @@ export const SEED_MARKETS = [
     logo: TOKEN_METADATA.SOL.logo,
     minOrderSize: 0.01,
     maxOrderSize: 100000,
-    tickSize: 0.01,
-    lotSize: 0.001,
-  },
-  {
-    ticker: "SOL-BTC",
-    baseAsset: "SOL",
-    quoteAsset: "BTC",
-    symbol: "SOLBTC",
-    name: "Solana",
-    logo: TOKEN_METADATA.SOL.logo,
-    minOrderSize: 0.01,
-    maxOrderSize: 100000,
-    tickSize: 0.00000001,
-    lotSize: 0.001,
-  },
-  {
-    ticker: "SOL-ETH",
-    baseAsset: "SOL",
-    quoteAsset: "ETH",
-    symbol: "SOLETH",
-    name: "Solana",
-    logo: TOKEN_METADATA.SOL.logo,
-    minOrderSize: 0.01,
-    maxOrderSize: 100000,
-    tickSize: 0.0000001,
-    lotSize: 0.001,
-  },
-
-  // BNB Markets
-  {
-    ticker: "BNB-USDT",
-    baseAsset: "BNB",
-    quoteAsset: "USDT",
-    symbol: "BNBUSDT",
-    name: "BNB",
-    logo: TOKEN_METADATA.BNB.logo,
-    minOrderSize: 0.01,
-    maxOrderSize: 10000,
     tickSize: 0.01,
     lotSize: 0.001,
   },
@@ -283,20 +175,6 @@ export const SEED_MARKETS = [
     tickSize: 0.01,
     lotSize: 0.001,
   },
-
-  // XRP Markets
-  {
-    ticker: "XRP-USDT",
-    baseAsset: "XRP",
-    quoteAsset: "USDT",
-    symbol: "XRPUSDT",
-    name: "Ripple",
-    logo: TOKEN_METADATA.XRP.logo,
-    minOrderSize: 1,
-    maxOrderSize: 1000000,
-    tickSize: 0.0001,
-    lotSize: 0.1,
-  },
   {
     ticker: "XRP-USDC",
     baseAsset: "XRP",
@@ -304,20 +182,6 @@ export const SEED_MARKETS = [
     symbol: "XRPUSDC",
     name: "Ripple",
     logo: TOKEN_METADATA.XRP.logo,
-    minOrderSize: 1,
-    maxOrderSize: 1000000,
-    tickSize: 0.0001,
-    lotSize: 0.1,
-  },
-
-  // ADA Markets
-  {
-    ticker: "ADA-USDT",
-    baseAsset: "ADA",
-    quoteAsset: "USDT",
-    symbol: "ADAUSDT",
-    name: "Cardano",
-    logo: TOKEN_METADATA.ADA.logo,
     minOrderSize: 1,
     maxOrderSize: 1000000,
     tickSize: 0.0001,
@@ -335,13 +199,11 @@ export const SEED_MARKETS = [
     tickSize: 0.0001,
     lotSize: 0.1,
   },
-
-  // AVAX Markets
   {
-    ticker: "AVAX-USDT",
+    ticker: "AVAX-USDC",
     baseAsset: "AVAX",
-    quoteAsset: "USDT",
-    symbol: "AVAXUSDT",
+    quoteAsset: "USDC",
+    symbol: "AVAXUSDC",
     name: "Avalanche",
     logo: TOKEN_METADATA.AVAX.logo,
     minOrderSize: 0.1,
@@ -349,13 +211,11 @@ export const SEED_MARKETS = [
     tickSize: 0.01,
     lotSize: 0.01,
   },
-
-  // DOGE Markets
   {
-    ticker: "DOGE-USDT",
+    ticker: "DOGE-USDC",
     baseAsset: "DOGE",
-    quoteAsset: "USDT",
-    symbol: "DOGEUSDT",
+    quoteAsset: "USDC",
+    symbol: "DOGEUSDC",
     name: "Dogecoin",
     logo: TOKEN_METADATA.DOGE.logo,
     minOrderSize: 1,
@@ -363,13 +223,11 @@ export const SEED_MARKETS = [
     tickSize: 0.00001,
     lotSize: 0.1,
   },
-
-  // MATIC Markets
   {
-    ticker: "MATIC-USDT",
+    ticker: "MATIC-USDC",
     baseAsset: "MATIC",
-    quoteAsset: "USDT",
-    symbol: "MATICUSDT",
+    quoteAsset: "USDC",
+    symbol: "MATICUSDC",
     name: "Polygon",
     logo: TOKEN_METADATA.MATIC.logo,
     minOrderSize: 1,
@@ -377,13 +235,11 @@ export const SEED_MARKETS = [
     tickSize: 0.0001,
     lotSize: 0.1,
   },
-
-  // DOT Markets
   {
-    ticker: "DOT-USDT",
+    ticker: "DOT-USDC",
     baseAsset: "DOT",
-    quoteAsset: "USDT",
-    symbol: "DOTUSDT",
+    quoteAsset: "USDC",
+    symbol: "DOTUSDC",
     name: "Polkadot",
     logo: TOKEN_METADATA.DOT.logo,
     minOrderSize: 0.1,
@@ -391,21 +247,7 @@ export const SEED_MARKETS = [
     tickSize: 0.001,
     lotSize: 0.01,
   },
-
-  // Stablecoin Pair
-  {
-    ticker: "USDC-USDT",
-    baseAsset: "USDC",
-    quoteAsset: "USDT",
-    symbol: "USDCUSDT",
-    name: "USD Coin",
-    logo: TOKEN_METADATA.USDC.logo,
-    minOrderSize: 1,
-    maxOrderSize: 1000000,
-    tickSize: 0.0001,
-    lotSize: 0.01,
-  },
-] as const;
+];
 
 export const fetchMarketMetadata = (ticker: string) => {
   const marketData = SEED_MARKETS.find((market) => market.ticker === ticker);
@@ -433,7 +275,6 @@ export const FEE_CONFIG = {
     ETH: 0.005,
     SOL: 0.01,
     USDC: 1,
-    USDT: 1,
     BNB: 0.01,
     XRP: 0.25,
     ADA: 1,
@@ -447,14 +288,6 @@ export const FEE_CONFIG = {
 export const ORDER_LIMITS = {
   minNotional: 10, 
   maxNotional: 1000000, 
-} as const;
-
-export const MARKET_CATEGORIES = {
-  trending: ["BTC-USDT", "ETH-USDT", "SOL-USDT"],
-  major: ["BTC-USDT", "ETH-USDT", "BNB-USDT", "SOL-USDT"],
-  defi: ["AVAX-USDT", "MATIC-USDT", "DOT-USDT"],
-  stablecoins: ["USDC-USDT"],
-  crossPairs: ["ETH-BTC", "SOL-BTC", "SOL-ETH"],
 } as const;
 
 export type SupportedMarket = typeof SUPPORTED_MARKETS[number];
