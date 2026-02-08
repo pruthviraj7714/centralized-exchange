@@ -16,25 +16,11 @@ import {
 } from "@/lib/api/user.api";
 import { cancelOrder, placeOrder } from "@/lib/api/order.api";
 import { Button } from "./ui/button";
+import { IOrder , BottomTab} from "@/types/order";
+import { ITrade } from "@/types/trade";
 
 const INTERVALS = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
-
-type BottomTab = "OPEN_ORDERS" | "ORDER_HISTORY" | "TRADE_HISTORY";
-
-interface IOrder {
-  createdAt: Date;
-  id: string;
-  marketId: string;
-  originalQuantity: string;
-  price: string;
-  remainingQuantity: string;
-  side: "BUY" | "SELL";
-  status: "OPEN" | "FILLED" | "CANCELLED";
-  type: "LIMIT" | "MARKET";
-  updatedAt: Date;
-  userId: string;
-}
 
 const sideColor = {
   BUY: "text-green-500",
@@ -44,7 +30,7 @@ const sideColor = {
 const statusColor = {
   OPEN: "text-yellow-400",
   FILLED: "text-green-500",
-  CANCELLED: "text-gray-400",
+  CANCELLED: "text-red-500",
 };
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
@@ -116,7 +102,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     refetchInterval: 10000,
   });
 
-  const { data: userTradesData } = useQuery({
+  const { data: userTradesData } = useQuery<ITrade[]>({
     queryKey: ["user-trades", ticker],
     queryFn: () => fetchUserTrades(marketData.id, data?.accessToken!),
     enabled: !!ticker && !!marketData && isReady,
@@ -156,13 +142,16 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const { mutateAsync: cancelOrderMutation } = useMutation({
     mutationFn: (orderId: string) => cancelOrder(orderId, data?.accessToken!),
     mutationKey: ["cancel-order", ticker],
-    onSuccess: (data : { message?: string }) => {
+    onSuccess: (data: { message?: string }) => {
       queryClient.invalidateQueries({
         queryKey: ["user-orders", ticker],
       });
-      toast.success(data.message ? data.message : "Order cancelled successfully", {
-        position: "top-center",
-      });
+      toast.success(
+        data.message ? data.message : "Order cancelled successfully",
+        {
+          position: "top-center",
+        },
+      );
     },
     onError: (error: any) => {
       toast.error(
@@ -945,7 +934,47 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
                 </div>
               )}
 
-              {bottomTab === "TRADE_HISTORY" && <div>trade history here</div>}
+              {bottomTab === "TRADE_HISTORY" && (
+                <div className="h-[260px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-[#0f172a] text-gray-400">
+                      <tr>
+                        <th className="text-left p-2">Time</th>
+                        <th className="text-center p-2">Price</th>
+                        <th className="text-center p-2">Qty</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {userTradesData?.map((trade) => (
+                        <tr
+                          key={trade.id}
+                          className="border-b border-gray-800 hover:bg-white/5"
+                        >
+                          <td className="p-2 text-gray-400">
+                            {new Date(trade.executedAt).toLocaleString()}
+                          </td>
+
+                          <td className={`p-2 text-center font-medium`}>{trade.price}</td>
+
+                          <td className="p-2 text-center">{trade.quantity}</td>
+                        </tr>
+                      ))}
+
+                      {userTradesData?.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="text-center py-6 text-gray-500"
+                          >
+                            No trade history
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

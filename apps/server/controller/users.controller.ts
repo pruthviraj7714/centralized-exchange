@@ -84,7 +84,7 @@ const fetchUserPortfolio = async (req: Request, res: Response) => {
 
         markets.forEach(market => {
             const baseAsset = market.symbol.split("-")[0];
-            usdPriceMap[baseAsset as string] = (baseAsset === "USDC" || baseAsset === "USDT") ? new Decimal(1) : market.price!;
+            usdPriceMap[baseAsset as string] = baseAsset === "USDC" ? new Decimal(1) : market.price!;
         });
 
         const portfolio = wallets.map(wallet => {

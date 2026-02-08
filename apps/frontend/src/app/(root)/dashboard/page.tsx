@@ -1,30 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import { TrendingUp, Sparkles, Star, Search, ArrowUpDown, ChevronDown, Filter } from "lucide-react";
-import { toast } from "sonner";
-import axios from "axios";
-import { BACKEND_URL } from "@/lib/config";
 import { useRouter } from "next/navigation";
 import { Decimal } from "decimal.js";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMarkets } from "@/lib/api/market.api";
-
-interface IMarketData {
-  id: string;
-  price: string;
-  ticker: string;
-  logo: string;
-  symbol: string;
-  baseAsset: string;
-  quoteAsset: string;
-  volume24h: string | null;
-  marketCap: string | null;
-  change24h: string | null;
-  sparkline7d: string[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
+import { IMarketData } from "@/types/market";
 
 export default function MarketDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -204,7 +185,6 @@ export default function MarketDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-      {/* Hero Section */}
       <div className="border-b border-slate-800/50 bg-slate-900/30 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
@@ -215,7 +195,6 @@ export default function MarketDashboard() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Featured Cards */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
           <div className="relative overflow-hidden bg-gradient-to-br from-emerald-500/20 via-emerald-500/10 to-transparent border border-emerald-500/30 rounded-2xl p-6 backdrop-blur-sm group hover:border-emerald-500/50 transition-all">
             <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl group-hover:bg-emerald-500/20 transition-all" />
@@ -225,12 +204,12 @@ export default function MarketDashboard() {
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                   ZERO FEES
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Got USDT?</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">Got USDC?</h2>
                 <p className="text-slate-300 text-sm mb-4">
                   Convert to USD instantly and start trading with no hidden charges
                 </p>
                 <button className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50">
-                  Trade USDT Now
+                  Trade USDC Now
                 </button>
               </div>
               <div className="hidden sm:flex w-20 h-20 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 items-center justify-center shadow-2xl shadow-emerald-500/40">
@@ -251,7 +230,7 @@ export default function MarketDashboard() {
                 <p className="text-slate-300 text-sm mb-4">
                   Track your portfolio and buy crypto instantly with one click
                 </p>
-                <button className="px-6 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50">
+                <button onClick={() => router.push('/portfolio')} className="px-6 py-2.5 cursor-pointer bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50">
                   View Portfolio
                 </button>
               </div>
@@ -262,7 +241,6 @@ export default function MarketDashboard() {
           </div>
         </div>
 
-        {/* Quick Lists */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
           <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl overflow-hidden hover:border-slate-700/50 transition-all">
             <div className="p-4 border-b border-slate-800/50 bg-slate-900/50">
@@ -313,7 +291,6 @@ export default function MarketDashboard() {
           </div>
         </div>
 
-        {/* All Markets Table */}
         <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl overflow-hidden">
           <div className="p-6 border-b border-slate-800/50 bg-slate-900/50">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -334,7 +311,6 @@ export default function MarketDashboard() {
             </div>
           </div>
 
-          {/* Desktop Table */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-900/50 border-b border-slate-800/50">

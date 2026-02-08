@@ -20,14 +20,8 @@ import Decimal from "decimal.js";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchPortfolio } from "@/lib/api/user.api";
 import { depositAsset } from "@/lib/api/wallet.api";
+import { IBalance } from "@/types/wallet";
 
-interface IBalance {
-  asset: string;
-  available: Decimal;
-  locked: Decimal;
-  usdValue: Decimal;
-  change24h: Decimal;
-}
 
 export default function PortfolioPage() {
   const [selectedAsset, setSelectedAsset] = useState("BTC");
