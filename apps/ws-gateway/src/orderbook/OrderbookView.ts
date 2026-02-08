@@ -119,6 +119,7 @@ export class OrderbookView {
     }
 
     applyOrderCancel(order: OrderEvent) {
+        console.log("Applying order cancel:", order);
         this.bids.forEach(level => level.delete(order.orderId));
         this.asks.forEach(level => level.delete(order.orderId));
     }

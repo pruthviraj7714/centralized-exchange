@@ -33,6 +33,7 @@ async function initializeKafka() {
         await consumer.connect();
         await consumer.subscribe({ topic: "trades.executed" });
         await consumer.subscribe({ topic: "orders.updated" });
+        await consumer.subscribe({ topic: "orders.cancel" });
 
         console.log("Kafka consumer connected successfully");
         
