@@ -14,4 +14,15 @@ export interface IMarketData {
   sparkline7d: string[];
   createdAt: Date;
   updatedAt: Date;
+  high24h: string,
+  low24h: string,
+  open24h: string,
+  quoteVolume24h: string,
+  priceChange: string,
+  minOrderSize: string,
+  maxOrderSize: string,
+  tickSize: string,
+  lotSize: string,
+  isActive: boolean,
+  isFeatured: boolean,
 }

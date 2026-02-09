@@ -1,3 +1,5 @@
+import Decimal from "decimal.js";
+
 export interface IOrder {
   createdAt: Date;
   id: string;

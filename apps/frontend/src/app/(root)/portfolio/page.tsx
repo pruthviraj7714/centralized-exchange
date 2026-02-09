@@ -97,7 +97,7 @@ export default function PortfolioPage() {
     new Decimal(0),
   );
 
-  const totalChangePercent = totalChange24h.div(totalUSDValue).mul(100);
+  const totalChangePercent = totalUSDValue.isZero() ? new Decimal(0) : totalChange24h.div(totalUSDValue).mul(100);
 
   const totalAvailableBalanceInUSD = balances.reduce(
     (sum, asset) =>
