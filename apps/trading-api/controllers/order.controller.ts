@@ -3,7 +3,7 @@ import { formatValidationError } from "../utils";
 import type { Request, Response } from "express";
 import prisma from "@repo/db";
 import { producer } from "@repo/kafka/src/producer";
-import { TOPICS } from "@repo/kafka/src/topics";
+import { COMMAND_TOPICS } from "@repo/kafka/src/topics";
 
 await producer.connect();
 
@@ -36,11 +36,11 @@ const placeOrderController = async (req: Request, res: Response) => {
       return;
     }
 
-    if(type === "LIMIT" && (!quantity || quantity === undefined || quantity.lte(0))) {
+    if (type === "LIMIT" && (!quantity || quantity === undefined || quantity.lte(0))) {
       res.status(400).json({
-        message : "Quantity is required for limit orders and must be greater than 0"
+        message: "Quantity is required for limit orders and must be greater than 0"
       });
-      return; 
+      return;
     }
 
     if (type === "MARKET" && side === "BUY" && !quoteAmount) {
@@ -49,7 +49,7 @@ const placeOrderController = async (req: Request, res: Response) => {
       });
       return;
     }
-    
+
     if (type === "MARKET" && side === "SELL" && !quantity) {
       res.status(400).json({
         message: "Quantity is required for market sell orders",
@@ -306,10 +306,10 @@ const placeOrderController = async (req: Request, res: Response) => {
     }
 
     const result = await producer.send({
-      topic: TOPICS.ORDER_CREATE,
+      topic: COMMAND_TOPICS.ORDER_CREATE,
       messages: [
         {
-          key: order.id,
+          key: order.marketId,
           value: JSON.stringify({ ...order, pair: market.symbol, event: "CREATE_ORDER" }),
         },
       ],
@@ -317,8 +317,8 @@ const placeOrderController = async (req: Request, res: Response) => {
 
     console.log(result);
 
-    res.status(200).json({
-      message: "Order successfully Initiated",
+    res.status(202).json({
+      message: "Order request accepted",
     });
   } catch (error) {
     console.log(error);
@@ -336,14 +336,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
     const order = await prisma.order.findFirst({
       where: {
         id: orderId,
-      },
-      include: {
-        market: {
-          select: {
-            baseAsset: true,
-            quoteAsset: true,
-          },
-        },
+        userId
       },
     });
 
@@ -354,50 +347,18 @@ const cancelOrderController = async (req: Request, res: Response) => {
       return;
     }
 
-    const amount = order.remainingQuantity;
-
-    const wallet = await prisma.wallet.findFirst({
-      where: {
-        userId,
-        asset:
-          order.side === "BUY"
-            ? order.market.baseAsset
-            : order.market.quoteAsset,
-      },
-    });
-
-    if (!wallet) {
+    if (order.status === "FILLED" || order.status === "CANCELLED") {
       res.status(400).json({
-        message: "Invalid Wallet",
+        message: "Order is already filled or cancelled",
       });
       return;
     }
 
-    await prisma.$transaction(async (tx) => {
-      (await tx.walletLedger.create({
-        data: {
-          amount: amount,
-          type: "REFUND",
-          walletId: wallet.id,
-          balanceAfter: wallet.available.plus(amount),
-        },
-      }),
-        await tx.order.update({
-          where: {
-            id: orderId,
-            userId,
-          },
-          data: {
-            status: "CANCELLED",
-          },
-        }));
-    });
-
     const result = await producer.send({
-      topic: TOPICS.ORDER_CANCEL,
+      topic: COMMAND_TOPICS.ORDER_CANCEL,
       messages: [
         {
-          key: order.id,
+          key: order.marketId,
           value: JSON.stringify({ orderId: order.id, event: "CANCEL_ORDER" }),
         },
       ],
@@ -405,8 +366,8 @@ const cancelOrderController = async (req: Request, res: Response) => {
 
     console.log(result);
 
-    res.status(200).json({
-      message: "Order Cancelled Successfully",
+    res.status(202).json({
+      message: "Cancel request accepted",
     });
   } catch (error) {
     res.status(500).json({

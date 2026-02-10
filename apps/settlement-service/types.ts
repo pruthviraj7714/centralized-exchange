@@ -12,7 +12,8 @@ export interface TradeEvent {
 }
 
 export interface OrderEvent {
-  event : "ORDER_UPDATED",
+  event : "ORDER_UPDATED" | "ORDER_CANCELLED" | "ORDER_OPENED",
+  userId : string;
   orderId : string;
   status : "FILLED" | "CANCELLED" | "PARTIALLY_FILLED" | "OPEN";
   remainingQuantity : string;
