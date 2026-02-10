@@ -1,9 +1,8 @@
-import { MatchEngine, OrderQueue } from "@repo/matching-engine-core";
-import type { EngineOrder, OrderEvent, Trade } from "./types";
 import Decimal from "decimal.js";
-import { createConsumer } from "@repo/kafka/src/consumer";
+import type { EngineOrder, OrderEvent, Trade } from "./types";
+import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
-import { TOPICS } from "@repo/kafka/src/topics";
+import { MatchEngine } from "@repo/matching-engine-core";
 
 await producer.connect();
 
@@ -15,93 +14,116 @@ interface OrderbookData {
 const orderIndex = new Map<string, { pair: string; side: "BUY" | "SELL" }>();
 const orderbookMap: Map<string, OrderbookData> = new Map();
 
-function debugOrderBook(ob:  {
-    bids: Map<string, OrderQueue>;
-    asks: Map<string, OrderQueue>;
-} | null) {
-  console.log("---- ORDERBOOK ----");
-
-  console.log("BIDS:");
-  for (const [price, queue] of ob?.bids.entries() || []) {
-    console.log(`  ${price} -> ${queue.size()} orders`);
+const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
+  if (data.event === "CREATE_ORDER") {
+    return {
+      id: data.id,
+      userId: data.userId,
+      side: data.side,
+      marketId: data.marketId,
+      price: data.type === "MARKET" ? null : new Decimal(data.price),
+      quantity: new Decimal(data.originalQuantity),
+      pair: data.pair,
+      filled: new Decimal(0),
+      createdAt: data.timestamp,
+      status: data.status
+    };
   }
-
-  console.log("ASKS:");
-  for (const [price, queue] of ob?.asks.entries() || []) {
-    console.log(`  ${price} -> ${queue.size()} orders`);
-  }
-
-  console.log("-------------------");
-}
+  return null;
+};
 
 const sendTradeToKafka = async (trade: Trade) => {
-
   const event = {
     ...trade,
     event: "TRADE_EXECUTED",
-    executedAt : Date.now(),
+    executedAt: Date.now(),
   }
 
   await producer.send({
-    topic : TOPICS.TRADE_EXECUTED,
+    topic: EVENT_TOPICS.TRADE_EXECUTED,
     messages: [
       {
-        key : trade.pair,
-        value : JSON.stringify(event)
+        key: trade.marketId,
+        value: JSON.stringify(event)
       }
     ]
   })
 };
 
 const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
-   const event = {
+  const event = {
     event: "ORDER_UPDATED",
     orderId: order.id,
     pair: order.pair,
     userId: order.userId,
-    price : order.price,
+    price: order.price,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
     remainingQuantity: order.quantity.sub(order.filled).toString(),
     updatedAt: Date.now()
   };
-  
+
   await producer.send({
-    topic : TOPICS.ORDER_UPDATED,
+    topic: EVENT_TOPICS.ORDER_UPDATED,
     messages: [
       {
-        key : order.pair,
-        value : JSON.stringify(event)
+        key: order.marketId,
+        value: JSON.stringify(event)
       }
     ]
   })
 };
 
 const sendCanceledOrderToKafka = async (order: EngineOrder) => {
-   const event = {
+  const event = {
     event: "ORDER_CANCELED",
     orderId: order.id,
     pair: order.pair,
     userId: order.userId,
-    price : order.price,
+    price: order.price,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
     remainingQuantity: order.quantity.sub(order.filled).toString(),
     updatedAt: Date.now()
   };
-  
+
   await producer.send({
-    topic : TOPICS.ORDER_CANCEL,
+    topic: EVENT_TOPICS.ORDER_CANCELLED,
     messages: [
       {
-        key : order.pair,
-        value : JSON.stringify(event)
+        key: order.marketId,
+        value: JSON.stringify(event)
       }
     ]
   })
 };
+
+const sendOpenedOrderToKafka = async (order: EngineOrder) => {
+  const event = {
+    event: "ORDER_OPENED",
+    orderId: order.id,
+    pair: order.pair,
+    userId: order.userId,
+    price: order.price,
+    side: order.side,
+    status: order.status,
+    filledQuantity: order.filled.toString(),
+    remainingQuantity: order.quantity.sub(order.filled).toString(),
+    updatedAt: Date.now()
+  };
+
+  await producer.send({
+    topic: EVENT_TOPICS.ORDER_OPENED,
+    messages: [
+      {
+        key: order.marketId,
+        value: JSON.stringify(event)
+      }
+    ]
+  })
+}
 
 const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   if (orderbookMap.has(pair)) {
@@ -112,7 +134,7 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
 
   engine.on("trade", (trade: Trade) => {
     sendTradeToKafka(trade);
-    
+
     const orderbookData = orderbookMap.get(pair);
     if (orderbookData) {
       orderbookData.lastTrades.unshift(trade);
@@ -122,14 +144,18 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
     }
   });
 
-  engine.on("order_updated",  (order: EngineOrder) => {
+  engine.on("order_updated", (order: EngineOrder) => {
     if (order.status === "FILLED" || order.status === "CANCELLED") {
       orderIndex.delete(order.id);
     }
     sendUpdatedOrderToKafka(order);
   });
 
-  engine.on("order_removed",  (order: EngineOrder) => {
+  engine.on("order_opened", (order: EngineOrder) => {
+    sendOpenedOrderToKafka(order);
+  })
+
+  engine.on("order_removed", (order: EngineOrder) => {
     orderIndex.delete(order.id);
     sendCanceledOrderToKafka(order);
   });
@@ -143,24 +169,6 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
   console.log(`Created new orderbook for ${pair}`);
 
   return orderbookData;
-};
-
-const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
-  if (data.event === "CREATE_ORDER") {
-    return {
-      id: data.id,
-      userId: data.userId,
-      side: data.side,
-      marketId : data.marketId,
-      price: data.type === "MARKET" ? null : new Decimal(data.price),
-      quantity: new Decimal(data.originalQuantity),
-      pair: data.pair,
-      filled: new Decimal(0),
-      createdAt: data.timestamp,
-      status: data.status
-    };
-  }
-  return null;
 };
 
 function processOrder(data: OrderEvent): boolean {
@@ -263,27 +271,3 @@ export class MatchingEngineService {
     return orderIndex.size;
   }
 }
-
-async function main() {
-  const consumer = createConsumer("matching-engine");
-
-  await consumer.subscribe({ topic: "orders.create" });
-  await consumer.subscribe({ topic: "orders.cancel" });
-
-  consumer.run({
-    eachMessage: async ({ topic, message }) => {
-      const event = JSON.parse(message.value?.toString() || "");
-      console.log("Received message:", event);
-      const result = MatchingEngineService.processOrderEvent(event);
-      console.log("Result:", result);
-      const ob = MatchingEngineService.getOrderbook(event.pair);
-
-      debugOrderBook(ob);
-      console.log("Active pairs:", MatchingEngineService.getActivePairs());
-    }
-  });
-}
-
-main();
-
-

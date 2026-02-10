@@ -44,7 +44,7 @@ export class MatchEngine extends EventEmitter {
                     // Limit order - add to orderbook
                     buyOrder.status = "OPEN";
                     this.orderbook.addOrder(buyOrder);
-                    this.emit("order_updated", buyOrder);
+                    this.emit("order_opened", buyOrder);
                     break;
                 }
             }
@@ -54,7 +54,7 @@ export class MatchEngine extends EventEmitter {
                 // Limit order with price too high - add to orderbook
                 buyOrder.status = "OPEN";
                 this.orderbook.addOrder(buyOrder);
-                this.emit("order_updated", buyOrder);
+                this.emit("order_opened", buyOrder);
                 break;
             }
 
@@ -105,7 +105,7 @@ export class MatchEngine extends EventEmitter {
                     // Limit order - add to orderbook
                     this.updateOrderStatus(sellOrder);
                     this.orderbook.addOrder(sellOrder);
-                    this.emit("order_updated", sellOrder);
+                    sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
                     break;
                 }
             }
@@ -115,7 +115,7 @@ export class MatchEngine extends EventEmitter {
                 // Limit order with price too low - add to orderbook
                 this.updateOrderStatus(sellOrder);
                 this.orderbook.addOrder(sellOrder);
-                this.emit("order_updated", sellOrder);
+                sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
                 break;
             }
 
@@ -157,8 +157,8 @@ export class MatchEngine extends EventEmitter {
         this.updateOrderStatus(buyOrder);
         this.updateOrderStatus(sellOrder);
 
-        this.emit("order_updated", buyOrder);
-        this.emit("order_updated", sellOrder);
+        buyOrder.status === "OPEN" ? this.emit("order_opened", buyOrder) : this.emit("order_updated", buyOrder);
+        sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
 
         const trade: Trade = {
             buyOrderId: buyOrder.id,
