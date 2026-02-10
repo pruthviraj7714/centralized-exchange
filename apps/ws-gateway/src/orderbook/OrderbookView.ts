@@ -58,45 +58,6 @@ export class OrderbookView {
             });
     }
 
-    applyOrderUpdate(order: OrderEvent) {
-        this.bids.forEach((level, price) => {
-            level.delete(order.orderId)
-            if (level.size === 0) {
-                this.bids.delete(price);
-            }
-        })
-        this.asks.forEach((level, price) => {
-            level.delete(order.orderId)
-            if (level.size === 0) {
-                this.asks.delete(price);
-            }
-        })
-
-        if (order.status === "FILLED" || order.status === "CANCELLED") {
-            return;
-        }
-
-        const sideBook = order.side === "BUY" ? this.bids : this.asks;
-        const priceKey = order.price.toString();
-
-        if (!sideBook.has(priceKey)) {
-            sideBook.set(priceKey, new Map());
-        }
-
-        if (new Decimal(order.remainingQuantity).lte(0)) {
-            sideBook.get(priceKey)!.delete(order.orderId);
-            if (sideBook.get(priceKey)!.size === 0) {
-                sideBook.delete(priceKey);
-            }
-            return;
-        }
-
-        sideBook.get(priceKey)!.set(
-            order.orderId,
-            new Decimal(order.remainingQuantity)
-        );
-    }
-
     applyTrade(trade: TradeEvent) {
         this.bids.forEach((level, price) => {
             const orderQuantity = level.get(trade.buyOrderId);
@@ -129,20 +90,20 @@ export class OrderbookView {
         });
     }
 
-    // applyOrderOpened(order: OrderEvent) {
-    //     const sidebook = order.side === "BUY" ? this.bids : this.asks;
-    //     const priceKey = order.price.toString();
+    applyOrderOpened(order: OrderEvent) {
+        const sidebook = order.side === "BUY" ? this.bids : this.asks;
+        const priceKey = order.price.toString();
 
-    //     if (new Decimal(order.remainingQuantity).lte(0)) {
-    //         return;
-    //     }
+        if (new Decimal(order.remainingQuantity).lte(0)) {
+            return;
+        }
 
-    //     if (!sidebook.has(priceKey)) {
-    //         sidebook.set(priceKey, new Map());
-    //     }
+        if (!sidebook.has(priceKey)) {
+            sidebook.set(priceKey, new Map());
+        }
 
-    //     sidebook.get(priceKey)!.set(order.orderId, new Decimal(order.remainingQuantity));
-    // }
+        sidebook.get(priceKey)!.set(order.orderId, new Decimal(order.remainingQuantity));
+    }
 
     applyOrderCancel(order: OrderEvent) {
         this.bids.forEach((level, price) => {

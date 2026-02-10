@@ -32,8 +32,8 @@ async function initializeKafka() {
 
         await consumer.connect();
         await consumer.subscribe({ topic: "trades.executed" });
-        await consumer.subscribe({ topic: "orders.updated" });
-        await consumer.subscribe({ topic: "orders.cancel" });
+        await consumer.subscribe({ topic: "orders.cancelled" });
+        await consumer.subscribe({topic : "orders.opened"});
 
         console.log("Kafka consumer connected successfully");
 
@@ -52,8 +52,8 @@ async function initializeKafka() {
 
                     const book = getBook(event.pair);
 
-                    if (event.event === "ORDER_UPDATED") {
-                        book?.applyOrderUpdate(event);
+                    if(event.event === "ORDER_OPENED") {
+                        book?.applyOrderOpened(event);
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
                             pair: event.pair,
@@ -63,23 +63,19 @@ async function initializeKafka() {
                         }));
                     }
 
-                    // if(event.event === "ORDER_OPENED") {
-                    //     book?.applyOrderOpened(event);
-                    //     broadcastToPair(event.pair, JSON.stringify({
-                    //         type: "ORDERBOOK_UPDATE",
-                    //         pair: event.pair,
-                    //         bids: book?.snapshot().bids || [],
-                    //         asks: book?.snapshot().asks || [],
-                    //         timestamp: Date.now()
-                    //     }));
-                    // }
-
                     if (event.event === "TRADE_EXECUTED") {
                         book?.applyTrade(event);
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "TRADE_EXECUTED",
                             pair: event.pair,
                             trade: event,
+                            timestamp: Date.now()
+                        }));
+                        broadcastToPair(event.pair, JSON.stringify({
+                            type: "ORDERBOOK_UPDATE",
+                            pair: event.pair,
+                            bids: book?.snapshot().bids || [],
+                            asks: book?.snapshot().asks || [],
                             timestamp: Date.now()
                         }));
                     }
