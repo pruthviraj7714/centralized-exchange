@@ -1,17 +1,106 @@
+"use client";
+
 import { ChartInterval, INTERVALS } from "@/types/chart";
 import { Activity } from "lucide-react";
+import { useEffect, useRef } from "react";
+import { createChart, CandlestickSeries } from "lightweight-charts";
 
 interface MarketChartProps {
   chartInterval: ChartInterval;
   setChartInterval: (interval: ChartInterval) => void;
-  chartRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export default function MarketChart({
   chartInterval,
   setChartInterval,
-  chartRef,
 }: MarketChartProps) {
+  const chartRef = useRef<HTMLDivElement>(null);
+
+   useEffect(() => {
+    if (!chartRef.current) {
+       console.log("chartRef is null");
+      return;
+    }
+
+    const chart = createChart(chartRef.current, {
+      height: 500,
+      layout: {
+        background: { color: "#0f172a" },
+        textColor: "#cbd5e1",
+      },
+      grid: {
+        vertLines: { color: "#1e293b" },
+        horzLines: { color: "#1e293b" },
+      },
+    });
+
+    const candlestickSeries = chart.addSeries(CandlestickSeries, {
+      upColor: "#22c55e",
+      downColor: "#ef4444",
+      borderVisible: false,
+      wickUpColor: "#22c55e",
+      wickDownColor: "#ef4444",
+    });
+
+    candlestickSeries.setData([
+      {
+        close: 100,
+        high: 161,
+        low: 60,
+        open: 80,
+        time: "2024-01-01",
+      },
+      {
+        close: 80,
+        high: 141,
+        low: 60,
+        open: 120,
+        time: "2024-01-02",
+      },
+      {
+        close: 120,
+        high: 161,
+        low: 60,
+        open: 100,
+        time: "2024-01-03",
+      },
+      {
+        close: 140,
+        high: 161,
+        low: 60,
+        open: 120,
+        time: "2024-01-04",
+      },
+      {
+        close: 160,
+        high: 161,
+        low: 60,
+        open: 120,
+        time: "2024-01-05",
+      },
+      {
+        close: 200,
+        high: 261,
+        low: 120,
+        open: 160,
+        time: "2024-01-06",
+      },
+      {
+        close : 220,
+        high : 261,
+        low : 160,
+        open : 200,
+        time : "2024-01-07",
+      }
+    ]);
+
+    chart.timeScale().fitContent();
+
+    return () => {
+      chart.remove();
+    };
+  }, []);
+
   return (
     <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
       <div className="p-4 border-b border-slate-800 bg-slate-900/50">
@@ -41,16 +130,8 @@ export default function MarketChart({
       <div className="p-4">
         <div
           ref={chartRef}
-          className="w-full h-[500px] bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-center"
-        >
-          <div className="text-center">
-            <Activity className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-            <p className="text-slate-500 text-lg">Chart Loading...</p>
-            <p className="text-slate-600 text-sm mt-2">
-              TradingView integration goes here
-            </p>
-          </div>
-        </div>
+          className="w-full h-[500px]"
+        />
       </div>
     </div>
   );

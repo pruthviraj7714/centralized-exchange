@@ -7,7 +7,7 @@ const smallNumber = () => {
 }
 
 const largeNumber = () => {
-  return Math.floor(Math.random() * 1000000);
+  return Math.floor(Math.random() * 10000);
 }
 
 async function main() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
@@ -31,7 +31,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [price, setPrice] = useState<Decimal>(new Decimal(0));
   const [activeTab, setActiveTab] = useState<"BUY" | "SELL">("BUY");
   const [spendAmount, setSpendAmount] = useState<Decimal>(new Decimal(0));
-  const chartRef = useRef<HTMLDivElement>(null);
   const { data, status } = useSession();
   const isReady = status === "authenticated" && !!data?.accessToken;
   const [bids, setBids] = useState<IOrderBookOrder[]>([]);
@@ -318,7 +317,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             <MarketChart
               chartInterval={chartInterval}
               setChartInterval={setChartInterval}
-              chartRef={chartRef}
             />
           </div>
 

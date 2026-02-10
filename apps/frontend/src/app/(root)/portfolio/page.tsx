@@ -38,7 +38,7 @@ export default function PortfolioPage() {
     queryKey: ["portfolio"],
     enabled: !!data?.accessToken,
   });
-  const { mutate } = useMutation({
+  const { mutateAsync } = useMutation({
     mutationFn : () => depositAsset(selectedAsset, amount, data?.accessToken!),
     mutationKey : ["deposit"],
     onError : () => {
@@ -66,7 +66,8 @@ export default function PortfolioPage() {
       toast.warning("Please login to deposit");
       return;
     }
-    mutate();
+    const result = await mutateAsync();
+    console.log(result);
     toast.success(`Successfully Deposited ${amount} ${selectedAsset}`, {
       position: "top-center",
     });

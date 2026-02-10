@@ -1,6 +1,5 @@
 import Decimal from "decimal.js";
 
-
 export interface IOrderBook {
   asks: IOrderBookOrder[];
   bids: IOrderBookOrder[];
