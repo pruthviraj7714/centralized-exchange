@@ -4,7 +4,7 @@ import { IncomingMessage } from 'http';
 import { createConsumer } from "@repo/kafka/src/consumer";
 import { OrderbookView } from "./orderbook/OrderbookView";
 
-const wss = new WebSocketServer({ 
+const wss = new WebSocketServer({
     port: 8082,
     perMessageDeflate: false
 });
@@ -24,7 +24,7 @@ let consumer: any = null;
 async function initializeKafka() {
     try {
         consumer = createConsumer("ws-gateway-service");
-        
+
         consumer.on("consumer.crash", (e: any) => {
             console.error("Kafka consumer crashed, attempting restart...", e);
             setTimeout(initializeKafka, 5000);
@@ -36,7 +36,7 @@ async function initializeKafka() {
         await consumer.subscribe({ topic: "orders.cancel" });
 
         console.log("Kafka consumer connected successfully");
-        
+
         await consumer.run({
             eachMessage: async ({ message }: any) => {
                 try {
@@ -44,12 +44,12 @@ async function initializeKafka() {
                     const event = JSON.parse(message.value.toString());
 
                     console.log(event);
-                    
+
                     if (!event.pair) {
                         console.warn("Message missing pair:", event);
                         return;
                     }
-                    
+
                     const book = getBook(event.pair);
 
                     if (event.event === "ORDER_UPDATED") {
@@ -63,6 +63,17 @@ async function initializeKafka() {
                         }));
                     }
 
+                    // if(event.event === "ORDER_OPENED") {
+                    //     book?.applyOrderOpened(event);
+                    //     broadcastToPair(event.pair, JSON.stringify({
+                    //         type: "ORDERBOOK_UPDATE",
+                    //         pair: event.pair,
+                    //         bids: book?.snapshot().bids || [],
+                    //         asks: book?.snapshot().asks || [],
+                    //         timestamp: Date.now()
+                    //     }));
+                    // }
+
                     if (event.event === "TRADE_EXECUTED") {
                         book?.applyTrade(event);
                         broadcastToPair(event.pair, JSON.stringify({
@@ -73,7 +84,7 @@ async function initializeKafka() {
                         }));
                     }
 
-                    if(event.event === "ORDER_CANCELED") {
+                    if (event.event === "ORDER_CANCELED") {
                         book?.applyOrderCancel(event);
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
@@ -98,27 +109,27 @@ async function initializeKafka() {
 initializeKafka();
 
 const getPairFromQuery = (req: IncomingMessage) => {
-  try {
-    const url = new URL(req.url!, "http://localhost");
-    const pair = url.searchParams.get("pair");
-    if (!pair) {
-        throw new Error("Missing pair parameter");
+    try {
+        const url = new URL(req.url!, "http://localhost");
+        const pair = url.searchParams.get("pair");
+        if (!pair) {
+            throw new Error("Missing pair parameter");
+        }
+        return pair;
+    } catch (error) {
+        console.error("Error parsing pair from query:", error);
+        return null;
     }
-    return pair;
-  } catch (error) {
-    console.error("Error parsing pair from query:", error);
-    return null;
-  }
 };
 
 function broadcastToPair(pair: string, message: string) {
     const clients = clientsByPair.get(pair);
     if (clients) {
         const deadClients: WebSocket[] = [];
-        
+
         clients.forEach(client => {
             try {
-                if (client.readyState === 1) { 
+                if (client.readyState === 1) {
                     client.send(message);
                 } else {
                     deadClients.push(client);
@@ -128,7 +139,7 @@ function broadcastToPair(pair: string, message: string) {
                 deadClients.push(client);
             }
         });
-        
+
         deadClients.forEach(client => {
             clients.delete(client);
         });
@@ -215,7 +226,7 @@ wss.on("connection", (ws, req) => {
     });
 
     const pingInterval = setInterval(() => {
-        if (ws.readyState === 1) { 
+        if (ws.readyState === 1) {
             ws.ping();
         } else {
             clearInterval(pingInterval);
