@@ -1,5 +1,5 @@
-import Redis from 'ioredis'
+import Redis from "ioredis";
 
-const redisClient = new Redis();
+const redisclient = new Redis();
 
-export default redisClient;
+export default redisclient;
