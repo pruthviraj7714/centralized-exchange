@@ -24,11 +24,12 @@ interface TradeData {
     timestamp: number;
 }
 
-const useOrderbook = (pair: string) => {
+const useOrderbook = (pair: string, chartInterval : string) => {
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState<boolean>(false);
     const [orderbook, setOrderbook] = useState<OrderbookData | null>(null);
     const [recentTrades, setRecentTrades] = useState<TradeData[]>([]);
+    const [candles, setCandles] = useState<any[]>([]);
     const [error, setError] = useState<null | string>(null);
 
     const applyOrderbookUpdate = useCallback(
@@ -63,6 +64,10 @@ const useOrderbook = (pair: string) => {
             ws.send(JSON.stringify({
                 type: "SUBSCRIBE_ORDERBOOK"
             }));
+            ws.send(JSON.stringify({
+                type: "SUBSCRIBE_CANDLES",
+                interval: chartInterval
+            }))
         };
 
         ws.onmessage = (event) => {
@@ -88,7 +93,20 @@ const useOrderbook = (pair: string) => {
 
                     case "TRADE_EXECUTED":
                         console.log('Trade executed:', data.trade);
-                        setRecentTrades(prev => [data.trade, ...prev.slice(0, 19)]); 
+                        setRecentTrades(prev => [data.trade, ...prev.slice(0, 19)]);
+                        break;
+
+                    case "CANDLE_NEW":
+                        setCandles(prev => [...prev, data.candle]);
+                        console.log(data);
+                        break;
+
+                    case "CANDLE_UPDATE":
+                        setCandles((prev) => prev.map(candle => candle.open === data.candle.open ? {
+                            ...candle,
+                            ...data.candle
+                        } : candle))
+                        console.log(data);
                         break;
 
                     case "ERROR":
@@ -127,6 +145,7 @@ const useOrderbook = (pair: string) => {
         isConnected,
         orderbook,
         recentTrades,
+        candles,
         error
     };
 };

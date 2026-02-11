@@ -1,18 +1,21 @@
 "use client";
 
-import { ChartInterval, INTERVALS } from "@/types/chart";
+import { ChartInterval, ICandle, INTERVALS } from "@/types/chart";
 import { Activity } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { createChart, CandlestickSeries } from "lightweight-charts";
+import Decimal from "decimal.js";
 
 interface MarketChartProps {
   chartInterval: ChartInterval;
   setChartInterval: (interval: ChartInterval) => void;
+  candles: ICandle[];
 }
 
 export default function MarketChart({
   chartInterval,
   setChartInterval,
+  candles,
 }: MarketChartProps) {
   const chartRef = useRef<HTMLDivElement>(null);
 
@@ -42,64 +45,36 @@ export default function MarketChart({
       wickDownColor: "#ef4444",
     });
 
-    candlestickSeries.setData([
-      {
-        close: 100,
-        high: 161,
-        low: 60,
-        open: 80,
-        time: "2024-01-01",
-      },
-      {
-        close: 80,
-        high: 141,
-        low: 60,
-        open: 120,
-        time: "2024-01-02",
-      },
-      {
-        close: 120,
-        high: 161,
-        low: 60,
-        open: 100,
-        time: "2024-01-03",
-      },
-      {
-        close: 140,
-        high: 161,
-        low: 60,
-        open: 120,
-        time: "2024-01-04",
-      },
-      {
-        close: 160,
-        high: 161,
-        low: 60,
-        open: 120,
-        time: "2024-01-05",
-      },
-      {
-        close: 200,
-        high: 261,
-        low: 120,
-        open: 160,
-        time: "2024-01-06",
-      },
-      {
-        close : 220,
-        high : 261,
-        low : 160,
-        open : 200,
-        time : "2024-01-07",
-      }
-    ]);
+    const formatted = candles
+  .map((candle) => ({
+    //type error here number is not assignable to type Time fix this
+    time: new Date(candle.openTime).toISOString().split("T")[0] as any, // seconds
+    open: new Decimal(candle.open).toNumber(),
+    high: new Decimal(candle.high).toNumber(),
+    low: new Decimal(candle.low).toNumber(),
+    close: new Decimal(candle.close).toNumber(),
+  }))
+  .sort((a, b) => a.time - b.time)
+  .filter((candle, index, arr) =>
+    index === 0 || candle.time !== arr[index - 1].time
+  );
+
+    candlestickSeries.setData(formatted);
+
+    // candlestickSeries.setData(candles.map((candle : ICandle) => ({
+    //    close : Decimal(candle.close).toNumber(),
+    //    high : Decimal(candle.high).toNumber(),
+    //    low : Decimal(candle.low).toNumber(),
+    //    open : Decimal(candle.open).toNumber(),
+    //    time : new Date(candle.openTime).toISOString().split("T")[0],
+    // })));
 
     chart.timeScale().fitContent();
 
     return () => {
       chart.remove();
     };
-  }, []);
+  }, [candles]);
 
   return (
     <div className="h-full bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">

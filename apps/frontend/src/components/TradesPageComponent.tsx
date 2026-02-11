@@ -6,7 +6,7 @@ import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
 import useOrderbook from "@/hooks/useOrderbook";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { fetchMarketData } from "@/lib/api/market.api";
+import { fetchMarketCandlesData, fetchMarketData } from "@/lib/api/market.api";
 import {
   fetchUserBalanceForMarket,
   fetchUserOpenOrders,
@@ -22,7 +22,7 @@ import MarketDataHeader from "./MarketDataHeader";
 import PlaceOrderComponent from "./PlaceOrderComponent";
 import OrderBookPanel from "./OrderBookPanel";
 import MarketChart from "./MarketChart";
-import { ChartInterval } from "@/types/chart";
+import { ChartInterval, ICandle } from "@/types/chart";
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
@@ -40,8 +40,16 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   );
   const [bottomTab, setBottomTab] = useState<BottomTab>("OPEN_ORDERS");
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [mergedCandles, setMergedCandles] = useState<ICandle[]>([]);
+
   const [baseAsset, quoteAsset] = ticker.split("-");
-  const { isConnected, orderbook, recentTrades, error } = useOrderbook(ticker);
+  const {
+    isConnected,
+    orderbook,
+    recentTrades,
+    candles: liveCandles,
+    error,
+  } = useOrderbook(ticker, chartInterval);
   const queryClient = useQueryClient();
   const {
     data: marketData,
@@ -53,6 +61,16 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     enabled: !!ticker,
     refetchInterval: 10000,
   });
+
+  const {
+    data: marketCandlesData,
+    isLoading: marketCandlesLoading,
+    isError: marketCandlesError,
+  } = useQuery({
+    queryKey: ["market-candles", ticker, chartInterval],
+    queryFn: () => fetchMarketCandlesData(ticker, chartInterval),
+  });
+
   const {
     data: userBalancesData,
     isLoading: userBalancesLoading,
@@ -146,9 +164,52 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     return () => clearInterval(timer);
   }, []);
 
+  useEffect(() => {
+    if (!marketCandlesData) return;
+
+  const sorted = [...marketCandlesData]
+    .sort((a, b) =>
+      new Date(a.openTime).getTime() - new Date(b.openTime).getTime()
+    )
+    .filter((candle, index, arr) =>
+      index === 0 ||
+      new Date(candle.openTime).getTime() !==
+        new Date(arr[index - 1].openTime).getTime()
+    );
+
+  setMergedCandles(sorted);
+  }, [marketCandlesData]);
+
   const handlePriceClick = (priceValue: Decimal) => {
     setPrice(priceValue);
   };
+
+  useEffect(() => {
+  if (!liveCandles || liveCandles.length === 0) return;
+
+  setMergedCandles((prev) => {
+    if (prev.length === 0) return liveCandles;
+
+    const lastPrev = prev[prev.length - 1];
+    const lastLive = liveCandles[liveCandles.length - 1];
+
+    // Same candle → update
+    if (lastPrev.openTime === lastLive.openTime) {
+      return [
+        ...prev.slice(0, -1),
+        lastLive
+      ];
+    }
+
+    // New candle → append
+    if (lastLive.openTime > lastPrev.openTime) {
+      return [...prev, lastLive];
+    }
+
+    return prev;
+  });
+}, [liveCandles]);
+
 
   const handlePlaceOrder = async () => {
     if (!isReady) {
@@ -317,6 +378,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             <MarketChart
               chartInterval={chartInterval}
               setChartInterval={setChartInterval}
+              candles={mergedCandles}
             />
           </div>
 

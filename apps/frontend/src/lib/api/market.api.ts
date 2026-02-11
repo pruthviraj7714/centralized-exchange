@@ -10,4 +10,10 @@ const fetchMarketData = async (ticker : string) => {
     return data;
 }
 
-export { fetchMarkets, fetchMarketData }
+const fetchMarketCandlesData = async (ticker : string, interval : string) => {
+    const { data } = await api.get(`/candles?pair=${ticker}&interval=${interval}`)
+    return data;
+}
+
+
+export { fetchMarkets, fetchMarketData, fetchMarketCandlesData }
