@@ -3,6 +3,7 @@ import { WebSocketServer } from "ws";
 import { IncomingMessage } from 'http';
 import { createConsumer } from "@repo/kafka/src/consumer";
 import { OrderbookView } from "./orderbook/OrderbookView";
+import redisclient from "@repo/redisclient"
 
 const wss = new WebSocketServer({
     port: 8082,
@@ -10,7 +11,8 @@ const wss = new WebSocketServer({
 });
 
 const books = new Map<string, OrderbookView>();
-const clientsByPair = new Map<string, Set<WebSocket>>();
+const orderbookClients = new Map<string, Set<WebSocket>>();
+const candleClients = new Map<string, Map<string, Set<WebSocket>>>();
 
 function getBook(pair: string) {
     if (!books.has(pair)) {
@@ -18,6 +20,28 @@ function getBook(pair: string) {
     }
     return books.get(pair);
 }
+
+function handleCandle(data: any) {
+    const { pair, interval, type } = data;
+
+    if (type === "CANDLE_NEW") {
+        broadcastCandle(pair, interval, JSON.stringify({
+            type: "CANDLE_NEW",
+            interval,
+            candle: data.candle,
+            timestamp: Date.now()
+        }));
+    } else if (type === "CANDLE_UPDATE") {
+        broadcastCandle(pair, interval, JSON.stringify({
+            type: "CANDLE_UPDATE",
+            interval,
+            candle: data.candle,
+            timestamp: Date.now()
+        }));
+    }
+}
+
+const redisSubscriber = redisclient.duplicate();
 
 let consumer: any = null;
 
@@ -33,17 +57,29 @@ async function initializeKafka() {
         await consumer.connect();
         await consumer.subscribe({ topic: "trades.executed" });
         await consumer.subscribe({ topic: "orders.cancelled" });
-        await consumer.subscribe({topic : "orders.opened"});
+        await consumer.subscribe({ topic: "orders.opened" });
 
         console.log("Kafka consumer connected successfully");
+
+        await redisSubscriber.psubscribe("candle:update:*");
+
+        redisSubscriber.on("pmessage", (pattern, channel, message) => {
+            if (!message) return;
+
+            try {
+                const data = JSON.parse(message);
+                if (!data?.pair) return;
+                console.log("Received candle message", data);
+                handleCandle(data);
+            } catch (err) {
+                console.error("Invalid candle message", err);
+            }
+        });
 
         await consumer.run({
             eachMessage: async ({ message }: any) => {
                 try {
-                    console.log('received message', message.value.toString());
                     const event = JSON.parse(message.value.toString());
-
-                    console.log(event);
 
                     if (!event.pair) {
                         console.warn("Message missing pair:", event);
@@ -52,7 +88,7 @@ async function initializeKafka() {
 
                     const book = getBook(event.pair);
 
-                    if(event.event === "ORDER_OPENED") {
+                    if (event.event === "ORDER_OPENED") {
                         book?.applyOrderOpened(event);
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
@@ -119,7 +155,7 @@ const getPairFromQuery = (req: IncomingMessage) => {
 };
 
 function broadcastToPair(pair: string, message: string) {
-    const clients = clientsByPair.get(pair);
+    const clients = orderbookClients.get(pair);
     if (clients) {
         const deadClients: WebSocket[] = [];
 
@@ -140,6 +176,20 @@ function broadcastToPair(pair: string, message: string) {
             clients.delete(client);
         });
     }
+}
+
+function broadcastCandle(pair: string, interval: string, message: string) {
+    const pairMap = candleClients.get(pair);
+    if (!pairMap) return;
+
+    const clients = pairMap?.get(interval);
+    if (!clients) return;
+
+    clients.forEach((client) => {
+        if (client.readyState === 1) {
+            client.send(message)
+        }
+    })
 }
 
 function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
@@ -175,10 +225,10 @@ wss.on("connection", (ws, req) => {
         return;
     }
 
-    if (!clientsByPair.has(pair)) {
-        clientsByPair.set(pair, new Set());
+    if (!orderbookClients.has(pair)) {
+        orderbookClients.set(pair, new Set());
     }
-    clientsByPair.get(pair)!.add(ws);
+    orderbookClients.get(pair)!.add(ws);
 
     console.log(`Client connected to pair: ${pair}`);
 
@@ -191,6 +241,32 @@ wss.on("connection", (ws, req) => {
 
             if (message.type === "SUBSCRIBE_ORDERBOOK") {
                 sendOrderbookSnapshot(ws, pair);
+            } else if (message.type === "SUBSCRIBE_CANDLES") {
+                const interval = message.interval;
+
+                if (!interval) {
+                    ws.send(JSON.stringify({
+                        type: "ERROR",
+                        message: "Interval required"
+                    }));
+                    return;
+                }
+
+                if (!candleClients.has(pair)) {
+                    candleClients.set(pair, new Map());
+                }
+
+                if (!candleClients.get(pair)!.has(interval)) {
+                    candleClients.get(pair)!.set(interval, new Set());
+                }
+
+                candleClients.get(pair)?.get(interval)?.add(ws);
+
+                ws.send(JSON.stringify({
+                    type: "CANDLE_SUBSCRIBED",
+                    interval,
+                    pair
+                }))
             } else if (message.type === "PING") {
                 ws.send(JSON.stringify({
                     type: "PONG",
@@ -212,13 +288,28 @@ wss.on("connection", (ws, req) => {
     });
 
     ws.on("close", (code, reason) => {
-        clientsByPair.get(pair)?.delete(ws);
+        orderbookClients.get(pair)?.delete(ws);
+        const pairMap = candleClients.get(pair);
+
+        if (pairMap) {
+            pairMap.forEach((clients, interval) => {
+                clients.delete(ws);
+            })
+        }
+
         console.log(`WebSocket connection closed for ${pair}, code: ${code}, reason: ${reason}`);
     });
 
     ws.on("error", (error) => {
         console.error(`WebSocket error for ${pair}:`, error);
-        clientsByPair.get(pair)?.delete(ws);
+        orderbookClients.get(pair)?.delete(ws);
+        const pairMap = candleClients.get(pair);
+
+        if (pairMap) {
+            pairMap.forEach((clients, interval) => {
+                clients.delete(ws);
+            })
+        }
     });
 
     const pingInterval = setInterval(() => {
