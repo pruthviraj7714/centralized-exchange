@@ -1,0 +1,17 @@
+{
+  "name": "candle-persist-worker",
+  "module": "src/index.ts",
+  "type": "module",
+  "scripts": {
+  "dev": "bun --watch run src/index.ts",
+    "build": "bun build src/index.ts --outdir dist",
+    "start": "bun run dist/index.js"
+  },
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
