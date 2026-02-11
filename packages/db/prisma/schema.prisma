@@ -18,10 +18,10 @@ model User {
   email     String   @unique
   createdAt DateTime @default(now())
 
-  wallets Wallet[]
-  orders  Order[]
-  tradesAsMaker Trade[] @relation("Maker")
-  tradesAsTaker Trade[] @relation("Taker")
+  wallets       Wallet[]
+  orders        Order[]
+  tradesAsMaker Trade[]  @relation("Maker")
+  tradesAsTaker Trade[]  @relation("Taker")
 }
 
 model WalletLedger {
@@ -112,19 +112,19 @@ model Market {
   quoteAsset String // USDT
   logo       String
 
-  price      Decimal? @db.Decimal(38, 18)
+  price Decimal? @db.Decimal(38, 18)
 
-  high24h    Decimal? @db.Decimal(38, 18)
-  low24h     Decimal? @db.Decimal(38, 18)
-  open24h    Decimal? @db.Decimal(38, 18)
+  high24h Decimal? @db.Decimal(38, 18)
+  low24h  Decimal? @db.Decimal(38, 18)
+  open24h Decimal? @db.Decimal(38, 18)
 
-  volume24h       Decimal? @db.Decimal(38, 18) // base asset
-  quoteVolume24h  Decimal? @db.Decimal(38, 18)
+  volume24h      Decimal? @db.Decimal(38, 18) // base asset
+  quoteVolume24h Decimal? @db.Decimal(38, 18)
 
-  change24h       Decimal? @db.Decimal(10, 6)  // percentage
-  priceChange     Decimal? @db.Decimal(38, 18)
+  change24h   Decimal? @db.Decimal(10, 6) // percentage
+  priceChange Decimal? @db.Decimal(38, 18)
 
-  marketCap       Decimal? @db.Decimal(38, 18)
+  marketCap Decimal? @db.Decimal(38, 18)
 
   minOrderSize Decimal @db.Decimal(38, 18)
   maxOrderSize Decimal @db.Decimal(38, 18)
@@ -133,8 +133,8 @@ model Market {
 
   sparkline7d Decimal[] // store scaled values or prices
 
-  isActive    Boolean @default(true)
-  isFeatured  Boolean @default(false)
+  isActive   Boolean @default(true)
+  isFeatured Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -143,6 +143,22 @@ model Market {
   trades Trade[]
 }
 
+model Candle {
+  id          String @id @default(uuid())
+  market    String
+  interval    String
+  openTime    DateTime
+  closeTime   DateTime
+  open        Decimal @db.Decimal(38, 18)
+  high        Decimal @db.Decimal(38, 18)
+  low         Decimal @db.Decimal(38, 18)
+  close       Decimal @db.Decimal(38, 18)
+  volume      Decimal @db.Decimal(38, 18)
+  tradeCount Int     @default(0)
+
+  @@index([market,interval, openTime])
+  @@unique([market, interval, openTime])
+}
 
 model FeeAccount {
   id      String  @id @default(uuid())
