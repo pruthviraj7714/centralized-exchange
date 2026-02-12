@@ -1,97 +1,102 @@
-import cron from "node-cron";
+import { createConsumer } from "@repo/kafka/src/consumer";
+import { type TradeEvent } from "./types";
 import prisma from "@repo/db";
-import { Decimal } from "decimal.js"
+import Decimal from "decimal.js";
 
-cron.schedule("* * * * *", async () => {
+const processTradeEvent = async (event: TradeEvent) => {
+  const { price, quantity, marketId, event: eventType, executedAt } = event;
+  if (eventType !== "TRADE_EXECUTED") {
+    console.log("Received message:", event);
+    return;
+  }
+
   try {
-    const markets = await prisma.market.findMany({
-      select: { id: true, symbol: true }
-    });
 
-    for (const market of markets) {
-      try {
-        const now = new Date();
-        const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    await prisma.$transaction(async (tx) => {
+      const [market] = await tx.$queryRaw<
+        {
+          id: string
+          price: Decimal
+          sparkline7d: Decimal[]
+          volume24h: Decimal
+          high24h: Decimal
+          low24h: Decimal
+          open24h: Decimal
+          change24h: Decimal
+          quoteVolume24h: Decimal
+        }[]
+      >`
+  SELECT id, price, sparkline7d, volume24h, high24h, low24h,
+         open24h, change24h, quoteVolume24h
+  FROM "Market"
+  WHERE id = ${marketId}
+  FOR UPDATE
+`;
+      if (!market) {
+        console.error("Market not found:", marketId);
+        return;
+      }
 
-        const trades24h = await prisma.trade.findMany({
-          where: {
-            marketId: market.id,
-            executedAt: { gte: yesterday }
-          },
-          orderBy: { executedAt: 'asc' }
-        });
+      const priceChange = new Decimal(price).sub(market.price || 0);
 
-        if (trades24h.length === 0) {
-          console.log(`No trades for market ${market.symbol} in last 24h`);
-          continue;
+      const bucket = Math.floor(new Date(executedAt).getTime() / (24 * 60 * 60 * 1000));
+      const sparkline7d = market.sparkline7d?.slice(bucket - 7, bucket + 1) || [];
+
+      const volume24h = market.volume24h?.add(quantity) || quantity;
+      const high24h = market.high24h?.gt(price) ? market.high24h : price;
+      const low24h = market.low24h?.lt(price) ? market.low24h : price;
+      const open24h = market.open24h || price;
+      const change24h = market.change24h?.add(priceChange) || priceChange;
+
+
+      await tx.market.update({
+        where: {
+          id: market.id
+        },
+        data: {
+          price,
+          priceChange,
+          change24h,
+          volume24h,
+          quoteVolume24h: market.quoteVolume24h?.add(new Decimal(price).mul(quantity)) || new Decimal(price).mul(quantity),
+          high24h,
+          low24h,
+          open24h,
+          sparkline7d: sparkline7d.concat([new Decimal(price)]),
+          updatedAt: new Date(executedAt)
         }
+      })
 
-        const latestTrade = await prisma.trade.findFirst({
-          where: { marketId: market.id },
-          orderBy: { executedAt: 'desc' }
-        });
+    })
+  } catch (error) {
+    console.error("Error processing trade event:", error);
+  }
 
-        const price = latestTrade?.price || new Decimal(0);
-        const open24h = trades24h[0]?.price || new Decimal(0);
-        
-        const high24h = trades24h.reduce((max, trade) => 
-          trade.price.gt(max) ? trade.price : max, 
-          trades24h[0]?.price || new Decimal(0)
-        );
-        
-        const low24h = trades24h.reduce((min, trade) => 
-          trade.price.lt(min) ? trade.price : min, 
-          trades24h[0]?.price || new Decimal(0)
-        );
+}
 
-        const volume24h = trades24h.reduce((sum, trade) => 
-          sum.add(trade.quantity || 0), 
-          new Decimal(0)
-        );
 
-        const quoteVolume24h = trades24h.reduce((sum, trade) => 
-          sum.add((trade.price || new Decimal(0)).mul(trade.quantity || 0)), 
-          new Decimal(0)
-        );
+async function initializeKafka() {
+  const consumer = createConsumer("market-metrics-worker");
 
-        const priceChange = price.sub(open24h);
-        const change24h = open24h.gt(0) 
-          ? priceChange.div(open24h).mul(100) 
-          : new Decimal(0);
+  consumer.on("consumer.crash", (error) => {
+    console.error("Consumer crashed:", error);
+  });
+  consumer.subscribe({ topic: "trades.executed", fromBeginning: false })
 
-        const circulatingSupply = await getCirculatingSupply(market.id);
-        const marketCap = price.mul(circulatingSupply || 0);
-
-        await prisma.market.update({
-          where: { id: market.id },
-          data: {
-            price,
-            high24h,
-            low24h,
-            open24h,
-            volume24h,
-            quoteVolume24h,
-            change24h,
-            priceChange,
-            marketCap,
-          },
-        });
-
-        console.log(`Updated market: ${market.symbol}`);
-      } catch (error) {
-        console.error(`Error updating market ${market.symbol}:`, error);
+  consumer.run({
+    eachMessage: async ({ topic, message }) => {
+      const event = JSON.parse(message.value?.toString() || "");
+      if (topic === "trades.executed") {
+        console.log("Received message:", event);
+        await processTradeEvent(event);
       }
     }
-  } catch (error) {
-    console.error("Error in cron job:", error);
-  }
-});
-
-async function getCirculatingSupply(marketId: string): Promise<Decimal> {
-  const market = await prisma.market.findUnique({
-    where: { id: marketId },
-    select: { marketCap: true }
-  });
-  
-  return market?.marketCap || new Decimal(0);
+  })
 }
+
+async function main() {
+  await initializeKafka();
+
+}
+
+main().then(() => console.log("Market metrics worker started")).catch(console.error);
