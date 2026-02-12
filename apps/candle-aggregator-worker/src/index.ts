@@ -63,7 +63,7 @@ const processInterval = async (trade: ITradeEvent, interval: string, intervalMs:
             interval,
             candle: newCandle
         }));
-        await redisclient.set(key, JSON.stringify(newCandle), "EX", ttl);
+        await redisclient.set(key, JSON.stringify(newCandle), "EX", Number(ttl));
         return;
     }
     const candle = JSON.parse(existing);
@@ -80,7 +80,7 @@ const processInterval = async (trade: ITradeEvent, interval: string, intervalMs:
         tradeCount: candle.tradeCount + 1
     }
 
-    await redisclient.set(key, JSON.stringify(updateCandle), "EX", ttl);
+    await redisclient.set(key, JSON.stringify(updateCandle), "EX", Number(ttl));
     await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
         type: "CANDLE_UPDATE",
         pair: trade.pair,
