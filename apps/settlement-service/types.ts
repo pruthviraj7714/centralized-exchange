@@ -15,6 +15,7 @@ export interface OrderEvent {
   event : "ORDER_UPDATED" | "ORDER_CANCELLED" | "ORDER_OPENED",
   userId : string;
   orderId : string;
+  side : "BUY" | "SELL";
   status : "FILLED" | "CANCELLED" | "PARTIALLY_FILLED" | "OPEN";
   remainingQuantity : string;
   updatedAt : Date;

@@ -77,7 +77,7 @@ const depositFunds = async (req: Request, res: Response) => {
         }
 
         const isValidAsset = SUPPORTED_TOKENS.some(t => t.symbol === asset);
-            
+
         if (!isValidAsset) {
             res.status(400).json({
                 message: "Unsupported asset"
@@ -85,24 +85,43 @@ const depositFunds = async (req: Request, res: Response) => {
             return;
         }
 
-        const wallet = await prisma.wallet.upsert({
-            where: {
-                userId_asset: {
+        const wallet = await prisma.$transaction(async (tx) => {
+            const wallet = await tx.wallet.upsert({
+                where: {
+                    userId_asset: {
+                        asset,
+                        userId
+                    }
+                },
+                create: {
                     asset,
-                    userId
+                    available: amount,
+                    userId,
+                    locked: 0
+                },
+                update: {
+                    available: {
+                        increment: amount
+                    }
                 }
-            },
-            create: {
-                asset,
-                available: amount,
-                userId,
-                locked: 0
-            },
-            update: {
-                available: {
-                    increment: amount
+            });
+
+            await tx.walletLedger.create({
+                data: {
+                    amount,
+                    asset,
+                    entryType : "DEPOSIT",
+                    userId,
+                    direction : "CREDIT",
+                    balanceBefore : wallet.available,
+                    balanceAfter : wallet.available.plus(amount),
+                    walletId: wallet.id,
+                    referenceId: "",
+                    referenceType : "DEPOSIT",
                 }
-            }
+            })
+
+            return wallet;
         })
 
         res.status(200).json({
@@ -119,8 +138,42 @@ const depositFunds = async (req: Request, res: Response) => {
     }
 }
 
+const fetchWalletTransactions = async (req: Request, res: Response) => {
+    try {
+        const userId = req.userId!;
+
+        const ledgers = await prisma.walletLedger.findMany({
+            where: {
+                wallet: {
+                    userId
+                }
+            },
+            orderBy: {
+                createdAt: "desc"
+            },
+            include: {
+                wallet: {
+                    select: {
+                        userId: true
+                    }
+                }
+            }
+        })
+
+        res.status(200).json({
+            ledgers
+        })
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({
+            message: "Internal Server Error"
+        })
+    }
+}
+
 export {
     fetchLedgers,
     fetchWallets,
-    depositFunds
+    depositFunds,
+    fetchWalletTransactions
 }

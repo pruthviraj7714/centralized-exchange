@@ -147,16 +147,62 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
 
 const settleUpdatedOrders = async (order: OrderEvent) => {
   try {
-    const updatedOrder = await prisma.order.update({
-      where: {
-        id: order.orderId
-      },
-      data: {
-        status: order.status,
-        updatedAt: new Date(order.updatedAt),
-        remainingQuantity: order.remainingQuantity,
+    const updatedOrder = await prisma.$transaction(async (tx) => {
+      const [odr] = await tx.$queryRaw<
+        {
+          id: string;
+          userId: string;
+          side: string;
+          price: string;
+          originalQuantity: string;
+          remainingQuantity: string;
+          baseAsset: string;
+          quoteAsset: string;
+          status: string;
+        }[]
+      >`
+  SELECT
+    o.id,
+    o."userId",
+    o.side,
+    o.status,
+    o."remainingQuantity",
+    o."price",
+    o."originalQuantity",
+    m."baseAsset",
+    m."quoteAsset"
+  FROM "Order" o
+  JOIN "Market" m ON o."marketId" = m.id
+  WHERE o.id = ${order.orderId} FOR UPDATE
+`;
+
+      if (!odr) {
+        throw new Error('Order not found');
       }
+
+      if (odr.status === "CANCELLED" || odr.status === "PENDING") {
+        return;
+      }
+
+      if (Decimal(order.remainingQuantity).lte(0)) {
+        throw new Error("Invalid remaining quantity on cancel");
+      }
+
+      const newRemainingQty = Decimal(order.remainingQuantity);
+
+      await tx.order.update({
+        where: {
+          id: odr.id,
+          userId: odr.userId,
+        },
+        data: {
+          remainingQuantity: newRemainingQty,
+          status: newRemainingQty.gt(0) ? "PARTIALLY_FILLED" : "FILLED",
+          updatedAt: new Date(order.updatedAt),
+        },
+      });
     })
+
     console.log('updated order in db', updatedOrder);
 
   } catch (error) {
@@ -202,11 +248,11 @@ const settleCancelledOrders = async (order: OrderEvent) => {
         return;
       }
 
-      if (Decimal(odr.remainingQuantity).lte(0)) {
+      if (Decimal(order.remainingQuantity).lte(0)) {
         throw new Error("Invalid remaining quantity on cancel");
       }
 
-      const refundAsset = odr.side === "BUY" ? odr.quoteAsset : odr.baseAsset;
+      const refundAsset = order.side === "BUY" ? odr.quoteAsset : odr.baseAsset;
 
       const wallet = await tx.wallet.findFirst({
         where: {
@@ -235,7 +281,14 @@ const settleCancelledOrders = async (order: OrderEvent) => {
       await tx.walletLedger.create({
         data: {
           amount: odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity,
-          type: "REFUND",
+          direction: "CREDIT",
+          userId: odr.userId,
+          asset: refundAsset,
+          entryType: "REFUND",
+          metadata: "ORDER_CANCELLED",
+          referenceId: order.orderId,
+          balanceBefore : wallet.available,
+          referenceType : "ORDER",
           walletId: wallet.id,
           balanceAfter: wallet.available.plus(odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity),
         },
@@ -309,6 +362,89 @@ const settleOpenedOrders = async (order: OrderEvent) => {
   }
 }
 
+const settleExpiredOrders = async (order: OrderEvent) => {
+  try {
+    console.log('Received order expired event:', order);
+
+    await prisma.$transaction(async (tx) => {
+      const [odr] = await tx.$queryRaw<{ id: string, userId: string, side: string, status: string, remainingQuantity: string, price: string, baseAsset: string, quoteAsset: string }[]>`
+         SELECT
+    o.id,
+    o."userId",
+    o.side,
+    o.status,
+    o."remainingQuantity",
+    o."price",
+    m."baseAsset",
+    m."quoteAsset"
+  FROM "Order" o
+  JOIN "Market" m ON o."marketId" = m.id
+  WHERE o.id = ${order.orderId} FOR UPDATE
+      `
+
+      if (!odr) {
+        throw new Error('Order request not found');
+      }
+
+      if (odr.status !== "EXPIRED") {
+        throw new Error('Order is not expired');
+      }
+
+      const orderSide = odr.side === "BUY" ? "SELL" : "BUY";
+      const refundAsset = orderSide === "BUY" ? odr.quoteAsset : odr.baseAsset;
+
+      const userId = order.userId;
+
+      const wallet = await tx.wallet.findFirst({
+        where: {
+          userId: userId,
+          asset: refundAsset
+        }
+      });
+
+      if (!wallet) {
+        throw new Error('Wallet not found');
+      }
+
+      const refundAmount = orderSide === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : Decimal(odr.remainingQuantity);
+
+      await tx.wallet.update({
+        where: {
+          id: wallet.id
+        },
+        data: {
+          available: {
+            increment: refundAmount
+          },
+          locked: {
+            decrement: refundAmount
+          }
+        }
+      })
+
+      await tx.walletLedger.create({
+        data: {
+          amount: refundAmount,
+          asset: refundAsset,
+          walletId: wallet.id,
+          balanceAfter: wallet.available.plus(refundAmount),
+          entryType: "REFUND",
+          direction: "CREDIT",
+          balanceBefore: wallet.available,
+          referenceType: "ORDER",
+          userId,
+          metadata : "ORDER_EXPIRED"
+        }
+      })
+
+    })
+
+    console.log('order expired & refunded successfully in db');
+  } catch (error) {
+    console.error('Error settling expired order:', error);
+  }
+}
+
 async function main() {
   console.log("Settlement service is running...");
 
@@ -319,6 +455,7 @@ async function main() {
   await consumer.subscribe({ topic: "orders.updated" });
   await consumer.subscribe({ topic: "orders.cancelled" })
   await consumer.subscribe({ topic: "orders.opened" })
+  await consumer.subscribe({ topic: "orders.expired" })
 
   await consumer.run({
     eachMessage: async ({ message }) => {
@@ -342,6 +479,9 @@ async function main() {
             break;
           case "ORDER_OPENED":
             await settleOpenedOrders(event);
+            break;
+          case "ORDER_EXPIRED":
+            await settleExpiredOrders(event);
             break;
         }
 
