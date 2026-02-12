@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import type { EngineOrder, OrderEvent, Trade } from "./types";
 import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
-import { MatchEngine } from "@repo/matching-engine-core";
+import { MatchEngine, OrderQueue } from "@repo/matching-engine-core";
 
 await producer.connect();
 
@@ -214,6 +214,31 @@ function processOrder(data: OrderEvent): boolean {
       }
     }
 
+    if(data.event === "ORDER_EXPIRED") {
+    const meta = orderIndex.get(data.orderId);
+      if (!meta) {
+        console.log(`Order ${data.orderId} not found in index`);
+        return false;
+      }
+
+      const orderbookData = orderbookMap.get(meta.pair);
+      if (!orderbookData) {
+        console.log(`Orderbook for ${meta.pair} not found`);
+        return false;
+      }
+
+      const cancelled = orderbookData.engine.cancelOrder(data.orderId, meta.side);
+
+      if (cancelled) {
+        orderIndex.delete(data.orderId);
+        console.log(`Cancelled order ${data.orderId}`);
+        return true;
+      } else {
+        console.log(`Failed to cancel order ${data.orderId}`);
+        return false;
+      }
+    }
+
     return false;
   } catch (error) {
     console.error("Error processing order:", data, error);
@@ -229,6 +254,11 @@ export class MatchingEngineService {
   static getOrderbook(pair: string) {
     const orderbookData = orderbookMap.get(pair);
     return orderbookData ? orderbookData.engine.getOrderbook() : null;
+  }
+
+  static serializeOrderbook(pair: string) {
+    const orderbookData = orderbookMap.get(pair);
+    return orderbookData ? orderbookData.engine.serializeOrderbook() : null;
   }
 
   static getRecentTrades(pair: string): Trade[] {
@@ -262,6 +292,15 @@ export class MatchingEngineService {
     return cancelled;
   }
 
+  static createOrderbook(pair: string): OrderbookData {
+    return getOrCreateOrderbookData(pair);
+  }
+
+  static restoreOrderbook(snapshot: any, pair: string): void {
+    const ob = this.createOrderbook(pair);
+    ob.engine.restoreOrderbook(snapshot);
+  }
+
   static clearAll(): void {
     orderbookMap.clear();
     orderIndex.clear();
@@ -271,3 +310,4 @@ export class MatchingEngineService {
     return orderIndex.size;
   }
 }
+

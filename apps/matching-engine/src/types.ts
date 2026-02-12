@@ -81,4 +81,10 @@ export type OrderEvent =
     timestamp: number;
     side?: never;
     pair?: never;
+  } | {
+    event : "ORDER_EXPIRED";
+    orderId: string;
+    timestamp: number;
+    pair?: never;
+    userId?: never;
   };
