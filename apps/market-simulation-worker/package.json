@@ -1,0 +1,15 @@
+{
+  "name": "market-simulation-worker",
+  "module": "src/index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "decimal.js": "^10.6.0"
+  }
+}
