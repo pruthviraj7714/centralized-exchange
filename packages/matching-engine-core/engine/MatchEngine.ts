@@ -10,6 +10,10 @@ export class MatchEngine extends EventEmitter {
         this.orderbook = new Orderbook();
     }
 
+    serializeOrderbook() {
+        return this.orderbook.serialize();
+    }
+
     addOrder(order: EngineOrder): void {
         if (order.side === "BUY") {
             this.matchBuyOrder(order);
@@ -192,6 +196,24 @@ export class MatchEngine extends EventEmitter {
         return true;
     }
 
+    removeExpiredOrder(orderId: string, side : Side): boolean {
+        const order = this.orderbook.getOrder(orderId);
+
+        if(!order) return false;
+
+        if(order.status === "PENDING" || order.status === "FILLED") {
+            return false;
+        }
+
+        this.orderbook.removeOrder(orderId, side);
+
+        return true;
+    }
+
+    restoreOrderbook(snapshot: any): void {
+        this.orderbook.restoreOrderbook(snapshot);
+    }
+   
     getOrderbook() {
         return {
             bids: this.orderbook.bids,

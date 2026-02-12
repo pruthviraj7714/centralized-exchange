@@ -120,6 +120,36 @@ export class OrderbookView {
         })
     }
 
+    restoreOrderbok(snapshot: any) {
+        if (!snapshot) return;
+
+        this.bids.clear();
+        this.asks.clear();
+
+        if (snapshot.bids) {
+            for (const level of snapshot.bids) {
+                const priceKey = level.price;
+                const map = new Map<string, Decimal>();
+                for (const order of level.orders) {
+                    map.set(order.orderId, new Decimal(order.quantity));
+                }
+                this.bids.set(priceKey, map);
+            }
+
+        }
+
+        if (snapshot.asks) {
+            for (const level of snapshot.asks) {
+                const priceKey = level.price;
+                const map = new Map<string, Decimal>();
+                for (const order of level.orders) {
+                    map.set(order.orderId, new Decimal(order.quantity));
+                }
+                this.asks.set(priceKey, map);
+            }
+        }
+    }
+
     snapshot() {
         return {
             bids: this.serialize(this.bids),

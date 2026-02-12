@@ -1,6 +1,6 @@
 import type Decimal from "decimal.js";
 
-export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
+export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "EXPIRED" | "PENDING";
 
 export type Side = "BUY" | "SELL";
 

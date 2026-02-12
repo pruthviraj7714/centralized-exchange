@@ -30,5 +30,9 @@ export class OrderQueue {
     removeOrder(orderId : string): void {
         this.orders = this.orders.filter(order => order.id !== orderId);
     }
+    
+    toArray(): EngineOrder[] {
+        return this.orders;
+    }
 
 }

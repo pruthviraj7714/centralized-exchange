@@ -4,6 +4,7 @@ import { IncomingMessage } from 'http';
 import { createConsumer } from "@repo/kafka/src/consumer";
 import { OrderbookView } from "./orderbook/OrderbookView";
 import redisclient from "@repo/redisclient"
+import { SUPPORTED_MARKETS } from "@repo/common";
 
 const wss = new WebSocketServer({
     port: 8082,
@@ -213,7 +214,34 @@ function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
     }
 }
 
-wss.on("connection", (ws, req) => {
+const restoreAllBooks = async () => {
+    const keys = await redisclient.keys("snapshot:*");
+    console.log("Restoring books", keys);
+
+    for (const key of keys) {
+        const pair = key.split(":")[1];
+        console.log("Restoring book for pair", pair);
+
+        if (!pair) continue;
+
+        const raw = await redisclient.get(key);
+        console.log("Raw snapshot", raw);
+        if (!raw) continue;
+
+        const snapshot = JSON.parse(raw);
+        console.log("Snapshot", snapshot);
+
+        const book = getBook(pair);
+
+        if (!book) continue;
+
+        book.restoreOrderbok(snapshot);
+    }
+
+}
+
+wss.on("connection", async (ws, req) => {
+    await restoreAllBooks();
     const pair = getPairFromQuery(req);
 
     if (!pair) {
@@ -332,3 +360,4 @@ wss.on("listening", () => {
 wss.on("error", (error) => {
     console.error("WebSocket server error:", error);
 });
+
