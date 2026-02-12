@@ -17,6 +17,7 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
+  walletLedgers WalletLedger[]
 
   wallets       Wallet[]
   orders        Order[]
@@ -25,17 +26,34 @@ model User {
 }
 
 model WalletLedger {
-  id           String      @id @default(uuid())
-  walletId     String
-  type         LEDGER_TYPE
-  amount       Decimal     @db.Decimal(36, 18)
-  balanceAfter Decimal     @db.Decimal(36, 18)
-  referenceId  String?
-  createdAt    DateTime    @default(now())
+  id        String   @id @default(uuid())
+
+  userId    String
+  walletId  String
+  asset     String
+
+  entryType LEDGER_ENTRY_TYPE
+  amount    Decimal  @db.Decimal(36, 18)  // always positive
+  direction LEDGER_DIRECTION
+
+  balanceBefore Decimal @db.Decimal(36, 18)
+  balanceAfter  Decimal @db.Decimal(36, 18)
+
+  referenceType LEDGER_REFERENCE_TYPE
+  referenceId   String?  // tradeId, orderId, withdrawalId, etc
+
+  idempotencyKey String? @unique
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
 
   wallet Wallet @relation(fields: [walletId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([walletId, createdAt])
+  @@index([userId, createdAt])
+  @@index([referenceId])
 }
 
 model Wallet {
@@ -59,7 +77,7 @@ model Order {
 
   side   SIDE
   type   ORDER_TYPE
-  status ORDER_STATUS
+  status ORDER_STATUS @default(PENDING)
 
   price             Decimal? @db.Decimal(36, 18) // null for MARKET
   originalQuantity  Decimal  @db.Decimal(36, 18)
@@ -177,17 +195,34 @@ enum ORDER_TYPE {
 }
 
 enum ORDER_STATUS {
+  PENDING
+  EXPIRED
   OPEN
   PARTIALLY_FILLED
   FILLED
   CANCELLED
 }
 
-enum LEDGER_TYPE {
+enum LEDGER_DIRECTION {
+  CREDIT
+  DEBIT
+}
+
+enum LEDGER_ENTRY_TYPE {
   DEPOSIT
-  WITHDRAW
-  TRADE_DEBIT
-  TRADE_CREDIT
-  FEE
+  WITHDRAWAL
+  TRADE_EXECUTION
+  TRADE_FEE
+  ORDER_LOCK
+  ORDER_UNLOCK
   REFUND
+  ADJUSTMENT
+}
+
+enum LEDGER_REFERENCE_TYPE {
+  TRADE
+  ORDER
+  WITHDRAWAL
+  DEPOSIT
+  SYSTEM
 }
