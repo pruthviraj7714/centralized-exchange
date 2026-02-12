@@ -398,7 +398,7 @@ export default function MarketDashboard() {
                         }`}
                       >
                         {coin.change24h != null
-                          ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber()}%`
+                          ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber().toFixed(2)}%`
                           : "-"}
                       </span>
                     </td>
@@ -419,7 +419,6 @@ export default function MarketDashboard() {
             </table>
           </div>
 
-          {/* Mobile Cards */}
           <div className="lg:hidden divide-y divide-slate-800/30">
             {filteredData.map((coin) => (
               <div
@@ -447,7 +446,7 @@ export default function MarketDashboard() {
                       }`}
                     >
                       {coin.change24h != null
-                        ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber()}%`
+                        ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber().toFixed(2)}%`
                         : "-"}
                     </div>
                   </div>

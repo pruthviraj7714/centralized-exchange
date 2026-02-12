@@ -14,4 +14,13 @@ const depositAsset = async (asset : string, amount : Decimal, token : string) =>
     return data;
 }
 
-export { depositAsset }
+const fetchWalletTransactions = async (token : string) => {
+    const { data } = await api.get('/wallets/transactions', {
+        headers : {
+            Authorization : `Bearer ${token}`
+        }
+    })
+    return data.ledgers;
+}
+
+export { depositAsset, fetchWalletTransactions }

@@ -23,6 +23,8 @@ import PlaceOrderComponent from "./PlaceOrderComponent";
 import OrderBookPanel from "./OrderBookPanel";
 import MarketChart from "./MarketChart";
 import { ChartInterval, ICandle } from "@/types/chart";
+import { LoadingSkeleton } from "./LoadingSkeleton";
+import { ErrorState } from "./ErrorState";
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
@@ -165,51 +167,53 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   }, []);
 
   useEffect(() => {
-    if (!marketCandlesData) return;
+    setMergedCandles([]);
+  }, [chartInterval]);
 
-  const sorted = [...marketCandlesData]
-    .sort((a, b) =>
-      new Date(a.openTime).getTime() - new Date(b.openTime).getTime()
-    )
-    .filter((candle, index, arr) =>
-      index === 0 ||
-      new Date(candle.openTime).getTime() !==
-        new Date(arr[index - 1].openTime).getTime()
-    );
+  useEffect(() => {
+    if (!marketCandlesData || marketCandlesData.length === 0) return;
 
-  setMergedCandles(sorted);
+    const sorted = [...marketCandlesData]
+      .sort(
+        (a, b) =>
+          new Date(a.openTime).getTime() - new Date(b.openTime).getTime(),
+      )
+      .filter(
+        (candle, index, arr) =>
+          index === 0 ||
+          new Date(candle.openTime).getTime() !==
+            new Date(arr[index - 1].openTime).getTime(),
+      );
+
+    setMergedCandles(sorted);
   }, [marketCandlesData]);
+
+  useEffect(() => {
+    if (!liveCandles || liveCandles.length === 0) return;
+
+    setMergedCandles((prev) => {
+      if (prev.length === 0) return liveCandles;
+
+      const candleMap = new Map<number, ICandle>();
+
+      prev.forEach((c) => {
+        candleMap.set(new Date(c.openTime).getTime(), c);
+      });
+
+      liveCandles.forEach((c) => {
+        candleMap.set(new Date(c.openTime).getTime(), c);
+      });
+
+      return Array.from(candleMap.values()).sort(
+        (a, b) =>
+          new Date(a.openTime).getTime() - new Date(b.openTime).getTime(),
+      );
+    });
+  }, [liveCandles]);
 
   const handlePriceClick = (priceValue: Decimal) => {
     setPrice(priceValue);
   };
-
-  useEffect(() => {
-  if (!liveCandles || liveCandles.length === 0) return;
-
-  setMergedCandles((prev) => {
-    if (prev.length === 0) return liveCandles;
-
-    const lastPrev = prev[prev.length - 1];
-    const lastLive = liveCandles[liveCandles.length - 1];
-
-    // Same candle → update
-    if (lastPrev.openTime === lastLive.openTime) {
-      return [
-        ...prev.slice(0, -1),
-        lastLive
-      ];
-    }
-
-    // New candle → append
-    if (lastLive.openTime > lastPrev.openTime) {
-      return [...prev, lastLive];
-    }
-
-    return prev;
-  });
-}, [liveCandles]);
-
 
   const handlePlaceOrder = async () => {
     if (!isReady) {
@@ -231,10 +235,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
 
     await placeOrderMutation();
-
-    setQuantity(new Decimal(0));
-    setPrice(new Decimal(0));
-    setSpendAmount(new Decimal(0));
   };
 
   const handlePlaceOrderDisabled = () => {
@@ -357,11 +357,11 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const maxDepth = Math.max(maxBidDepth, maxAskDepth);
 
   if (marketDataLoading) {
-    return <div>Loading...</div>;
+    return <LoadingSkeleton />;
   }
 
   if (marketDataError) {
-    return <div>Error fetching market data</div>;
+    return <ErrorState />;
   }
 
   return (

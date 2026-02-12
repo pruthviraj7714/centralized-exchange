@@ -57,14 +57,12 @@ const processInterval = async (trade: ITradeEvent, interval: string, intervalMs:
             tradeCount: 1
         }
         await redisclient.zadd(`candle:index:${trade.pair}:${interval}`, openTime, openTime.toString());
-        const result = await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
-            type : "CANDLE_NEW",
-            pair : trade.pair,
+        await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
+            type: "CANDLE_NEW",
+            pair: trade.pair,
             interval,
-            candle : newCandle
+            candle: newCandle
         }));
-        console.log("new candle added result:", result);
-        
         await redisclient.set(key, JSON.stringify(newCandle), "EX", ttl);
         return;
     }
@@ -83,15 +81,12 @@ const processInterval = async (trade: ITradeEvent, interval: string, intervalMs:
     }
 
     await redisclient.set(key, JSON.stringify(updateCandle), "EX", ttl);
-    const result = await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
-            type : "CANDLE_UPDATE",
-            pair : trade.pair,
-            interval,
-            candle : updateCandle
-        }))
-
-        console.log('Hi there', result);
-        
+    await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
+        type: "CANDLE_UPDATE",
+        pair: trade.pair,
+        interval,
+        candle: updateCandle
+    }))
 }
 
 const processTrade = async (trade: ITradeEvent) => {
@@ -113,15 +108,15 @@ async function main() {
 
     consumer.run({
         eachMessage: async ({ message }) => {
-            if(!message.value) return;
+            if (!message.value) return;
 
             let trade: ITradeEvent;
 
             try {
-                 trade = JSON.parse(message.value?.toString())
-                     await processTrade(trade)
+                trade = JSON.parse(message.value?.toString())
+                await processTrade(trade)
             } catch (error) {
-                throw new Error("Error while processing trades");
+                console.error("Error while processing Trade", error);
             }
         }
     })

@@ -1,5 +1,6 @@
 import { IMarketData } from "@/types/market";
 import { TrendingUp } from "lucide-react";
+import Decimal from "decimal.js";
 
 interface MarketDataHeaderProps {
   marketData: IMarketData;
@@ -12,6 +13,12 @@ export default function MarketDataHeader({
   isConnected,
   currentTime,
 }: MarketDataHeaderProps) {
+
+  const priceChange = new Decimal(marketData.priceChange);
+  const change24h = new Decimal(marketData.change24h!);
+  const isPositive = priceChange.greaterThan(0);
+  const isPositive24h = change24h.greaterThan(0);
+
   return (
     <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
       <div className="mx-auto px-4 py-3">
@@ -50,8 +57,11 @@ export default function MarketDataHeader({
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Change</span>
-                <span className="text-emerald-400 font-semibold">
-                  +{marketData.priceChange} (+{marketData.change24h}%)
+                <span
+                  className={`${isPositive24h ? "text-emerald-400" : "text-red-400"} font-semibold`}
+                >
+                  {isPositive ? "+" : ""}{new Decimal(marketData.priceChange).toFixed(2).toString()}
+                  ({isPositive24h ? "+" : "-"}{new Decimal(marketData.change24h!).toFixed(2).toString()}%)
                 </span>
               </div>
               <div className="flex flex-col">
@@ -69,7 +79,7 @@ export default function MarketDataHeader({
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Volume</span>
                 <span className="text-white font-semibold">
-                  {marketData?.volume24h?.toLocaleString()} SOL
+                  {marketData?.volume24h?.toLocaleString()} {marketData.baseAsset}
                 </span>
               </div>
             </div>
