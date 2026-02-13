@@ -2,22 +2,41 @@ import { IMarketData } from "@/types/market";
 import { TrendingUp } from "lucide-react";
 import Decimal from "decimal.js";
 
+interface IUpdatedMarketData {
+  lastPrice: string;
+  change: string;
+  changePercent: string;
+  high: string;
+  low: string;
+  volume: string;
+}
+
 interface MarketDataHeaderProps {
   marketData: IMarketData;
+  updatedMarketData: IUpdatedMarketData | null;
   isConnected: boolean;
   currentTime: Date;
 }
 
 export default function MarketDataHeader({
   marketData,
+  updatedMarketData,
   isConnected,
   currentTime,
 }: MarketDataHeaderProps) {
+  const live = {
+    lastPrice: updatedMarketData?.lastPrice ?? marketData.price?.toString(),
+    change: updatedMarketData?.change ?? marketData.priceChange,
+    changePercent: updatedMarketData?.changePercent ?? marketData.change24h,
+    high: updatedMarketData?.high ?? marketData.high24h?.toString(),
+    low: updatedMarketData?.low ?? marketData.low24h?.toString(),
+    volume: updatedMarketData?.volume ?? marketData.volume24h?.toString(),
+  };
 
-  const priceChange = new Decimal(marketData.priceChange);
-  const change24h = new Decimal(marketData.change24h!);
-  const isPositive = priceChange.greaterThan(0);
-  const isPositive24h = change24h.greaterThan(0);
+  const priceChange = new Decimal(live.change || 0);
+  const change24h = new Decimal(live.changePercent || 0);
+  const isPositive = priceChange.gt(0);
+  const isPositive24h = change24h.gt(0);
 
   return (
     <div className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-10">
@@ -49,10 +68,16 @@ export default function MarketDataHeader({
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">Last Price</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-lg font-bold text-emerald-400">
-                    ${marketData.price.toString()}
+                  <span className={`text-lg font-bold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                    ${live.lastPrice}
                   </span>
-                  <TrendingUp className="w-4 h-4 text-emerald-400" />
+                  <TrendingUp
+                    className={`w-4 h-4 ${
+                      isPositive
+                        ? "text-emerald-400"
+                        : "text-red-400 rotate-180"
+                    }`}
+                  />
                 </div>
               </div>
               <div className="flex flex-col">
@@ -60,26 +85,23 @@ export default function MarketDataHeader({
                 <span
                   className={`${isPositive24h ? "text-emerald-400" : "text-red-400"} font-semibold`}
                 >
-                  {isPositive ? "+" : ""}{new Decimal(marketData.priceChange).toFixed(2).toString()}
-                  ({isPositive24h ? "+" : "-"}{new Decimal(marketData.change24h!).toFixed(2).toString()}%)
+                  {isPositive ? "+" : ""}
+                  {priceChange.toFixed(2)} ({isPositive24h ? "+" : ""}
+                  {change24h.toFixed(2)}%)
                 </span>
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h High</span>
-                <span className="text-white font-semibold">
-                  ${marketData.high24h.toString()}
-                </span>
+                <span className="text-white font-semibold">${live.high}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Low</span>
-                <span className="text-white font-semibold">
-                  ${marketData.low24h.toString()}
-                </span>
+                <span className="text-white font-semibold">${live.low}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Volume</span>
                 <span className="text-white font-semibold">
-                  {marketData?.volume24h?.toLocaleString()} {marketData.baseAsset}
+                  {live.volume} {marketData.baseAsset}
                 </span>
               </div>
             </div>

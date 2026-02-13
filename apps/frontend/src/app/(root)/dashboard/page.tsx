@@ -70,10 +70,10 @@ export default function MarketDashboard() {
 
   const formatNumber = (num: string | null) => {
     if (num == null) return "-";
-    if (Decimal(num).gte(1_000_000_000)) return `$${Decimal(num).div(1_000_000_000)}B`;
-    if (Decimal(num).gte(1_000_000)) return `$${Decimal(num).div(1_000_000)}M`;
-    if (Decimal(num).gte(1_000)) return `$${Decimal(num).div(1_000)}K`;
-    return `$${Decimal(num)}`;
+    if (Decimal(num).gte(1_000_000_000)) return `$${Decimal(num).div(1_000_000_000).toFixed(2)}B`;
+    if (Decimal(num).gte(1_000_000)) return `$${Decimal(num).div(1_000_000).toFixed(2)}M`;
+    if (Decimal(num).gte(1_000)) return `$${Decimal(num).div(1_000).toFixed(2)}K`;
+    return `$${Decimal(num).toFixed(2)}`;
   };
 
   const Sparkline = ({ data, isPositive }: { data: string[]; isPositive: boolean }) => {

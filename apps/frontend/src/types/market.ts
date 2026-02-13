@@ -17,7 +17,6 @@ export interface IMarketData {
   high24h: string,
   low24h: string,
   open24h: string,
-  quoteVolume24h: string,
   priceChange: string,
   minOrderSize: string,
   maxOrderSize: string,

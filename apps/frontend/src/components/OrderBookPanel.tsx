@@ -8,6 +8,7 @@ interface OrderBookPanelProps {
   setOrderBookTab: (tab: "ORDER_BOOK" | "TRADES") => void;
   baseAsset: string;
   quoteAsset: string;
+  lastPrice: string;
   asks: IOrderBookOrder[];
   bids: IOrderBookOrder[];
   recentTrades: any[];
@@ -23,6 +24,7 @@ export default function OrderBookPanel({
   setOrderBookTab,
   baseAsset,
   quoteAsset,
+  lastPrice,
   asks,
   bids,
   recentTrades,
@@ -99,7 +101,7 @@ export default function OrderBookPanel({
             <div className="px-4 py-3 border-y border-slate-800 bg-slate-900/30 sticky top-0 z-10">
               <div className="text-center">
                 <div className="text-2xl font-bold text-emerald-400 mb-1">
-                  ${marketData.price.toString()}
+                  ${lastPrice}
                 </div>
                 <div className="flex items-center justify-center gap-3 text-xs text-slate-400">
                   <span>Spread: ${spread}</span>

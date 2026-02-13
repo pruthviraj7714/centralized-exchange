@@ -50,6 +50,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     orderbook,
     recentTrades,
     candles: liveCandles,
+    updatedMarketData,
     error,
   } = useOrderbook(ticker, chartInterval);
   const queryClient = useQueryClient();
@@ -61,7 +62,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     queryFn: () => fetchMarketData(ticker),
     queryKey: ["market-data", ticker],
     enabled: !!ticker,
-    refetchInterval: 10000,
+    refetchInterval: isConnected ? false : 10000,
   });
 
   const {
@@ -355,6 +356,10 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const maxBidDepth = Math.max(...bids.map((b) => b.total.toNumber()));
   const maxAskDepth = Math.max(...asks.map((a) => a.total.toNumber()));
   const maxDepth = Math.max(maxBidDepth, maxAskDepth);
+  const livePrice =
+  updatedMarketData?.lastPrice ??
+  marketData?.price?.toString() ??
+  "0";
 
   if (marketDataLoading) {
     return <LoadingSkeleton />;
@@ -368,6 +373,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     <div className="min-h-screen bg-slate-950 text-white">
       <MarketDataHeader
         marketData={marketData}
+        updatedMarketData={updatedMarketData}
         isConnected={isConnected}
         currentTime={currentTime}
       />
@@ -388,6 +394,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
               quoteAsset={quoteAsset}
               asks={asks}
               bids={bids}
+              lastPrice={livePrice}
               handlePriceClick={handlePriceClick}
               recentTrades={recentTrades}
               marketData={marketData}

@@ -1,5 +1,6 @@
 import { WS_URL } from "@/lib/config";
-import { useEffect, useState, useCallback } from "react"
+import Decimal from "decimal.js";
+import { useEffect, useState, useCallback, useRef } from "react"
 
 interface OrderbookLevel {
     price: string;
@@ -24,13 +25,27 @@ interface TradeData {
     timestamp: number;
 }
 
-const useOrderbook = (pair: string, chartInterval : string) => {
+interface IUpdatedMarketData {
+    lastPrice: string;
+    change: string;
+    changePercent: string;
+    high: string;
+    low: string;
+    volume: string;
+}
+
+const useOrderbook = (pair: string, chartInterval: string) => {
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState<boolean>(false);
     const [orderbook, setOrderbook] = useState<OrderbookData | null>(null);
     const [recentTrades, setRecentTrades] = useState<TradeData[]>([]);
     const [candles, setCandles] = useState<any[]>([]);
+    const [updatedMarketData, setUpdatedMarketData] = useState<IUpdatedMarketData | null>(null);
     const [error, setError] = useState<null | string>(null);
+    const orderbookBuffer = useRef<OrderbookData | null>(null);
+    const tradesBuffer = useRef<TradeData[]>([]);
+    const marketBuffer = useRef<IUpdatedMarketData | null>(null);
+
 
     const applyOrderbookUpdate = useCallback(
         (prev: OrderbookData | null, update: any): OrderbookData => {
@@ -54,6 +69,29 @@ const useOrderbook = (pair: string, chartInterval : string) => {
     );
 
     useEffect(() => {
+        const interval = setInterval(() => {
+            if (orderbookBuffer.current) {
+                setOrderbook(orderbookBuffer.current);
+            }
+
+            if (tradesBuffer.current.length) {
+                setRecentTrades(prev => [
+                    ...tradesBuffer.current,
+                    ...prev,
+                ].slice(0, 20));
+                tradesBuffer.current = [];
+            }
+
+            if (marketBuffer.current) {
+                setUpdatedMarketData(marketBuffer.current);
+            }
+        }, 100); // 🔥 sweet spot
+
+        return () => clearInterval(interval);
+    }, []);
+
+
+    useEffect(() => {
         const ws = new WebSocket(`${WS_URL}?pair=${pair}`);
 
         ws.onopen = () => {
@@ -70,6 +108,8 @@ const useOrderbook = (pair: string, chartInterval : string) => {
             }))
         };
 
+
+
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
@@ -78,27 +118,39 @@ const useOrderbook = (pair: string, chartInterval : string) => {
                 switch (data.type) {
                     case "ORDERBOOK_SNAPSHOT":
                         console.log('Orderbook snapshot received:', data);
-                        setOrderbook({
+                        orderbookBuffer.current = {
                             bids: data.bids || [],
                             asks: data.asks || [],
                             pair: data.pair,
                             timestamp: data.timestamp,
-                        });
+                        };
                         break;
 
                     case "ORDERBOOK_UPDATE":
                         console.log('Orderbook update received:', data);
-                        setOrderbook((prev) => applyOrderbookUpdate(prev, data))
+                        orderbookBuffer.current = applyOrderbookUpdate(orderbookBuffer.current, data);
+                        break;
+
+                    case "ORDERBOOK_UPDATE":
+                        console.log('Orderbook update received:', data);
+                        orderbookBuffer.current = applyOrderbookUpdate(orderbookBuffer.current, data)
                         break;
 
                     case "TRADE_EXECUTED":
                         console.log('Trade executed:', data.trade);
-                        setRecentTrades(prev => [data.trade, ...prev.slice(0, 19)]);
+                        marketBuffer.current = {
+                            lastPrice: data.trade.price,
+                            change: marketBuffer.current?.lastPrice ? Decimal(marketBuffer.current?.lastPrice).minus(data.trade.price).toString() : "0",
+                            changePercent: marketBuffer.current?.lastPrice ? Decimal(marketBuffer.current?.lastPrice).minus(data.trade.price).div(marketBuffer.current?.lastPrice).times(100).toString() : "0",
+                            high: Decimal.max(marketBuffer.current?.high || "0", data.trade.price).toString(),
+                            low: Decimal.min(marketBuffer.current?.low || "0", data.trade.price).toString(),
+                            volume: marketBuffer.current?.volume ? Decimal(marketBuffer.current?.volume).plus(data.trade.quantity).toString() : "0"
+                        }
+                        tradesBuffer.current = [...tradesBuffer.current, data.trade];
                         break;
 
                     case "CANDLE_NEW":
                         setCandles(prev => [...prev, data.candle]);
-                        console.log(data);
                         break;
 
                     case "CANDLE_UPDATE":
@@ -106,7 +158,6 @@ const useOrderbook = (pair: string, chartInterval : string) => {
                             ...candle,
                             ...data.candle
                         } : candle))
-                        console.log(data);
                         break;
 
                     case "ERROR":
@@ -138,7 +189,7 @@ const useOrderbook = (pair: string, chartInterval : string) => {
             console.log('Cleaning up WebSocket connection');
             ws.close();
         };
-    }, [pair]);
+    }, [pair, chartInterval]);
 
     return {
         socket,
@@ -146,6 +197,7 @@ const useOrderbook = (pair: string, chartInterval : string) => {
         orderbook,
         recentTrades,
         candles,
+        updatedMarketData,
         error
     };
 };
