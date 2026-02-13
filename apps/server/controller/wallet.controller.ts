@@ -109,15 +109,14 @@ const depositFunds = async (req: Request, res: Response) => {
             await tx.walletLedger.create({
                 data: {
                     amount,
-                    asset,
-                    entryType : "DEPOSIT",
-                    userId,
-                    direction : "CREDIT",
-                    balanceBefore : wallet.available,
-                    balanceAfter : wallet.available.plus(amount),
+                    entryType: "DEPOSIT",
+                    balanceType: "AVAILABLE",
+                    direction: "CREDIT",
+                    balanceBefore: wallet.available,
+                    balanceAfter: wallet.available.plus(amount),
                     walletId: wallet.id,
                     referenceId: "",
-                    referenceType : "DEPOSIT",
+                    referenceType: "DEPOSIT",
                 }
             })
 

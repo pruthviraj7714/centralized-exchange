@@ -3,58 +3,58 @@ import prisma from '@repo/db'
 import redisclient from "@repo/redisclient";
 
 interface ICandle {
-    interval: string;
-    openTime: number;
-    closeTime: number;
-    open: string;
-    high: string;
-    low: string;
-    close: string;
-    volume: string;
+  interval: string;
+  openTime: number;
+  closeTime: number;
+  open: string;
+  high: string;
+  low: string;
+  close: string;
+  volume: string;
 }
 
 const INTERVALS = {
-    "1m": 60000,
-    "5m": 300000,
-    "15m": 900000,
-    "30m": 1800000,
-    "1h": 3600000,
-    "4h": 14400000,
-    "1d": 86400000
+  "1m": 60000,
+  "5m": 300000,
+  "15m": 900000,
+  "30m": 1800000,
+  "1h": 3600000,
+  "4h": 14400000,
+  "1d": 86400000
 }
 
 async function insertCandle(pair: string, candle: ICandle, interval: string) {
-    console.log("inserting candle" + JSON.stringify(candle, null, 2));
-    
+  console.log("inserting candle" + JSON.stringify(candle, null, 2));
+  try {
     await prisma.candle.upsert({
-        where : {
-            market_interval_openTime: {
-                market: pair,
-                interval: interval,
-                openTime: new Date(Number(candle.openTime))
-            }
-        },
-        create: {
-            ...candle,
-            openTime: new Date(Number(candle.openTime)),
-            closeTime: new Date(Number(candle.closeTime)),
-            interval : interval,
-            market: pair
-        },
-        update: {
-            ...candle,
-            openTime: new Date(Number(candle.openTime)),
-            closeTime: new Date(Number(candle.closeTime)),
-            interval : interval,
-            market: pair
+      where: {
+        market_interval_openTime: {
+          market: pair,
+          interval: interval,
+          openTime: new Date(Number(candle.openTime))
         }
+      },
+      create: {
+        ...candle,
+        openTime: new Date(Number(candle.openTime)),
+        closeTime: new Date(Number(candle.closeTime)),
+        interval: interval,
+        market: pair
+      },
+      update: {
+        ...candle,
+        openTime: new Date(Number(candle.openTime)),
+        closeTime: new Date(Number(candle.closeTime)),
+        interval: interval,
+        market: pair
+      }
     })
+  } catch (error) {
+    console.error("Error while inserting candle", error);
+  }
 }
 
-
 async function flushCandlesToDB() {
-  console.log("Flushing candles...");
-
   for (const pair of SUPPORTED_MARKETS) {
     for (const interval of Object.keys(INTERVALS)) {
 
@@ -83,4 +83,12 @@ async function flushCandlesToDB() {
   }
 }
 
-setInterval(flushCandlesToDB, 30000);
+async function main() {
+  while (true) {
+    console.log("Flushing candles...");
+    await flushCandlesToDB();
+    await new Promise((res, _rej) => setTimeout(res, 30000));
+  }
+}
+
+main();

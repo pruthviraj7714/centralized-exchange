@@ -306,7 +306,7 @@ const placeOrderController = async (req: Request, res: Response) => {
       messages: [
         {
           key: order.marketId,
-          value: JSON.stringify({ ...order, pair: market.symbol, event: "CREATE_ORDER" }),
+          value: JSON.stringify({ ...order, pair: market.symbol, event: "CREATE_ORDER", eventId: crypto.randomUUID() }),
         },
       ],
     });
@@ -355,7 +355,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
       messages: [
         {
           key: order.marketId,
-          value: JSON.stringify({ orderId: order.id, event: "CANCEL_ORDER" }),
+          value: JSON.stringify({ orderId: order.id, event: "CANCEL_ORDER", eventId: crypto.randomUUID() }),
         },
       ],
     });

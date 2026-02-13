@@ -120,7 +120,7 @@ export class OrderbookView {
         })
     }
 
-    restoreOrderbok(snapshot: any) {
+    restoreOrderbook(snapshot: any) {
         if (!snapshot) return;
 
         this.bids.clear();
@@ -153,7 +153,7 @@ export class OrderbookView {
     snapshot() {
         return {
             bids: this.serialize(this.bids),
-            asks: this.serializeAsks()
+            asks: this.serializeAsks(),
         };
     }
 }

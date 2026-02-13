@@ -2,6 +2,7 @@ import { createConsumer } from "@repo/kafka/src/consumer";
 import prisma from "@repo/db";
 import Decimal from "decimal.js";
 import type { OrderEvent, TradeEvent } from "./types";
+import redisclient from "@repo/redisclient";
 
 const settleExectuedTrades = async (trade: TradeEvent) => {
   try {
@@ -141,6 +142,7 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
     })
   } catch (error) {
     console.error('Error settling executed trade:', error);
+    throw error;
   }
 
 }
@@ -207,6 +209,7 @@ const settleUpdatedOrders = async (order: OrderEvent) => {
 
   } catch (error) {
     console.error('Error updating order:', error);
+    throw error;
   }
 
 }
@@ -282,9 +285,8 @@ const settleCancelledOrders = async (order: OrderEvent) => {
         data: {
           amount: odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity,
           direction: "CREDIT",
-          userId: odr.userId,
-          asset: refundAsset,
-          entryType: "REFUND",
+          balanceType: "AVAILABLE",
+          entryType: "TRADE_UNLOCK",
           metadata: "ORDER_CANCELLED",
           referenceId: order.orderId,
           balanceBefore : wallet.available,
@@ -307,6 +309,7 @@ const settleCancelledOrders = async (order: OrderEvent) => {
     console.log('order cancelled successfully in db');
   } catch (error) {
     console.error('Error cancelling order:', error);
+    throw error;
   }
 }
 
@@ -359,6 +362,7 @@ const settleOpenedOrders = async (order: OrderEvent) => {
     console.log('order settled successfully in db');
   } catch (error) {
     console.error('Error settling opened order:', error);
+    throw error;
   }
 }
 
@@ -425,14 +429,13 @@ const settleExpiredOrders = async (order: OrderEvent) => {
       await tx.walletLedger.create({
         data: {
           amount: refundAmount,
-          asset: refundAsset,
           walletId: wallet.id,
           balanceAfter: wallet.available.plus(refundAmount),
-          entryType: "REFUND",
+          entryType: "TRADE_UNLOCK",
           direction: "CREDIT",
+          balanceType: "AVAILABLE",
           balanceBefore: wallet.available,
           referenceType: "ORDER",
-          userId,
           metadata : "ORDER_EXPIRED"
         }
       })
@@ -442,6 +445,7 @@ const settleExpiredOrders = async (order: OrderEvent) => {
     console.log('order expired & refunded successfully in db');
   } catch (error) {
     console.error('Error settling expired order:', error);
+    throw error;
   }
 }
 
@@ -458,13 +462,22 @@ async function main() {
   await consumer.subscribe({ topic: "orders.expired" })
 
   await consumer.run({
-    eachMessage: async ({ message }) => {
+    eachMessage: async ({ message, topic, partition }) => {
       if (!message.value) {
         console.log('No message value');
         return;
       }
       try {
         const event = JSON.parse(message.value.toString());
+
+        const key = `settled:${event.eventId}`;
+
+        const isProcessed = await redisclient.get(key);
+
+        if(isProcessed) {
+          console.log("Event Already Processed", event.eventId);
+          return;
+        }
 
         console.log('Received message:', event);
         switch (event.event) {
@@ -485,6 +498,14 @@ async function main() {
             break;
         }
 
+        await consumer.commitOffsets([{
+          offset : (Number(message.offset) + 1).toString(),
+          partition,
+          topic
+        }])
+
+        await redisclient.set(key, "1", "EX", 60 * 60 * 24) // 24 hours
+
       } catch (error) {
         console.error(error);
       }
@@ -493,5 +514,8 @@ async function main() {
 
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
 

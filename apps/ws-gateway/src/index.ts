@@ -4,12 +4,12 @@ import { IncomingMessage } from 'http';
 import { createConsumer } from "@repo/kafka/src/consumer";
 import { OrderbookView } from "./orderbook/OrderbookView";
 import redisclient from "@repo/redisclient"
-import { SUPPORTED_MARKETS } from "@repo/common";
 
 const wss = new WebSocketServer({
     port: 8082,
     perMessageDeflate: false
 });
+
 
 const books = new Map<string, OrderbookView>();
 const orderbookClients = new Map<string, Set<WebSocket>>();
@@ -42,16 +42,50 @@ function handleCandle(data: any) {
     }
 }
 
+const restoreAllBooks = async () => {
+    let cursor = "0";
+
+    do {
+        const [nextCursor, keys] = await redisclient.scan(
+            cursor,
+            "MATCH",
+            "snapshot:*",
+            "COUNT",
+            100
+        );
+
+        cursor = nextCursor;
+
+        for (const key of keys) {
+            const pair = key.split(":")[1];
+            if (!pair) continue;
+
+            const raw = await redisclient.get(key);
+            if (!raw) continue;
+
+            const snapshot = JSON.parse(raw);
+            const book = getBook(pair);
+            book?.restoreOrderbook(snapshot);
+        }
+    } while (cursor !== "0");
+
+}
+
 const redisSubscriber = redisclient.duplicate();
 
-let consumer: any = null;
+let consumer: ReturnType<typeof createConsumer>;
 
 async function initializeKafka() {
     try {
+        await restoreAllBooks();
+
         consumer = createConsumer("ws-gateway-service");
 
-        consumer.on("consumer.crash", (e: any) => {
+        consumer.on("consumer.crash", async (e: any) => {
             console.error("Kafka consumer crashed, attempting restart...", e);
+            try {
+                await consumer.disconnect();
+            } catch { }
             setTimeout(initializeKafka, 5000);
         });
 
@@ -78,8 +112,9 @@ async function initializeKafka() {
         });
 
         await consumer.run({
-            eachMessage: async ({ message }: any) => {
+            eachMessage: async ({ message, partition, topic }) => {
                 try {
+                    if (!message.value) return;
                     const event = JSON.parse(message.value.toString());
 
                     if (!event.pair) {
@@ -87,21 +122,32 @@ async function initializeKafka() {
                         return;
                     }
 
+                    const key = `ws-gateway:${event.eventId}`;
+
+                    const isAlreadyProcessed = await redisclient.get(key);
+
+                    if (isAlreadyProcessed) {
+                        console.log("Event Already Processed", event.eventId);
+                        return;
+                    }
+
                     const book = getBook(event.pair);
 
                     if (event.event === "ORDER_OPENED") {
                         book?.applyOrderOpened(event);
+                        const snapshot = book?.snapshot();
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
                             pair: event.pair,
-                            bids: book?.snapshot().bids || [],
-                            asks: book?.snapshot().asks || [],
+                            bids: snapshot?.bids || [],
+                            asks: snapshot?.asks || [],
                             timestamp: Date.now()
                         }));
                     }
 
                     if (event.event === "TRADE_EXECUTED") {
                         book?.applyTrade(event);
+                        const snapshot = book?.snapshot();
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "TRADE_EXECUTED",
                             pair: event.pair,
@@ -111,23 +157,33 @@ async function initializeKafka() {
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
                             pair: event.pair,
-                            bids: book?.snapshot().bids || [],
-                            asks: book?.snapshot().asks || [],
+                            bids: snapshot?.bids || [],
+                            asks: snapshot?.asks || [],
                             timestamp: Date.now()
                         }));
                     }
 
                     if (event.event === "ORDER_CANCELED") {
                         book?.applyOrderCancel(event);
+                        const snapshot = book?.snapshot();
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
                             pair: event.pair,
-                            bids: book?.snapshot().bids || [],
-                            asks: book?.snapshot().asks || [],
+                            bids: snapshot?.bids || [],
+                            asks: snapshot?.asks || [],
                             timestamp: Date.now()
                         }));
                     }
 
+                    await redisclient.set(key, "1", "EX", 60 * 60);
+
+                    await consumer.commitOffsets([
+                        {
+                            offset: (Number(message.offset) + 1).toString(),
+                            partition,
+                            topic
+                        }
+                    ])
                 } catch (error) {
                     console.error("Error processing Kafka message:", error);
                 }
@@ -214,34 +270,8 @@ function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
     }
 }
 
-const restoreAllBooks = async () => {
-    const keys = await redisclient.keys("snapshot:*");
-    console.log("Restoring books", keys);
-
-    for (const key of keys) {
-        const pair = key.split(":")[1];
-        console.log("Restoring book for pair", pair);
-
-        if (!pair) continue;
-
-        const raw = await redisclient.get(key);
-        console.log("Raw snapshot", raw);
-        if (!raw) continue;
-
-        const snapshot = JSON.parse(raw);
-        console.log("Snapshot", snapshot);
-
-        const book = getBook(pair);
-
-        if (!book) continue;
-
-        book.restoreOrderbok(snapshot);
-    }
-
-}
 
 wss.on("connection", async (ws, req) => {
-    await restoreAllBooks();
     const pair = getPairFromQuery(req);
 
     if (!pair) {

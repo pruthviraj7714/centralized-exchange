@@ -69,8 +69,6 @@ class Orderbook {
         let bestPrice: Decimal | null = null;
         let bestQueue: OrderQueue | null = null;
 
-        console.log(this.asks)
-
         for (const [priceStr, queue] of this.asks.entries()) {
             if (queue.isEmpty()) continue;
 
@@ -134,7 +132,6 @@ class Orderbook {
         if (!snapshot) return;
 
         if (!Array.isArray(snapshot.bids) || !Array.isArray(snapshot.asks)) {
-            console.log(snapshot)
             console.warn("Invalid snapshot format");
             return;
         }

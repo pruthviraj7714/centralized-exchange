@@ -2,9 +2,7 @@ import Decimal from "decimal.js";
 import type { EngineOrder, OrderEvent, Trade } from "./types";
 import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
-import { MatchEngine, OrderQueue } from "@repo/matching-engine-core";
-
-await producer.connect();
+import { MatchEngine } from "@repo/matching-engine-core";
 
 interface OrderbookData {
   engine: MatchEngine;
@@ -35,6 +33,7 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
 const sendTradeToKafka = async (trade: Trade) => {
   const event = {
     ...trade,
+    eventId : crypto.randomUUID(),
     event: "TRADE_EXECUTED",
     executedAt: Date.now(),
   }
@@ -54,6 +53,7 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_UPDATED",
     orderId: order.id,
+    eventId : crypto.randomUUID(),
     pair: order.pair,
     userId: order.userId,
     price: order.price,
@@ -79,6 +79,7 @@ const sendCanceledOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_CANCELED",
     orderId: order.id,
+    eventId : crypto.randomUUID(),
     pair: order.pair,
     userId: order.userId,
     price: order.price,
@@ -104,6 +105,7 @@ const sendOpenedOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_OPENED",
     orderId: order.id,
+    eventId : crypto.randomUUID(),
     pair: order.pair,
     userId: order.userId,
     price: order.price,
