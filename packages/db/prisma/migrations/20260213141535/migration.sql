@@ -5,10 +5,19 @@ CREATE TYPE "SIDE" AS ENUM ('BUY', 'SELL');
 CREATE TYPE "ORDER_TYPE" AS ENUM ('LIMIT', 'MARKET');
 
 -- CreateEnum
-CREATE TYPE "ORDER_STATUS" AS ENUM ('PENDING', 'OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED');
+CREATE TYPE "ORDER_STATUS" AS ENUM ('PENDING', 'EXPIRED', 'OPEN', 'PARTIALLY_FILLED', 'FILLED', 'CANCELLED');
 
 -- CreateEnum
-CREATE TYPE "LEDGER_TYPE" AS ENUM ('DEPOSIT', 'WITHDRAW', 'TRADE_DEBIT', 'TRADE_CREDIT', 'FEE', 'REFUND');
+CREATE TYPE "BALANCE_TYPE" AS ENUM ('AVAILABLE', 'LOCKED');
+
+-- CreateEnum
+CREATE TYPE "LEDGER_DIRECTION" AS ENUM ('CREDIT', 'DEBIT');
+
+-- CreateEnum
+CREATE TYPE "LEDGER_ENTRY_TYPE" AS ENUM ('DEPOSIT', 'WITHDRAWAL', 'TRADE_LOCK', 'TRADE_UNLOCK', 'TRADE_EXECUTE', 'FEE', 'TRANSFER_IN', 'TRANSFER_OUT');
+
+-- CreateEnum
+CREATE TYPE "LEDGER_REFERENCE_TYPE" AS ENUM ('DEPOSIT', 'WITHDRAWAL', 'ORDER', 'TRADE', 'FEE', 'TRANSFER');
 
 -- CreateTable
 CREATE TABLE "User" (
@@ -23,10 +32,16 @@ CREATE TABLE "User" (
 CREATE TABLE "WalletLedger" (
     "id" TEXT NOT NULL,
     "walletId" TEXT NOT NULL,
-    "type" "LEDGER_TYPE" NOT NULL,
+    "entryType" "LEDGER_ENTRY_TYPE" NOT NULL,
     "amount" DECIMAL(36,18) NOT NULL,
+    "direction" "LEDGER_DIRECTION" NOT NULL,
+    "balanceType" "BALANCE_TYPE" NOT NULL,
+    "balanceBefore" DECIMAL(36,18) NOT NULL,
     "balanceAfter" DECIMAL(36,18) NOT NULL,
+    "referenceType" "LEDGER_REFERENCE_TYPE" NOT NULL,
     "referenceId" TEXT,
+    "idempotencyKey" TEXT,
+    "metadata" JSONB,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "WalletLedger_pkey" PRIMARY KEY ("id")
@@ -136,7 +151,13 @@ CREATE TABLE "FeeAccount" (
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "WalletLedger_idempotencyKey_key" ON "WalletLedger"("idempotencyKey");
+
+-- CreateIndex
 CREATE INDEX "WalletLedger_walletId_createdAt_idx" ON "WalletLedger"("walletId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "WalletLedger_referenceId_idx" ON "WalletLedger"("referenceId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Wallet_userId_asset_key" ON "Wallet"("userId", "asset");

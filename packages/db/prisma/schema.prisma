@@ -17,7 +17,6 @@ model User {
   id        String   @id @default(uuid())
   email     String   @unique
   createdAt DateTime @default(now())
-  walletLedgers WalletLedger[]
 
   wallets       Wallet[]
   orders        Order[]
@@ -27,32 +26,32 @@ model User {
 
 model WalletLedger {
   id        String   @id @default(uuid())
-
-  userId    String
+  
   walletId  String
-  asset     String
-
+  
   entryType LEDGER_ENTRY_TYPE
-  amount    Decimal  @db.Decimal(36, 18)  // always positive
-  direction LEDGER_DIRECTION
-
+  amount    Decimal  @db.Decimal(36, 18)
+  direction LEDGER_DIRECTION  // CREDIT or DEBIT
+  
+  // CRITICAL: Which balance was affected
+  balanceType BALANCE_TYPE  // AVAILABLE or LOCKED
+  
+  // Snapshots for audit and reconciliation
   balanceBefore Decimal @db.Decimal(36, 18)
   balanceAfter  Decimal @db.Decimal(36, 18)
-
+  
   referenceType LEDGER_REFERENCE_TYPE
-  referenceId   String?  // tradeId, orderId, withdrawalId, etc
-
+  referenceId   String?
+  
   idempotencyKey String? @unique
-
+  
   metadata Json?
-
+  
   createdAt DateTime @default(now())
-
+  
   wallet Wallet @relation(fields: [walletId], references: [id])
-  user   User   @relation(fields: [userId], references: [id])
-
+  
   @@index([walletId, createdAt])
-  @@index([userId, createdAt])
   @@index([referenceId])
 }
 
@@ -137,7 +136,6 @@ model Market {
   open24h Decimal? @db.Decimal(38, 18)
 
   volume24h      Decimal? @db.Decimal(38, 18) // base asset
-  quoteVolume24h Decimal? @db.Decimal(38, 18)
 
   change24h   Decimal? @db.Decimal(10, 6) // percentage
   priceChange Decimal? @db.Decimal(38, 18)
@@ -203,26 +201,32 @@ enum ORDER_STATUS {
   CANCELLED
 }
 
+enum BALANCE_TYPE {
+  AVAILABLE
+  LOCKED
+}
+
 enum LEDGER_DIRECTION {
-  CREDIT
-  DEBIT
+  CREDIT  // Increases balance
+  DEBIT   // Decreases balance
 }
 
 enum LEDGER_ENTRY_TYPE {
   DEPOSIT
   WITHDRAWAL
-  TRADE_EXECUTION
-  TRADE_FEE
-  ORDER_LOCK
-  ORDER_UNLOCK
-  REFUND
-  ADJUSTMENT
+  TRADE_LOCK      // Lock funds for order
+  TRADE_UNLOCK    // Release locked funds
+  TRADE_EXECUTE   // Execute trade
+  FEE
+  TRANSFER_IN
+  TRANSFER_OUT
 }
 
 enum LEDGER_REFERENCE_TYPE {
-  TRADE
-  ORDER
-  WITHDRAWAL
   DEPOSIT
-  SYSTEM
+  WITHDRAWAL
+  ORDER
+  TRADE
+  FEE
+  TRANSFER
 }

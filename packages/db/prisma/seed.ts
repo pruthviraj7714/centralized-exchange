@@ -31,7 +31,6 @@ async function main() {
       low24h: new Decimal(largeNumber()),
       open24h: new Decimal(largeNumber()),
       volume24h: new Decimal(largeNumber()),
-      quoteVolume24h: new Decimal(largeNumber()),
       change24h: new Decimal(smallNumber()),
       priceChange: new Decimal(smallNumber()),
       marketCap: new Decimal(largeNumber()),
