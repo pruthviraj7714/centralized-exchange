@@ -139,6 +139,7 @@ const verifyOTPController = async (req: Request, res: Response) => {
       res.status(200).json({
         message: "successfully verified otp",
         jwt,
+        email : user.email,
         id : user.id,
         success: true,
       });

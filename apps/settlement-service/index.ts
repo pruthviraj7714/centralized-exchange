@@ -285,6 +285,8 @@ const settleCancelledOrders = async (order: OrderEvent) => {
         data: {
           amount: odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity,
           direction: "CREDIT",
+          asset: refundAsset,
+          userId: odr.userId,
           balanceType: "AVAILABLE",
           entryType: "TRADE_UNLOCK",
           metadata: "ORDER_CANCELLED",
@@ -430,6 +432,8 @@ const settleExpiredOrders = async (order: OrderEvent) => {
         data: {
           amount: refundAmount,
           walletId: wallet.id,
+          asset: refundAsset,
+          userId: userId,
           balanceAfter: wallet.available.plus(refundAmount),
           entryType: "TRADE_UNLOCK",
           direction: "CREDIT",

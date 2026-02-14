@@ -109,6 +109,8 @@ const depositFunds = async (req: Request, res: Response) => {
             await tx.walletLedger.create({
                 data: {
                     amount,
+                    asset,
+                    userId,
                     entryType: "DEPOSIT",
                     balanceType: "AVAILABLE",
                     direction: "CREDIT",
@@ -143,24 +145,18 @@ const fetchWalletTransactions = async (req: Request, res: Response) => {
 
         const ledgers = await prisma.walletLedger.findMany({
             where: {
-                wallet: {
-                    userId
-                }
+                userId
             },
             orderBy: {
-                createdAt: "desc"
+                sequence: "desc"
             },
-            include: {
-                wallet: {
-                    select: {
-                        userId: true
-                    }
-                }
-            }
         })
 
         res.status(200).json({
-            ledgers
+            ledgers : ledgers.map(l => ({
+                ...l,
+                sequence : l.sequence.toString()
+            }))
         })
     } catch (error) {
         console.log(error);
