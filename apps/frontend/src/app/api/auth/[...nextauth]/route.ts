@@ -28,6 +28,7 @@ const authOptions: AuthOptions = {
         return {
           id: data.id,
           token: data.jwt,
+          email: data.email,
         };
       },
     }),
@@ -37,6 +38,7 @@ const authOptions: AuthOptions = {
       if (user) {
         token.accessToken = user.token;
         token.id = user.id
+        token.email = user.email as string
       }
       return token;
     },
@@ -44,6 +46,7 @@ const authOptions: AuthOptions = {
       session.user = {
         ...session.user,
         id: token.id as string,
+        email: token.email as string,
       };
       (session as any).accessToken = token.accessToken;
       return session;

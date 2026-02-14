@@ -126,6 +126,10 @@ export const TOKEN_METADATA = {
   },
 } as const;
 
+export const TOKEN_LOGOS = Object.fromEntries(
+  Object.entries(TOKEN_METADATA).map(([symbol, metadata]) => [symbol, metadata.logo])
+);
+
 export const SEED_MARKETS = [
   {
     ticker: "BTC-USDC",

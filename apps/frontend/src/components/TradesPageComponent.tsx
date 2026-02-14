@@ -25,6 +25,7 @@ import MarketChart from "./MarketChart";
 import { ChartInterval, ICandle } from "@/types/chart";
 import { LoadingSkeleton } from "./LoadingSkeleton";
 import { ErrorState } from "./ErrorState";
+import { useRouter } from "next/navigation";
 
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
@@ -43,6 +44,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [bottomTab, setBottomTab] = useState<BottomTab>("OPEN_ORDERS");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mergedCandles, setMergedCandles] = useState<ICandle[]>([]);
+  const router = useRouter();
 
   const [baseAsset, quoteAsset] = ticker.split("-");
   const {
@@ -357,16 +359,21 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const maxAskDepth = Math.max(...asks.map((a) => a.total.toNumber()));
   const maxDepth = Math.max(maxBidDepth, maxAskDepth);
   const livePrice =
-  updatedMarketData?.lastPrice ??
-  marketData?.price?.toString() ??
-  "0";
+    updatedMarketData?.lastPrice ?? marketData?.price?.toString() ?? "0";
 
   if (marketDataLoading) {
-    return <LoadingSkeleton />;
+    return <LoadingSkeleton pageType="market" />;
   }
 
   if (marketDataError) {
-    return <ErrorState />;
+    return (
+      <ErrorState
+        pageType="market"
+        onRetry={() => {
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (

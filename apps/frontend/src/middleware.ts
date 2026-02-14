@@ -6,7 +6,7 @@ export default withAuth(
     const { pathname } = req.nextUrl;
     const token = req.nextauth.token?.accessToken;
 
-    if (token && (pathname === "/" || pathname.startsWith("/auth"))) {
+    if (token && (pathname === "/")) {
       return NextResponse.redirect(new URL("/dashboard", req.url));
     }
 
@@ -35,7 +35,6 @@ export const config = {
     "/", 
     "/portfolio", 
     "/wallet", 
-    "/auth/:path*", 
     "/assets", 
     "/trade/:path*", 
     "/dashboard/:path*",

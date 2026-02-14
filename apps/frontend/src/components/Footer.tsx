@@ -75,7 +75,7 @@ export const Footer = () => {
   
           <div className="flex flex-col md:flex-row items-center justify-between gap-6">
             <p className="text-slate-500 text-sm">
-              © 2025 Exchange. All rights reserved.
+              © {new Date().getFullYear()} Exchange. All rights reserved.
             </p>
   
             <div className="flex items-center gap-6">

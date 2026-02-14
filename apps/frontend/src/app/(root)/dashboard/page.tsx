@@ -1,35 +1,48 @@
 "use client";
 import { useState, useEffect } from "react";
-import { TrendingUp, Sparkles, Star, Search, ArrowUpDown, ChevronDown, Filter } from "lucide-react";
+import {
+  TrendingUp,
+  Sparkles,
+  Star,
+  Search,
+  ArrowUpDown,
+  ChevronDown,
+  Filter,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Decimal } from "decimal.js";
 import { useQuery } from "@tanstack/react-query";
 import { fetchMarkets } from "@/lib/api/market.api";
 import { IMarketData } from "@/types/market";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { ErrorState } from "@/components/ErrorState";
 
 export default function MarketDashboard() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<"name" | "price" | "change24h" | "marketCap">("marketCap");
+  const [sortBy, setSortBy] = useState<
+    "name" | "price" | "change24h" | "marketCap"
+  >("marketCap");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [filteredData, setFilteredData] = useState<IMarketData[]>([]);
   const router = useRouter();
-  const { data, isLoading, isError } = useQuery<{markets : IMarketData[]}>({
-    queryFn : () => fetchMarkets(),
-    queryKey : ["markets"],
-  })
+  const { data, isLoading, isError } = useQuery<{ markets: IMarketData[] }>({
+    queryFn: () => fetchMarkets(),
+    queryKey: ["markets"],
+  });
 
   useEffect(() => {
-    if(!data || isLoading || isError){
+    if (!data || isLoading || isError) {
       return;
     }
-    let filtered = data.markets.filter(coin =>
-      coin.baseAsset.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      coin.symbol.toLowerCase().includes(searchTerm.toLowerCase())
+    let filtered = data.markets.filter(
+      (coin) =>
+        coin.baseAsset.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        coin.symbol.toLowerCase().includes(searchTerm.toLowerCase()),
     );
 
     filtered.sort((a, b) => {
       let aVal: any, bVal: any;
-      
+
       switch (sortBy) {
         case "name":
           aVal = a.baseAsset;
@@ -70,17 +83,26 @@ export default function MarketDashboard() {
 
   const formatNumber = (num: string | null) => {
     if (num == null) return "-";
-    if (Decimal(num).gte(1_000_000_000)) return `$${Decimal(num).div(1_000_000_000).toFixed(2)}B`;
-    if (Decimal(num).gte(1_000_000)) return `$${Decimal(num).div(1_000_000).toFixed(2)}M`;
-    if (Decimal(num).gte(1_000)) return `$${Decimal(num).div(1_000).toFixed(2)}K`;
+    if (Decimal(num).gte(1_000_000_000))
+      return `$${Decimal(num).div(1_000_000_000).toFixed(2)}B`;
+    if (Decimal(num).gte(1_000_000))
+      return `$${Decimal(num).div(1_000_000).toFixed(2)}M`;
+    if (Decimal(num).gte(1_000))
+      return `$${Decimal(num).div(1_000).toFixed(2)}K`;
     return `$${Decimal(num).toFixed(2)}`;
   };
 
-  const Sparkline = ({ data, isPositive }: { data: string[]; isPositive: boolean }) => {
+  const Sparkline = ({
+    data,
+    isPositive,
+  }: {
+    data: string[];
+    isPositive: boolean;
+  }) => {
     if (!data || data.length === 0) return <div className="w-20 h-8" />;
 
-    const max = Math.max(...data.map(d => Decimal(d).toNumber()));
-    const min = Math.min(...data.map(d => Decimal(d).toNumber()));
+    const max = Math.max(...data.map((d) => Decimal(d).toNumber()));
+    const min = Math.min(...data.map((d) => Decimal(d).toNumber()));
     const range = max - min || 1;
 
     const points = data
@@ -94,14 +116,28 @@ export default function MarketDashboard() {
     return (
       <svg width="80" height="32" className="inline-block">
         <defs>
-          <linearGradient id={`gradient-${isPositive ? 'up' : 'down'}`} x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={isPositive ? "#10b981" : "#ef4444"} stopOpacity="0" />
+          <linearGradient
+            id={`gradient-${isPositive ? "up" : "down"}`}
+            x1="0%"
+            y1="0%"
+            x2="0%"
+            y2="100%"
+          >
+            <stop
+              offset="0%"
+              stopColor={isPositive ? "#10b981" : "#ef4444"}
+              stopOpacity="0.3"
+            />
+            <stop
+              offset="100%"
+              stopColor={isPositive ? "#10b981" : "#ef4444"}
+              stopOpacity="0"
+            />
           </linearGradient>
         </defs>
         <polyline
           points={`0,32 ${points} 80,32`}
-          fill={`url(#gradient-${isPositive ? 'up' : 'down'})`}
+          fill={`url(#gradient-${isPositive ? "up" : "down"})`}
         />
         <polyline
           points={points}
@@ -115,21 +151,36 @@ export default function MarketDashboard() {
   };
 
   const getNewCoins = () => {
-    return [...data?.markets || []]
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    return [...(data?.markets || [])]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )
       .slice(0, 5);
   };
 
   const getTopGainers = () => {
-    return [...data?.markets || []]
-      .filter(coin => coin.change24h !== null && Decimal(coin.change24h || "0").toNumber() > 0)
-      .sort((a, b) => (Decimal(b.change24h || "0").toNumber() - Decimal(a.change24h || "0").toNumber()))
+    return [...(data?.markets || [])]
+      .filter(
+        (coin) =>
+          coin.change24h !== null &&
+          Decimal(coin.change24h || "0").toNumber() > 0,
+      )
+      .sort(
+        (a, b) =>
+          Decimal(b.change24h || "0").toNumber() -
+          Decimal(a.change24h || "0").toNumber(),
+      )
       .slice(0, 5);
   };
 
   const getPopular = () => {
-    return [...data?.markets || []]
-      .sort((a, b) => (Decimal(b.marketCap || "0").toNumber() - Decimal(a.marketCap || "0").toNumber()))
+    return [...(data?.markets || [])]
+      .sort(
+        (a, b) =>
+          Decimal(b.marketCap || "0").toNumber() -
+          Decimal(a.marketCap || "0").toNumber(),
+      )
       .slice(0, 5);
   };
 
@@ -154,13 +205,23 @@ export default function MarketDashboard() {
         </div>
       </div>
       <div className="text-right ml-2">
-        <div className="text-white font-semibold text-sm">{formatPrice(coin.price)}</div>
+        <div className="text-white font-semibold text-sm">
+          {formatPrice(coin.price)}
+        </div>
         <div
           className={`text-xs font-medium ${
-            coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0 ? "text-emerald-400" : "text-red-400"
+            coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0
+              ? "text-emerald-400"
+              : "text-red-400"
           }`}
         >
-          {coin.change24h != null ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber().toFixed(2)}%` : "-"}
+          {coin.change24h != null
+            ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(
+                coin.change24h || "0",
+              )
+                .toNumber()
+                .toFixed(2)}%`
+            : "-"}
         </div>
       </div>
     </div>
@@ -175,12 +236,19 @@ export default function MarketDashboard() {
     }
   };
 
-  if(isLoading){
-    return <div>Loading...</div>
+  if (isLoading) {
+    return <LoadingSkeleton pageType="dashboard" />;
   }
 
-  if(isError){
-    return <div>Error</div>
+  if (isError) {
+    return (
+      <ErrorState
+        pageType="dashboard"
+        onRetry={() => {
+          router.refresh();
+        }}
+      />
+    );
   }
 
   return (
@@ -190,7 +258,9 @@ export default function MarketDashboard() {
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
             Markets
           </h1>
-          <p className="text-slate-400">Trade cryptocurrencies with zero fees and instant execution</p>
+          <p className="text-slate-400">
+            Trade cryptocurrencies with zero fees and instant execution
+          </p>
         </div>
       </div>
 
@@ -204,9 +274,12 @@ export default function MarketDashboard() {
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
                   ZERO FEES
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Got USDC?</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Got USDC?
+                </h2>
                 <p className="text-slate-300 text-sm mb-4">
-                  Convert to USD instantly and start trading with no hidden charges
+                  Convert to USD instantly and start trading with no hidden
+                  charges
                 </p>
                 <button className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-emerald-500/30 hover:shadow-emerald-500/50">
                   Trade USDC Now
@@ -226,11 +299,16 @@ export default function MarketDashboard() {
                   <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
                   PORTFOLIO
                 </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Manage Assets</h2>
+                <h2 className="text-2xl font-bold text-white mb-2">
+                  Manage Assets
+                </h2>
                 <p className="text-slate-300 text-sm mb-4">
                   Track your portfolio and buy crypto instantly with one click
                 </p>
-                <button onClick={() => router.push('/portfolio')} className="px-6 py-2.5 cursor-pointer bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50">
+                <button
+                  onClick={() => router.push("/portfolio")}
+                  className="px-6 py-2.5 cursor-pointer bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-all shadow-lg shadow-purple-500/30 hover:shadow-purple-500/50"
+                >
                   View Portfolio
                 </button>
               </div>
@@ -295,7 +373,7 @@ export default function MarketDashboard() {
           <div className="p-6 border-b border-slate-800/50 bg-slate-900/50">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <h2 className="text-2xl font-bold text-white">All Markets</h2>
-              
+
               <div className="flex items-center gap-3">
                 <div className="relative flex-1 sm:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -334,7 +412,9 @@ export default function MarketDashboard() {
                     </button>
                   </th>
                   <th className="px-6 py-4 text-right">
-                    <span className="text-sm font-semibold text-slate-400">24h Volume</span>
+                    <span className="text-sm font-semibold text-slate-400">
+                      24h Volume
+                    </span>
                   </th>
                   <th className="px-6 py-4 text-right">
                     <button
@@ -355,7 +435,9 @@ export default function MarketDashboard() {
                     </button>
                   </th>
                   <th className="px-6 py-4 text-right">
-                    <span className="text-sm font-semibold text-slate-400">Last 7 Days</span>
+                    <span className="text-sm font-semibold text-slate-400">
+                      Last 7 Days
+                    </span>
                   </th>
                   <th className="px-6 py-4"></th>
                 </tr>
@@ -378,34 +460,52 @@ export default function MarketDashboard() {
                           <div className="font-semibold text-white group-hover:text-emerald-400 transition-colors">
                             {coin.baseAsset}
                           </div>
-                          <div className="text-sm text-slate-500">{coin.symbol}</div>
+                          <div className="text-sm text-slate-500">
+                            {coin.symbol}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-white font-semibold">{formatPrice(coin.price)}</span>
+                      <span className="text-white font-semibold">
+                        {formatPrice(coin.price)}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-slate-300">{formatNumber(coin.volume24h)}</span>
+                      <span className="text-slate-300">
+                        {formatNumber(coin.volume24h)}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <span className="text-slate-300">{formatNumber(coin.marketCap)}</span>
+                      <span className="text-slate-300">
+                        {formatNumber(coin.marketCap)}
+                      </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <span
                         className={`font-semibold ${
-                          coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0 ? "text-emerald-400" : "text-red-400"
+                          coin.change24h &&
+                          Decimal(coin.change24h || "0").toNumber() >= 0
+                            ? "text-emerald-400"
+                            : "text-red-400"
                         }`}
                       >
                         {coin.change24h != null
-                          ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber().toFixed(2)}%`
+                          ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(
+                              coin.change24h || "0",
+                            )
+                              .toNumber()
+                              .toFixed(2)}%`
                           : "-"}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <Sparkline
                         data={coin.sparkline7d ?? []}
-                        isPositive={!!coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0}
+                        isPositive={
+                          !!coin.change24h &&
+                          Decimal(coin.change24h || "0").toNumber() >= 0
+                        }
                       />
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -434,19 +534,32 @@ export default function MarketDashboard() {
                       className="w-12 h-12 rounded-full border border-slate-700/50 object-contain bg-white p-1"
                     />
                     <div>
-                      <div className="font-semibold text-white">{coin.baseAsset}</div>
-                      <div className="text-sm text-slate-500">{coin.symbol}</div>
+                      <div className="font-semibold text-white">
+                        {coin.baseAsset}
+                      </div>
+                      <div className="text-sm text-slate-500">
+                        {coin.symbol}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-white font-semibold">{formatPrice(coin.price)}</div>
+                    <div className="text-white font-semibold">
+                      {formatPrice(coin.price)}
+                    </div>
                     <div
                       className={`text-sm font-semibold ${
-                        coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0 ? "text-emerald-400" : "text-red-400"
+                        coin.change24h &&
+                        Decimal(coin.change24h || "0").toNumber() >= 0
+                          ? "text-emerald-400"
+                          : "text-red-400"
                       }`}
                     >
                       {coin.change24h != null
-                        ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(coin.change24h || "0").toNumber().toFixed(2)}%`
+                        ? `${Decimal(coin.change24h || "0").toNumber() >= 0 ? "+" : ""}${Decimal(
+                            coin.change24h || "0",
+                          )
+                            .toNumber()
+                            .toFixed(2)}%`
                         : "-"}
                     </div>
                   </div>
@@ -454,16 +567,23 @@ export default function MarketDashboard() {
                 <div className="flex items-center justify-between text-sm">
                   <div>
                     <div className="text-slate-500 text-xs">Market Cap</div>
-                    <div className="text-slate-300">{formatNumber(coin.marketCap)}</div>
+                    <div className="text-slate-300">
+                      {formatNumber(coin.marketCap)}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-slate-500 text-xs">24h Volume</div>
-                    <div className="text-slate-300">{formatNumber(coin.volume24h)}</div>
+                    <div className="text-slate-300">
+                      {formatNumber(coin.volume24h)}
+                    </div>
                   </div>
                   <div>
                     <Sparkline
                       data={coin.sparkline7d ?? []}
-                      isPositive={!!coin.change24h && Decimal(coin.change24h || "0").toNumber() >= 0}
+                      isPositive={
+                        !!coin.change24h &&
+                        Decimal(coin.change24h || "0").toNumber() >= 0
+                      }
                     />
                   </div>
                 </div>
@@ -473,8 +593,12 @@ export default function MarketDashboard() {
 
           {filteredData.length === 0 && (
             <div className="p-12 text-center">
-              <div className="text-slate-500 text-lg mb-2">No markets found</div>
-              <p className="text-slate-600 text-sm">Try adjusting your search terms</p>
+              <div className="text-slate-500 text-lg mb-2">
+                No markets found
+              </div>
+              <p className="text-slate-600 text-sm">
+                Try adjusting your search terms
+              </p>
             </div>
           )}
         </div>

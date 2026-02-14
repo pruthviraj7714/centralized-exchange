@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+ @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Geist+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -120,3 +122,155 @@
     @apply bg-background text-foreground;
   }
 }
+
+
+  html { font-family: 'DM Sans', sans-serif; }
+
+  @keyframes fadeUp   { from { opacity:0; transform:translateY(28px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+  @keyframes shimmer  { 0%,100% { background-position:0% 50%; } 50% { background-position:100% 50%; } }
+  @keyframes ticker   { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+  @keyframes pulseGlow{ 0%,100%{ opacity:.7; transform:scale(1);   } 50%{ opacity:1; transform:scale(1.08); } }
+  @keyframes floatY   { 0%,100%{ transform:translateY(0px);  } 50%{ transform:translateY(-14px); } }
+  @keyframes scanline { from{ transform:translateY(-100%); } to{ transform:translateY(400%); } }
+  @keyframes barRise  { from{ transform:scaleY(0); transform-origin:bottom; } to{ transform:scaleY(1); } }
+  @keyframes borderPulse { 0%,100%{ border-color:rgba(16,185,129,.18); } 50%{ border-color:rgba(16,185,129,.55); } }
+
+  .font-syne   { font-family:'Syne', sans-serif !important; }
+  .font-mono-g { font-family:'Geist Mono', monospace !important; }
+
+  .anim-fadeUp-0  { animation: fadeUp .65s ease both; }
+  .anim-fadeUp-1  { animation: fadeUp .65s .12s ease both; }
+  .anim-fadeUp-2  { animation: fadeUp .65s .24s ease both; }
+  .anim-fadeUp-3  { animation: fadeUp .65s .36s ease both; }
+  .anim-fadeIn-4  { animation: fadeIn  .8s .5s  ease both; }
+
+  .gradient-text {
+    background: linear-gradient(90deg, #34d399, #60a5fa, #34d399);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 4s ease infinite;
+  }
+
+  .ticker-track { animation: ticker 30s linear infinite; }
+  .ticker-track:hover { animation-play-state: paused; }
+
+  .card-hover {
+    transition: transform .3s ease, border-color .3s ease, box-shadow .3s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 24px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(16,185,129,.2);
+  }
+
+  .glow-emerald { box-shadow: 0 0 40px rgba(16,185,129,.35); }
+  .glow-emerald:hover { box-shadow: 0 0 64px rgba(16,185,129,.55); }
+
+  .scanline::after {
+    content:'';
+    position:absolute; inset:0;
+    background: linear-gradient(transparent 50%, rgba(16,185,129,.025) 50%);
+    background-size: 100% 4px;
+    pointer-events:none;
+    border-radius: inherit;
+  }
+
+  .bar-anim { animation: barRise .6s ease both; }
+
+  .cta-border { animation: borderPulse 3s ease infinite; }
+
+  .float-card { animation: floatY 6s ease-in-out infinite; }
+
+  .noise-overlay {
+    position:absolute; inset:0; pointer-events:none; z-index:1;
+    opacity:.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 160px 160px;
+  }
+
+   @keyframes otpFadeUp {
+    from { opacity:0; transform:translateY(16px); }
+    to   { opacity:1; transform:translateY(0); }
+  }
+  @keyframes otpShake {
+    0%,100% { transform:translateX(0); }
+    15%     { transform:translateX(-6px); }
+    30%     { transform:translateX(6px); }
+    45%     { transform:translateX(-5px); }
+    60%     { transform:translateX(5px); }
+    75%     { transform:translateX(-3px); }
+    90%     { transform:translateX(3px); }
+  }
+  @keyframes otpPulseRing {
+    0%   { box-shadow: 0 0 0 0   rgba(16,185,129,.45); }
+    70%  { box-shadow: 0 0 0 10px rgba(16,185,129,0);  }
+    100% { box-shadow: 0 0 0 0   rgba(16,185,129,0);   }
+  }
+  @keyframes otpSuccessScale {
+    0%   { transform:scale(.85); opacity:0; }
+    60%  { transform:scale(1.08); }
+    100% { transform:scale(1);   opacity:1; }
+  }
+  @keyframes otpSpin {
+    from { transform:rotate(0deg);   }
+    to   { transform:rotate(360deg); }
+  }
+  @keyframes otpCountdown {
+    from { stroke-dashoffset: 0; }
+    to   { stroke-dashoffset: 100; }
+  }
+  @keyframes digitPop {
+    0%   { transform:scale(1); }
+    40%  { transform:scale(1.18); }
+    100% { transform:scale(1); }
+  }
+
+  .otp-font-syne  { font-family:'Syne', sans-serif !important; }
+  .otp-font-mono  { font-family:'Geist Mono', monospace !important; }
+  .otp-font-body  { font-family:'DM Sans', sans-serif !important; }
+
+  .otp-enter      { animation: otpFadeUp .5s ease both; }
+  .otp-enter-1    { animation: otpFadeUp .5s .08s ease both; }
+  .otp-enter-2    { animation: otpFadeUp .5s .16s ease both; }
+  .otp-enter-3    { animation: otpFadeUp .5s .24s ease both; }
+
+  .otp-shake      { animation: otpShake .5s ease; }
+
+  .otp-digit-filled { animation: digitPop .2s ease; }
+
+  .otp-verify-spin { animation: otpSpin .8s linear infinite; }
+
+  .otp-success-icon { animation: otpSuccessScale .4s cubic-bezier(.175,.885,.32,1.275) both; }
+
+  .otp-digit:focus {
+    outline: none;
+    border-color: rgba(16,185,129,.7) !important;
+    box-shadow: 0 0 0 3px rgba(16,185,129,.18), 0 0 20px rgba(16,185,129,.15) !important;
+  }
+  .otp-digit:not(:placeholder-shown) {
+    border-color: rgba(16,185,129,.4) !important;
+    background: rgba(16,185,129,.06) !important;
+  }
+
+  .otp-btn-primary {
+    background: linear-gradient(135deg, #10b981, #059669);
+    transition: transform .2s ease, box-shadow .2s ease, opacity .2s;
+  }
+  .otp-btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 0 40px rgba(16,185,129,.5), 0 8px 24px rgba(0,0,0,.4) !important;
+  }
+  .otp-btn-primary:active:not(:disabled) { transform:scale(.97); }
+  .otp-btn-primary:disabled { opacity:.45; cursor:not-allowed; }
+
+  .otp-resend-btn {
+    transition: color .2s, transform .2s;
+  }
+  .otp-resend-btn:not(:disabled):hover {
+    color:#34d399 !important;
+    transform: translateY(-1px);
+  }
+  .otp-resend-btn:disabled { opacity:.4; cursor:not-allowed; }

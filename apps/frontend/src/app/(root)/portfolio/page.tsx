@@ -21,6 +21,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchPortfolio } from "@/lib/api/user.api";
 import { depositAsset } from "@/lib/api/wallet.api";
 import { IBalance } from "@/types/wallet";
+import { LoadingSkeleton } from "@/components/LoadingSkeleton";
+import { ErrorState } from "@/components/ErrorState";
+import { useRouter } from "next/navigation";
 
 
 export default function PortfolioPage() {
@@ -28,7 +31,9 @@ export default function PortfolioPage() {
   const [amount, setAmount] = useState<Decimal>(new Decimal(0));
   const [activeTab, setActiveTab] = useState<"deposit" | "withdraw">("deposit");
   const [hideBalances, setHideBalances] = useState(false);
+  const router = useRouter();
   const { data, status } = useSession();
+  const isReady = status === "authenticated";
   const {
     data: portfolioData,
     isLoading: portfolioLoading,
@@ -36,7 +41,7 @@ export default function PortfolioPage() {
   } = useQuery<{ portfolio: IBalance[] }>({
     queryFn: () => fetchPortfolio(data?.accessToken!),
     queryKey: ["portfolio"],
-    enabled: !!data?.accessToken,
+    enabled: isReady,
   });
   const { mutateAsync } = useMutation({
     mutationFn : () => depositAsset(selectedAsset, amount, data?.accessToken!),
@@ -80,11 +85,13 @@ export default function PortfolioPage() {
   };
 
   if (portfolioLoading) {
-    return <div>Loading...</div>;
+    return <LoadingSkeleton pageType="portfolio" />;
   }
 
   if(portfolioError) {
-    return <div>Error while fetching portfolio</div>;
+    return <ErrorState pageType="portfolio" onRetry={() => {
+      router.refresh();
+    }} />;
   }
 
   const balances = normalizeBalances(portfolioData?.portfolio || []);
