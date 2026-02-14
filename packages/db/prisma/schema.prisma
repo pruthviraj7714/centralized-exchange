@@ -25,33 +25,38 @@ model User {
 }
 
 model WalletLedger {
-  id        String   @id @default(uuid())
-  
+  id String @id @default(uuid())
+
   walletId  String
-  
+  asset     String
+  userId    String
   entryType LEDGER_ENTRY_TYPE
-  amount    Decimal  @db.Decimal(36, 18)
-  direction LEDGER_DIRECTION  // CREDIT or DEBIT
-  
+  amount    Decimal           @db.Decimal(36, 18)
+  direction LEDGER_DIRECTION // CREDIT or DEBIT
+
   // CRITICAL: Which balance was affected
-  balanceType BALANCE_TYPE  // AVAILABLE or LOCKED
-  
+  balanceType BALANCE_TYPE // AVAILABLE or LOCKED
+
   // Snapshots for audit and reconciliation
   balanceBefore Decimal @db.Decimal(36, 18)
   balanceAfter  Decimal @db.Decimal(36, 18)
-  
+
   referenceType LEDGER_REFERENCE_TYPE
   referenceId   String?
-  
-  idempotencyKey String? @unique
-  
+
+  idempotencyKey String?
+
+  sequence BigInt @default(autoincrement())
+
   metadata Json?
-  
+
   createdAt DateTime @default(now())
-  
+
   wallet Wallet @relation(fields: [walletId], references: [id])
-  
+
+  @@unique([walletId, idempotencyKey])
   @@index([walletId, createdAt])
+  @@index([walletId, sequence])
   @@index([referenceId])
 }
 
@@ -63,8 +68,9 @@ model Wallet {
   available Decimal @db.Decimal(36, 18)
   locked    Decimal @db.Decimal(36, 18)
 
-  user   User           @relation(fields: [userId], references: [id])
-  ledger WalletLedger[]
+  user      User           @relation(fields: [userId], references: [id])
+  ledger    WalletLedger[]
+  updatedAt DateTime       @updatedAt
 
   @@unique([userId, asset])
 }
@@ -135,7 +141,7 @@ model Market {
   low24h  Decimal? @db.Decimal(38, 18)
   open24h Decimal? @db.Decimal(38, 18)
 
-  volume24h      Decimal? @db.Decimal(38, 18) // base asset
+  volume24h Decimal? @db.Decimal(38, 18) // base asset
 
   change24h   Decimal? @db.Decimal(10, 6) // percentage
   priceChange Decimal? @db.Decimal(38, 18)
@@ -160,20 +166,20 @@ model Market {
 }
 
 model Candle {
-  id          String @id @default(uuid())
-  market    String
-  interval    String
-  openTime    DateTime
-  closeTime   DateTime
-  open        Decimal @db.Decimal(38, 18)
-  high        Decimal @db.Decimal(38, 18)
-  low         Decimal @db.Decimal(38, 18)
-  close       Decimal @db.Decimal(38, 18)
-  volume      Decimal @db.Decimal(38, 18)
-  tradeCount Int     @default(0)
+  id         String   @id @default(uuid())
+  market     String
+  interval   String
+  openTime   DateTime
+  closeTime  DateTime
+  open       Decimal  @db.Decimal(38, 18)
+  high       Decimal  @db.Decimal(38, 18)
+  low        Decimal  @db.Decimal(38, 18)
+  close      Decimal  @db.Decimal(38, 18)
+  volume     Decimal  @db.Decimal(38, 18)
+  tradeCount Int      @default(0)
 
-  @@index([market,interval, openTime])
   @@unique([market, interval, openTime])
+  @@index([market, interval, openTime])
 }
 
 model FeeAccount {
@@ -207,16 +213,16 @@ enum BALANCE_TYPE {
 }
 
 enum LEDGER_DIRECTION {
-  CREDIT  // Increases balance
-  DEBIT   // Decreases balance
+  CREDIT // Increases balance
+  DEBIT // Decreases balance
 }
 
 enum LEDGER_ENTRY_TYPE {
   DEPOSIT
   WITHDRAWAL
-  TRADE_LOCK      // Lock funds for order
-  TRADE_UNLOCK    // Release locked funds
-  TRADE_EXECUTE   // Execute trade
+  TRADE_LOCK // Lock funds for order
+  TRADE_UNLOCK // Release locked funds
+  TRADE_EXECUTE // Execute trade
   FEE
   TRANSFER_IN
   TRANSFER_OUT
