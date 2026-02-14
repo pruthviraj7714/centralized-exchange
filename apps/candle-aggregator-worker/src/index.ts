@@ -33,70 +33,81 @@ async function initializeKafka() {
 }
 
 const processInterval = async (trade: ITradeEvent, interval: string, intervalMs: number) => {
-    const openTime = Math.floor(trade.timestamp / intervalMs) * intervalMs
-    const closeTime = openTime + intervalMs;
-
-    const key = `candle:${trade.pair}:${interval}:${openTime}`
-
-    const ttl = TTL_CONFIG[interval]
-
-    const existing = await redisclient.get(key);
-
-    const tradePrice = new Decimal(trade.price);
-    const tradeQty = new Decimal(trade.quantity)
-
-    if (!existing) {
-        const newCandle = {
-            openTime,
-            closeTime,
-            high: tradePrice.toString(),
-            open: tradePrice.toString(),
-            low: tradePrice.toString(),
-            close: tradePrice.toString(),
-            volume: tradeQty.toString(),
-            tradeCount: 1
+    try {
+        
+        const openTime = Math.floor(trade.timestamp / intervalMs) * intervalMs
+        const closeTime = openTime + intervalMs;
+    
+        const key = `candle:${trade.pair}:${interval}:${openTime}`
+    
+        const ttl = TTL_CONFIG[interval]
+    
+        const existing = await redisclient.get(key);
+    
+        const tradePrice = new Decimal(trade.price);
+        const tradeQty = new Decimal(trade.quantity)
+    
+        if (!existing) {
+            const newCandle = {
+                openTime,
+                closeTime,
+                high: tradePrice.toString(),
+                open: tradePrice.toString(),
+                low: tradePrice.toString(),
+                close: tradePrice.toString(),
+                volume: tradeQty.toString(),
+                tradeCount: 1
+            }
+            await redisclient.zadd(`candle:index:${trade.pair}:${interval}`, openTime, openTime.toString());
+            await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
+                type: "CANDLE_NEW",
+                pair: trade.pair,
+                interval,
+                candle: newCandle
+            }));
+            await redisclient.set(key, JSON.stringify(newCandle), "EX", Number(ttl));
+            return;
         }
-        await redisclient.zadd(`candle:index:${trade.pair}:${interval}`, openTime, openTime.toString());
+        const candle = JSON.parse(existing);
+    
+        const existingHigh = new Decimal(candle.high)
+        const existingLow = new Decimal(candle.low)
+    
+        const updateCandle = {
+            ...candle,
+            high: Decimal.max(tradePrice, existingHigh).toString(),
+            low: Decimal.min(tradePrice, existingLow).toString(),
+            close: tradePrice.toString(),
+            volume: new Decimal(candle.volume).plus(tradeQty).toString(),
+            tradeCount: candle.tradeCount + 1
+        }
+    
+        await redisclient.set(key, JSON.stringify(updateCandle), "EX", Number(ttl));
         await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
-            type: "CANDLE_NEW",
+            type: "CANDLE_UPDATE",
             pair: trade.pair,
             interval,
-            candle: newCandle
-        }));
-        await redisclient.set(key, JSON.stringify(newCandle), "EX", Number(ttl));
-        return;
+            candle: updateCandle
+        }))
+    } catch (error) {
+        console.error("Error processing trade:", error);
+        throw error;
     }
-    const candle = JSON.parse(existing);
-
-    const existingHigh = new Decimal(candle.high)
-    const existingLow = new Decimal(candle.low)
-
-    const updateCandle = {
-        ...candle,
-        high: Decimal.max(tradePrice, existingHigh).toString(),
-        low: Decimal.min(tradePrice, existingLow).toString(),
-        close: tradePrice.toString(),
-        volume: new Decimal(candle.volume).plus(tradeQty).toString(),
-        tradeCount: candle.tradeCount + 1
-    }
-
-    await redisclient.set(key, JSON.stringify(updateCandle), "EX", Number(ttl));
-    await redisclient.publish(`candle:update:${trade.pair}:${interval}`, JSON.stringify({
-        type: "CANDLE_UPDATE",
-        pair: trade.pair,
-        interval,
-        candle: updateCandle
-    }))
 }
 
 const processTrade = async (trade: ITradeEvent) => {
     if (trade.event !== "TRADE_EXECUTED") return;
 
-    await Promise.all(
-        Object.entries(INTERVALS).map(([interval, intervalMs]) => {
-            return processInterval(trade, interval, intervalMs)
-        })
-    )
+    try {
+        await Promise.all(
+            Object.entries(INTERVALS).map(([interval, intervalMs]) => {
+                return processInterval(trade, interval, intervalMs)
+            })
+        )
+    } catch (error) {
+        throw error;        
+    }
+
 }
 
 async function main() {
@@ -107,14 +118,28 @@ async function main() {
     }
 
     consumer.run({
-        eachMessage: async ({ message }) => {
+        eachMessage: async ({ message, partition, topic }) => {
             if (!message.value) return;
-
             let trade: ITradeEvent;
-
             try {
                 trade = JSON.parse(message.value?.toString())
-                await processTrade(trade)
+                const key = `candle-aggregator:${trade.eventId}`;
+
+                const isAlreadyProcessed = await redisclient.get(key);
+                if (isAlreadyProcessed) {
+                    console.log("Trade already processed", trade.eventId);
+                    return;
+                }
+
+                await processTrade(trade);
+
+                await redisclient.set(key, "1", "EX", 60 * 60 * 24); // 24 hours
+
+                await consumer.commitOffsets([{
+                    offset : (Number(message.offset) + 1).toString(),
+                    partition,
+                    topic
+                }]);
             } catch (error) {
                 console.error("Error while processing Trade", error);
             }

@@ -4,117 +4,100 @@ import Decimal from "decimal.js";
 import type { OrderEvent, TradeEvent } from "./types";
 import redisclient from "@repo/redisclient";
 
+
 const settleExectuedTrades = async (trade: TradeEvent) => {
   try {
-    const { buyOrderId, sellOrderId } = trade;
+    const { buyOrderId, sellOrderId, executedAt, quantity, price, event } = trade;
 
-    const market = await prisma.market.findFirst({
-      where: {
-        id: trade.marketId
+    const tradeResult = await prisma.$transaction(async (tx) => {
+      const orders = await tx.$queryRaw<
+        {
+          id: string;
+          userId: string;
+          marketId: string;
+          baseAsset: string;
+          quoteAsset: string;
+          status: "PENDING" | "FILLED" | "PARTIALLY_FILLED" | "CANCELED" | "EXPIRED",
+          remainingQuantity: Decimal;
+          originalQuantity: Decimal;
+        }[]
+      >`
+      SELECT 
+        o.id,
+        o."userId",
+        o."marketId",
+        o."status",
+        o."remainingQuantity",
+        o."originalQuantity",
+        m."baseAsset",
+        m."quoteAsset"
+      FROM "Order" o
+      JOIN "Market" m ON m.id = o."marketId"
+      WHERE o.id IN (${buyOrderId}, ${sellOrderId})
+      FOR UPDATE
+      `;
+
+      const buyOrder = orders.find((order) => order.id === buyOrderId);
+      const sellOrder = orders.find((order) => order.id === sellOrderId);
+
+      if (!buyOrder || !sellOrder) {
+        throw new Error("Invalid Order Id found!");
       }
-    });
 
-    if (!market) {
-      throw new Error("Market not found")
-    }
-
-    const [baseAsset, quoteAsset] = market.symbol.split("-");
-
-    if (!baseAsset || !quoteAsset) {
-      throw new Error("Invalid Market Symbol")
-    }
-
-    const buyOrder = await prisma.order.findUnique({
-      where: {
-        id: buyOrderId
+      if (buyOrder.status === "CANCELED" || buyOrder.status === "EXPIRED" || sellOrder.status === "CANCELED" || sellOrder.status === "EXPIRED") {
+        throw new Error("Order is already canceled or expired!");
       }
-    })
 
-    const sellOrder = await prisma.order.findUnique({
-      where: {
-        id: sellOrderId
+      const [baseAssetBuyerWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${buyOrder.userId} AND asset = ${buyOrder.baseAsset} FOR UPDATE`
+      const [quoteAssetBuyerWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${buyOrder.userId} AND asset = ${buyOrder.quoteAsset} FOR UPDATE`
+      const [baseAssetSellerWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${sellOrder.userId} AND asset = ${sellOrder.baseAsset} FOR UPDATE`
+      const [quoteAssetSellerWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${sellOrder.userId} AND asset = ${sellOrder.quoteAsset} FOR UPDATE`
+
+      if (!baseAssetBuyerWallet || !quoteAssetBuyerWallet || !baseAssetSellerWallet || !quoteAssetSellerWallet) {
+        throw new Error("Invalid Wallet found!");
       }
-    })
 
-    if (!buyOrder || !sellOrder) {
-      throw new Error("Invalid Order Id found!");
-    }
+      const remainingBuyOrderQty = buyOrder.remainingQuantity.minus(new Decimal(quantity));
+      const remainingSellOrderQty = sellOrder.remainingQuantity.minus(new Decimal(quantity));
 
-    const remainingBuyOrderQty = buyOrder.remainingQuantity.minus(trade.quantity);
-    const remainingSellOrderQty = sellOrder.remainingQuantity.minus(trade.quantity);
+      const boughtAmount = new Decimal(quantity).mul(new Decimal(price));
 
-    const boughtAmount = new Decimal(trade.quantity).mul(trade.price);
-    const soldQty = new Decimal(trade.quantity);
-
-    await prisma.$transaction(async (tx) => {
-      await tx.order.update({
+      await tx.wallet.update({
         where: {
-          id: buyOrder.id
+          id: baseAssetBuyerWallet.id
         },
         data: {
-          remainingQuantity: remainingBuyOrderQty,
+          available: {
+            increment: new Decimal(quantity)
+          }
         }
       })
 
-      // Buyer
       await tx.wallet.update({
         where: {
-          userId_asset: {
-            userId: buyOrder.userId,
-            asset: quoteAsset
-          }
+          id: quoteAssetBuyerWallet.id
         },
         data: {
           locked: {
             decrement: boughtAmount
-          },
-        }
-      });
-
-      await tx.wallet.update({
-        where: {
-          userId_asset: {
-            userId: buyOrder.userId,
-            asset: baseAsset
-          }
-        },
-        data: {
-          available: {
-            increment: trade.quantity
           }
         }
       })
 
-      await tx.order.update({
-        where: {
-          id: sellOrder.id
-        },
-        data: {
-          remainingQuantity: remainingSellOrderQty
-        }
-      })
-
-      //seller
       await tx.wallet.update({
         where: {
-          userId_asset: {
-            userId: sellOrder.userId,
-            asset: baseAsset
-          }
+          id: baseAssetSellerWallet.id
         },
         data: {
           locked: {
-            decrement: soldQty
-          },
+            decrement: new Decimal(quantity)
+          }
         }
-      });
+      })
 
       await tx.wallet.update({
         where: {
-          userId_asset: {
-            userId: sellOrder.userId,
-            asset: quoteAsset
-          }
+          id: quoteAssetSellerWallet.id
         },
         data: {
           available: {
@@ -123,23 +106,45 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         }
       })
 
-      await tx.trade.create({
+      await tx.order.update({
+        where: {
+          id: buyOrder.id
+        },
         data: {
-          makerId: buyOrder.userId,
-          takerId: sellOrder.userId,
-          makerFee: new Decimal(0), //for now
-          price: trade.price,
-          quantity: trade.quantity,
-          takerFee: new Decimal(0), //for now
-          marketId: trade.marketId,
-          buyOrderId: trade.buyOrderId,
-          sellOrderId: trade.sellOrderId,
-          executedAt: new Date(trade.executedAt),
+          status: remainingBuyOrderQty.gt(0) ? 'PARTIALLY_FILLED' : 'FILLED',
+          remainingQuantity: remainingBuyOrderQty
         }
       })
-      console.log('executed trade in db');
 
+      await tx.order.update({
+        where: {
+          id: sellOrder.id
+        },
+        data: {
+          status: remainingSellOrderQty.gt(0) ? 'PARTIALLY_FILLED' : 'FILLED',
+          remainingQuantity: remainingSellOrderQty
+        }
+      })
+
+      const trade = await tx.trade.create({
+        data: {
+          makerFee: new Decimal(0),
+          price : new Decimal(price),
+          quantity : new Decimal(quantity),
+          takerFee: new Decimal(0),
+          marketId: buyOrder.marketId,
+          buyOrderId: buyOrder.id,
+          sellOrderId: sellOrder.id,
+          makerId: buyOrder.userId,
+          takerId: sellOrder.userId,
+          executedAt: new Date(executedAt),
+        }
+      })
+
+      return trade;
     })
+
+    console.log('executed trade in db', tradeResult);
   } catch (error) {
     console.error('Error settling executed trade:', error);
     throw error;
@@ -186,13 +191,13 @@ const settleUpdatedOrders = async (order: OrderEvent) => {
         return;
       }
 
-      if (Decimal(order.remainingQuantity).lte(0)) {
+      if (Decimal(order.remainingQuantity).lt(0)) {
         throw new Error("Invalid remaining quantity on cancel");
       }
 
       const newRemainingQty = Decimal(order.remainingQuantity);
 
-      await tx.order.update({
+      const updateOrder = await tx.order.update({
         where: {
           id: odr.id,
           userId: odr.userId,
@@ -203,10 +208,11 @@ const settleUpdatedOrders = async (order: OrderEvent) => {
           updatedAt: new Date(order.updatedAt),
         },
       });
+
+      return updateOrder;
     })
 
     console.log('updated order in db', updatedOrder);
-
   } catch (error) {
     console.error('Error updating order:', error);
     throw error;
@@ -291,8 +297,8 @@ const settleCancelledOrders = async (order: OrderEvent) => {
           entryType: "TRADE_UNLOCK",
           metadata: "ORDER_CANCELLED",
           referenceId: order.orderId,
-          balanceBefore : wallet.available,
-          referenceType : "ORDER",
+          balanceBefore: wallet.available,
+          referenceType: "ORDER",
           walletId: wallet.id,
           balanceAfter: wallet.available.plus(odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity),
         },
@@ -440,7 +446,7 @@ const settleExpiredOrders = async (order: OrderEvent) => {
           balanceType: "AVAILABLE",
           balanceBefore: wallet.available,
           referenceType: "ORDER",
-          metadata : "ORDER_EXPIRED"
+          metadata: "ORDER_EXPIRED"
         }
       })
 
@@ -478,7 +484,7 @@ async function main() {
 
         const isProcessed = await redisclient.get(key);
 
-        if(isProcessed) {
+        if (isProcessed) {
           console.log("Event Already Processed", event.eventId);
           return;
         }
@@ -503,7 +509,7 @@ async function main() {
         }
 
         await consumer.commitOffsets([{
-          offset : (Number(message.offset) + 1).toString(),
+          offset: (Number(message.offset) + 1).toString(),
           partition,
           topic
         }])

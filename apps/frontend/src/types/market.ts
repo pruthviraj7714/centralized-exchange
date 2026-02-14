@@ -25,3 +25,12 @@ export interface IMarketData {
   isActive: boolean,
   isFeatured: boolean,
 }
+
+export interface IUpdatedMarketData {
+    lastPrice: string;
+    change: string;
+    changePercent: string;
+    high: string;
+    low: string;
+    volume: string;
+}

@@ -12,3 +12,18 @@ export interface IOrderBookOrder {
   requestId: string;
   orderCount: number;
 }
+
+
+export interface OrderbookLevel {
+    price: string;
+    totalQuantity: string;
+    orderCount: number;
+    orders: Array<{ orderId: string; quantity: string }>;
+}
+
+export interface OrderbookData {
+    bids: OrderbookLevel[];
+    asks: OrderbookLevel[];
+    pair: string;
+    timestamp: number;
+}

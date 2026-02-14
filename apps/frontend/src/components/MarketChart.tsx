@@ -34,6 +34,8 @@ export default function MarketChart({
     isPositive: boolean;
   } | null>(null);
 
+  console.log(candles);
+
   useEffect(() => {
     if (!chartContainerRef.current) return;
 

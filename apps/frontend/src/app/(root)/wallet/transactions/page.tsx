@@ -28,12 +28,26 @@ interface ITransaction {
   wallet: { userId: string };
   walletId: string;
   asset: string;
-  entryType: "DEPOSIT" | "WITHDRAW" | "TRADE_DEBIT" | "TRADE_CREDIT" | "FEE";
+  entryType:
+    | "DEPOSIT"
+    | "WITHDRAWAL"
+    | "FEE"
+    | "TRADE_LOCK"
+    | "TRADE_UNLOCK"
+    | "TRADE_EXECUTE"
+    | "TRANSFER_IN"
+    | "TRANSFER_OUT";
   direction: "CREDIT" | "DEBIT";
   balanceType: "AVAILABLE" | "LOCKED";
   balanceBefore: string;
   balanceAfter: string;
-  referenceType: "DEPOSIT" | "WITHDRAWAL" | "ORDER" | "TRADE" | "FEE" | "TRANSFER";
+  referenceType:
+    | "DEPOSIT"
+    | "WITHDRAWAL"
+    | "ORDER"
+    | "TRADE"
+    | "FEE"
+    | "TRANSFER";
   referenceId: string | null;
   idempotencyKey: string | null;
   sequence: number;
@@ -42,18 +56,18 @@ interface ITransaction {
 }
 
 export default function WalletTransactions() {
-  const [isLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("ALL");
   const [filterAsset, setFilterAsset] = useState<string>("ALL");
-  const [selectedTransaction, setSelectedTransaction] = useState<ITransaction | null>(null);
-  const { data, status} = useSession();
+  const [selectedTransaction, setSelectedTransaction] =
+    useState<ITransaction | null>(null);
+  const { data, status } = useSession();
   const isReady = status === "authenticated";
-  const{ data: transactions } = useQuery<ITransaction[]>({
-    queryKey: ["transactions"],
-    queryFn: () => fetchWalletTransactions(data?.accessToken as string),
-    enabled: isReady,
-  });
+ const { data: transactions, isLoading } = useQuery<ITransaction[]>({
+  queryKey: ["transactions"],
+  queryFn: () => fetchWalletTransactions(data?.accessToken as string),
+  enabled: isReady,
+});
 
   const getTransactionConfig = (type: ITransaction["entryType"]) => {
     const configs = {
@@ -65,7 +79,7 @@ export default function WalletTransactions() {
         borderColor: "border-emerald-500/30",
         iconBg: "bg-emerald-500/20",
       },
-      WITHDRAW: {
+      WITHDRAWAL: {
         label: "Withdrawal",
         icon: ArrowUpRight,
         color: "text-red-400",
@@ -73,8 +87,8 @@ export default function WalletTransactions() {
         borderColor: "border-red-500/30",
         iconBg: "bg-red-500/20",
       },
-      TRADE_CREDIT: {
-        label: "Trade Credit",
+      TRADE_EXECUTE: {
+        label: "Trade Execute",
         icon: TrendingUp,
         color: "text-blue-400",
         bgColor: "bg-blue-500/10",
@@ -97,6 +111,38 @@ export default function WalletTransactions() {
         borderColor: "border-purple-500/30",
         iconBg: "bg-purple-500/20",
       },
+      TRADE_LOCK : {
+        label : "Trade Lock",
+        icon: Receipt,
+        color: "text-purple-400",
+        bgColor: "bg-purple-500/10",
+        borderColor: "border-purple-500/30",
+        iconBg: "bg-purple-500/20",
+      },
+      TRADE_UNLOCK : {
+        label : "Trade Unlock",
+        icon: Receipt,
+        color: "text-purple-400",
+        bgColor: "bg-purple-500/10",
+        borderColor: "border-purple-500/30",
+        iconBg: "bg-purple-500/20",
+      },
+      TRANSFER_IN : {
+        label : "Transfer In",
+        icon: Receipt,
+        color: "text-purple-400",
+        bgColor: "bg-purple-500/10",
+        borderColor: "border-purple-500/30",
+        iconBg: "bg-purple-500/20",
+      },
+      TRANSFER_OUT : {
+        label : "Transfer Out",
+        icon: Receipt,
+        color: "text-purple-400",
+        bgColor: "bg-purple-500/10",
+        borderColor: "border-purple-500/30",
+        iconBg: "bg-purple-500/20",
+      }
     };
     return configs[type];
   };
@@ -121,14 +167,19 @@ export default function WalletTransactions() {
     return matchesSearch && matchesFilter && matchesAsset;
   });
 
-  const uniqueAssets = Array.from(new Set(transactions?.map(t => t.asset)));
+  const uniqueAssets = Array.from(
+    new Set(transactions?.map((t) => t.asset) ?? []),
+  );
 
   const stats = {
-    totalDeposits: transactions?.filter((t) => t.entryType === "DEPOSIT")
+    totalDeposits: transactions
+      ?.filter((t) => t.entryType === "DEPOSIT")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0),
-    totalWithdrawals: transactions?.filter((t) => t.entryType === "WITHDRAW")
+    totalWithdrawals: transactions
+      ?.filter((t) => t.entryType === "WITHDRAWAL")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0),
-    totalFees: transactions?.filter((t) => t.entryType === "FEE")
+    totalFees: transactions
+      ?.filter((t) => t.entryType === "FEE")
       .reduce((sum, t) => sum + parseFloat(t.amount), 0),
     totalTransactions: transactions?.length,
   };
@@ -157,7 +208,9 @@ export default function WalletTransactions() {
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
                   Transaction History
                 </h1>
-                <p className="text-xs text-slate-400">Track all your wallet activities</p>
+                <p className="text-xs text-slate-400">
+                  Track all your wallet activities
+                </p>
               </div>
             </div>
 
@@ -180,7 +233,9 @@ export default function WalletTransactions() {
               <p className="text-sm text-slate-400">Total Deposits</p>
               <ArrowDownLeft className="w-4 h-4 text-emerald-400" />
             </div>
-            <p className="text-2xl font-bold text-white">{stats?.totalDeposits?.toFixed(4)}</p>
+            <p className="text-2xl font-bold text-white">
+              {stats?.totalDeposits?.toFixed(4)}
+            </p>
             <p className="text-xs text-emerald-400 mt-1">Multi-asset</p>
           </div>
 
@@ -189,7 +244,9 @@ export default function WalletTransactions() {
               <p className="text-sm text-slate-400">Total Withdrawals</p>
               <ArrowUpRight className="w-4 h-4 text-red-400" />
             </div>
-            <p className="text-2xl font-bold text-white">{stats?.totalWithdrawals?.toFixed(4)}</p>
+            <p className="text-2xl font-bold text-white">
+              {stats?.totalWithdrawals?.toFixed(4)}
+            </p>
             <p className="text-xs text-red-400 mt-1">Multi-asset</p>
           </div>
 
@@ -198,7 +255,9 @@ export default function WalletTransactions() {
               <p className="text-sm text-slate-400">Total Fees</p>
               <Receipt className="w-4 h-4 text-purple-400" />
             </div>
-            <p className="text-2xl font-bold text-white">{stats?.totalFees?.toFixed(4)}</p>
+            <p className="text-2xl font-bold text-white">
+              {stats?.totalFees?.toFixed(4)}
+            </p>
             <p className="text-xs text-purple-400 mt-1">Multi-asset</p>
           </div>
 
@@ -207,7 +266,9 @@ export default function WalletTransactions() {
               <p className="text-sm text-slate-400">Transactions</p>
               <Clock className="w-4 h-4 text-blue-400" />
             </div>
-            <p className="text-2xl font-bold text-white">{stats?.totalTransactions}</p>
+            <p className="text-2xl font-bold text-white">
+              {stats?.totalTransactions}
+            </p>
             <p className="text-xs text-blue-400 mt-1">All time</p>
           </div>
         </div>
@@ -233,7 +294,9 @@ export default function WalletTransactions() {
               >
                 <option value="ALL">All Assets</option>
                 {uniqueAssets.map((asset) => (
-                  <option key={asset} value={asset}>{asset}</option>
+                  <option key={asset} value={asset}>
+                    {asset}
+                  </option>
                 ))}
               </select>
 
@@ -283,7 +346,9 @@ export default function WalletTransactions() {
                   >
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex items-start gap-4 flex-1 min-w-0">
-                        <div className={`p-3 ${config.iconBg} rounded-xl border ${config.borderColor} shrink-0`}>
+                        <div
+                          className={`p-3 ${config.iconBg} rounded-xl border ${config.borderColor} shrink-0`}
+                        >
                           <Icon className={`w-5 h-5 ${config.color}`} />
                         </div>
 
@@ -292,14 +357,18 @@ export default function WalletTransactions() {
                             <h3 className="font-semibold text-white group-hover:text-emerald-400 transition-colors">
                               {config.label}
                             </h3>
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded ${config.bgColor} ${config.color}`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded ${config.bgColor} ${config.color}`}
+                            >
                               {transaction.entryType}
                             </span>
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded flex items-center gap-1 ${
-                              transaction.balanceType === "LOCKED" 
-                                ? "bg-orange-500/10 text-orange-400 border border-orange-500/30" 
-                                : "bg-slate-700/30 text-slate-400 border border-slate-600/30"
-                            }`}>
+                            <span
+                              className={`px-2 py-0.5 text-xs font-medium rounded flex items-center gap-1 ${
+                                transaction.balanceType === "LOCKED"
+                                  ? "bg-orange-500/10 text-orange-400 border border-orange-500/30"
+                                  : "bg-slate-700/30 text-slate-400 border border-slate-600/30"
+                              }`}
+                            >
                               {transaction.balanceType === "LOCKED" ? (
                                 <>
                                   <Lock className="w-3 h-3" />
@@ -331,16 +400,18 @@ export default function WalletTransactions() {
 
                           <div className="flex items-center gap-2">
                             {TOKEN_LOGOS[transaction.asset] && (
-                              <img 
-                                src={TOKEN_LOGOS[transaction.asset]} 
+                              <img
+                                src={TOKEN_LOGOS[transaction.asset]}
                                 alt={transaction.asset}
                                 className="w-5 h-5 rounded-full border border-slate-700/50 bg-white p-0.5"
                               />
                             )}
-                            <span className="text-sm font-medium text-slate-300">{transaction.asset}</span>
-                            
+                            <span className="text-sm font-medium text-slate-300">
+                              {transaction.asset}
+                            </span>
+
                             {transaction.metadata && (
-                              <button 
+                              <button
                                 className="ml-2 p-1 hover:bg-slate-700/30 rounded transition-colors"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -355,15 +426,24 @@ export default function WalletTransactions() {
                       </div>
 
                       <div className="text-right shrink-0">
-                        <div className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-400" : "text-red-400"}`}>
-                          {isCredit ? "+" : "-"}{transaction.amount}
+                        <div
+                          className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-400" : "text-red-400"}`}
+                        >
+                          {isCredit ? "+" : "-"}
+                          {transaction.amount}
                         </div>
                         <div className="text-xs text-slate-500 space-y-1">
                           <div>
-                            Before: <span className="text-slate-400 font-medium">{transaction.balanceBefore}</span>
+                            Before:{" "}
+                            <span className="text-slate-400 font-medium">
+                              {transaction.balanceBefore}
+                            </span>
                           </div>
                           <div>
-                            After: <span className="text-slate-400 font-medium">{transaction.balanceAfter}</span>
+                            After:{" "}
+                            <span className="text-slate-400 font-medium">
+                              {transaction.balanceAfter}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -376,7 +456,9 @@ export default function WalletTransactions() {
                 <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Receipt className="w-10 h-10 text-slate-500" />
                 </div>
-                <p className="text-slate-400 text-lg mb-2">No transactions found</p>
+                <p className="text-slate-400 text-lg mb-2">
+                  No transactions found
+                </p>
                 <p className="text-sm text-slate-500">
                   {searchTerm || filterType !== "ALL" || filterAsset !== "ALL"
                     ? "Try adjusting your search or filters"
@@ -390,7 +472,8 @@ export default function WalletTransactions() {
             <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/50">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-400">
-                  Showing {filteredTransactions.length} of {transactions?.length} transactions
+                  Showing {filteredTransactions.length} of{" "}
+                  {transactions?.length} transactions
                 </p>
                 <div className="flex gap-2">
                   <button className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-all">
@@ -407,10 +490,18 @@ export default function WalletTransactions() {
       </div>
 
       {selectedTransaction && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedTransaction(null)}>
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedTransaction(null)}
+        >
+          <div
+            className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="sticky top-0 bg-slate-900 border-b border-slate-800 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white">Transaction Details</h3>
+              <h3 className="text-xl font-bold text-white">
+                Transaction Details
+              </h3>
               <button
                 onClick={() => setSelectedTransaction(null)}
                 className="p-2 hover:bg-slate-800 rounded-lg transition-colors"
@@ -423,49 +514,72 @@ export default function WalletTransactions() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Transaction ID</p>
-                  <p className="text-white font-mono text-sm break-all">{selectedTransaction.id}</p>
+                  <p className="text-white font-mono text-sm break-all">
+                    {selectedTransaction.id}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Sequence</p>
-                  <p className="text-white font-semibold">#{selectedTransaction.sequence}</p>
+                  <p className="text-white font-semibold">
+                    #{selectedTransaction.sequence}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Amount</p>
-                  <p className={`text-lg font-bold ${selectedTransaction.direction === "CREDIT" ? "text-emerald-400" : "text-red-400"}`}>
-                    {selectedTransaction.direction === "CREDIT" ? "+" : "-"}{selectedTransaction.amount} {selectedTransaction.asset}
+                  <p
+                    className={`text-lg font-bold ${selectedTransaction.direction === "CREDIT" ? "text-emerald-400" : "text-red-400"}`}
+                  >
+                    {selectedTransaction.direction === "CREDIT" ? "+" : "-"}
+                    {selectedTransaction.amount} {selectedTransaction.asset}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Direction</p>
-                  <p className="text-white font-semibold">{selectedTransaction.direction}</p>
+                  <p className="text-white font-semibold">
+                    {selectedTransaction.direction}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Entry Type</p>
-                  <p className="text-white font-semibold">{selectedTransaction.entryType}</p>
+                  <p className="text-white font-semibold">
+                    {selectedTransaction.entryType}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Balance Type</p>
-                  <p className="text-white font-semibold">{selectedTransaction.balanceType}</p>
+                  <p className="text-white font-semibold">
+                    {selectedTransaction.balanceType}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Balance Before</p>
-                  <p className="text-white font-mono">{selectedTransaction.balanceBefore}</p>
+                  <p className="text-white font-mono">
+                    {selectedTransaction.balanceBefore}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Balance After</p>
-                  <p className="text-white font-mono">{selectedTransaction.balanceAfter}</p>
+                  <p className="text-white font-mono">
+                    {selectedTransaction.balanceAfter}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Reference Type</p>
-                  <p className="text-white font-semibold">{selectedTransaction.referenceType}</p>
+                  <p className="text-white font-semibold">
+                    {selectedTransaction.referenceType}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-slate-500 mb-1">Reference ID</p>
-                  <p className="text-white font-mono text-sm">{selectedTransaction.referenceId || "N/A"}</p>
+                  <p className="text-white font-mono text-sm">
+                    {selectedTransaction.referenceId || "N/A"}
+                  </p>
                 </div>
                 <div className="col-span-2">
                   <p className="text-sm text-slate-500 mb-1">Created At</p>
-                  <p className="text-white">{formatDate(selectedTransaction.createdAt)}</p>
+                  <p className="text-white">
+                    {formatDate(selectedTransaction.createdAt)}
+                  </p>
                 </div>
               </div>
 

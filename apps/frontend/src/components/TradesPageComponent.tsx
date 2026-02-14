@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Decimal from "decimal.js";
@@ -30,14 +30,12 @@ import { useRouter } from "next/navigation";
 export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [chartInterval, setChartInterval] = useState<ChartInterval>("1m");
   const [orderType, setOrderType] = useState<"LIMIT" | "MARKET">("LIMIT");
-  const [quantity, setQuantity] = useState<Decimal>(new Decimal(0));
-  const [price, setPrice] = useState<Decimal>(new Decimal(0));
+  const [quantity, setQuantity] = useState<string>("");
+  const [price, setPrice] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"BUY" | "SELL">("BUY");
-  const [spendAmount, setSpendAmount] = useState<Decimal>(new Decimal(0));
+  const [spendAmount, setSpendAmount] = useState<string>("");
   const { data, status } = useSession();
   const isReady = status === "authenticated" && !!data?.accessToken;
-  const [bids, setBids] = useState<IOrderBookOrder[]>([]);
-  const [asks, setAsks] = useState<IOrderBookOrder[]>([]);
   const [orderBookTab, setOrderBookTab] = useState<"ORDER_BOOK" | "TRADES">(
     "ORDER_BOOK",
   );
@@ -49,10 +47,11 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [baseAsset, quoteAsset] = ticker.split("-");
   const {
     isConnected,
-    orderbook,
     recentTrades,
     candles: liveCandles,
     updatedMarketData,
+    asks,
+    bids,
     error,
   } = useOrderbook(ticker, chartInterval);
   const queryClient = useQueryClient();
@@ -115,9 +114,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
         activeTab,
         orderType,
         data?.accessToken!,
-        quantity,
-        spendAmount,
-        price,
+        new Decimal(quantity || 0),
+        new Decimal(spendAmount || 0),
+        new Decimal(price || 0),
       ),
     mutationKey: ["place-order", ticker, activeTab, price, quantity, orderType],
     onSuccess: (data) => {
@@ -130,8 +129,8 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     },
     onError: (error: any) => {
       toast.error(
-        error.response.data.message
-          ? error.response.data.message
+        error.response?.data?.message
+          ? error.response?.data?.message
           : "Failed to place order",
         { position: "top-center" },
       );
@@ -214,7 +213,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     });
   }, [liveCandles]);
 
-  const handlePriceClick = (priceValue: Decimal) => {
+  const handlePriceClick = (priceValue: string) => {
     setPrice(priceValue);
   };
 
@@ -244,20 +243,20 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     if (!isReady || !quantity || (orderType === "LIMIT" && !price)) return true;
     if (
       orderType === "LIMIT" &&
-      (!price || price.eq(0)) &&
-      (!quantity || quantity.eq(0))
+      (!price || new Decimal(price).eq(0)) &&
+      (!quantity || new Decimal(quantity).eq(0))
     )
       return true;
     if (
       orderType === "MARKET" &&
       activeTab === "BUY" &&
-      (!spendAmount || spendAmount.eq(0))
+      (!spendAmount || new Decimal(spendAmount).eq(0))
     )
       return true;
     if (
       orderType === "MARKET" &&
       activeTab === "SELL" &&
-      (!quantity || quantity.eq(0))
+      (!quantity || new Decimal(quantity).eq(0))
     )
       return true;
     return false;
@@ -305,35 +304,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   };
 
   useEffect(() => {
-    if (orderbook) {
-      console.log("Updating orderbook display:", orderbook);
-
-      const transformedBids = orderbook.bids.map((level, index) => ({
-        price: Decimal(level.price),
-        quantity: Decimal(level.totalQuantity),
-        total: Decimal(level.totalQuantity).mul(index + 1),
-        requestId: `bid-${index}`,
-        orderCount: level.orderCount,
-      }));
-
-      const transformedAsks = orderbook.asks.map((level, index) => ({
-        price: Decimal(level.price),
-        quantity: Decimal(level.totalQuantity),
-        total: Decimal(level.totalQuantity).mul(index + 1),
-        requestId: `ask-${index}`,
-        orderCount: level.orderCount,
-      }));
-
-      setBids(transformedBids);
-      setAsks(transformedAsks);
-
-      if (recentTrades.length > 0) {
-        setPrice(Decimal(recentTrades[0].price));
-      }
-    }
-  }, [orderbook, recentTrades]);
-
-  useEffect(() => {
     if (error) {
       toast.error(error, { position: "top-center" });
     }
@@ -350,14 +320,17 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     orderType === "LIMIT" && price && quantity
       ? new Decimal(price).mul(quantity).toFixed(2)
       : orderType === "MARKET" && quantity
-        ? (new Decimal(marketData?.price) ?? new Decimal(0))
+        ? (new Decimal(marketData?.price || 0))
             .mul(quantity)
             .toFixed(2)
         : "0.00";
 
-  const maxBidDepth = Math.max(...bids.map((b) => b.total.toNumber()));
-  const maxAskDepth = Math.max(...asks.map((a) => a.total.toNumber()));
-  const maxDepth = Math.max(maxBidDepth, maxAskDepth);
+  const maxDepth = useMemo(() => {
+    const maxBid = Math.max(...bids.map((b) => b.total.toNumber()));
+    const maxAsk = Math.max(...asks.map((a) => a.total.toNumber()));
+    return Math.max(maxBid, maxAsk);
+  }, [bids, asks]);
+
   const livePrice =
     updatedMarketData?.lastPrice ?? marketData?.price?.toString() ?? "0";
 
@@ -404,7 +377,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
               lastPrice={livePrice}
               handlePriceClick={handlePriceClick}
               recentTrades={recentTrades}
-              marketData={marketData}
               maxDepth={maxDepth}
               spread={spread}
               spreadPercent={spreadPercent}

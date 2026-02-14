@@ -1,5 +1,6 @@
 
 export interface ITradeEvent {
+    eventId : string;
     buyOrderId: string,
     sellOrderId: string,
     price: string,

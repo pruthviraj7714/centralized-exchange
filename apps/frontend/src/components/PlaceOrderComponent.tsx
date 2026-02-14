@@ -15,12 +15,12 @@ interface PlaceOrderComponentProps {
   totalValue: string;
   quoteAsset: string;
   baseAsset: string;
-  price: Decimal;
-  spendAmount: Decimal;
-  quantity: Decimal;
-  setSpendAmount: (spendAmount: Decimal) => void;
-  setQuantity: (quantity: Decimal) => void;
-  setPrice: (price: Decimal) => void;
+  price: string;
+  spendAmount: string;
+  quantity: string;
+  setSpendAmount: (spendAmount: string) => void;
+  setQuantity: (quantity: string) => void;
+  setPrice: (price: string) => void;
 }
 
 export default function PlaceOrderComponent({
@@ -118,9 +118,9 @@ export default function PlaceOrderComponent({
               Price ({quoteAsset})
             </label>
             <input
-              type="number"
+              type="text"
               value={price.toString()}
-              onChange={(e) => setPrice(new Decimal(e.target.value))}
+              onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all"
             />
@@ -135,7 +135,7 @@ export default function PlaceOrderComponent({
             <input
               type="text"
               value={spendAmount.toString()}
-              onChange={(e) => setSpendAmount(new Decimal(e.target.value))}
+              onChange={(e) => setSpendAmount(e.target.value)}
               placeholder="0.00"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all"
             />
@@ -150,8 +150,8 @@ export default function PlaceOrderComponent({
             </label>
             <input
               type="text"
-              value={new Decimal(quantity).toString()}
-              onChange={(e) => setQuantity(new Decimal(e.target.value))}
+              value={quantity.toString()}
+              onChange={(e) => setQuantity(e.target.value)}
               placeholder="0.00"
               className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 focus:outline-none transition-all"
             />

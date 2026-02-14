@@ -1,15 +1,6 @@
-import { IMarketData } from "@/types/market";
+import { IMarketData, IUpdatedMarketData } from "@/types/market";
 import { TrendingUp } from "lucide-react";
 import Decimal from "decimal.js";
-
-interface IUpdatedMarketData {
-  lastPrice: string;
-  change: string;
-  changePercent: string;
-  high: string;
-  low: string;
-  volume: string;
-}
 
 interface MarketDataHeaderProps {
   marketData: IMarketData;

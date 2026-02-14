@@ -1,7 +1,5 @@
-import Decimal from "decimal.js";
 import { Button } from "./ui/button";
 import { IOrderBookOrder } from "@/types/orderbook";
-import { IMarketData } from "@/types/market";
 
 interface OrderBookPanelProps {
   orderBookTab: "ORDER_BOOK" | "TRADES";
@@ -12,11 +10,10 @@ interface OrderBookPanelProps {
   asks: IOrderBookOrder[];
   bids: IOrderBookOrder[];
   recentTrades: any[];
-  marketData: IMarketData;
   maxDepth: number;
   spread: string;
   spreadPercent: string;
-  handlePriceClick: (price: Decimal) => void;
+  handlePriceClick: (price: string) => void;
 }
 
 export default function OrderBookPanel({
@@ -28,7 +25,6 @@ export default function OrderBookPanel({
   asks,
   bids,
   recentTrades,
-  marketData,
   maxDepth,
   spread,
   spreadPercent,
@@ -78,7 +74,7 @@ export default function OrderBookPanel({
                     <div
                       key={`ask-${index}`}
                       className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-red-500/10 cursor-pointer rounded transition-colors group"
-                      onClick={() => handlePriceClick(ask.price)}
+                      onClick={() => handlePriceClick(ask.price.toString())}
                     >
                       <div
                         className="absolute right-0 top-0 bottom-0 bg-red-500/10 transition-all group-hover:bg-red-500/15"
@@ -117,7 +113,7 @@ export default function OrderBookPanel({
                   <div
                     key={`bid-${index}`}
                     className="relative grid grid-cols-3 gap-2 text-sm py-1 hover:bg-emerald-500/10 cursor-pointer rounded transition-colors group"
-                    onClick={() => handlePriceClick(bid.price)}
+                    onClick={() => handlePriceClick(bid.price.toString())}
                   >
                     <div
                       className="absolute right-0 top-0 bottom-0 bg-emerald-500/10 transition-all group-hover:bg-emerald-500/15"

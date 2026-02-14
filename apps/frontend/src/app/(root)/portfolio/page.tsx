@@ -68,17 +68,26 @@ export default function PortfolioPage() {
 
   const handleDeposit = async () => {
     if (!data?.accessToken) {
-      toast.warning("Please login to deposit");
+      toast.warning("Please login to deposit", { position : "top-center"});
       return;
     }
-    const result = await mutateAsync();
-    console.log(result);
+
+    if(!amount || new Decimal(amount).lte(0)) {
+      toast.warning("Amount should be minimum 0.01", { position : "top-center"});
+      return;
+    }
+
+    await mutateAsync();
     toast.success(`Successfully Deposited ${amount} ${selectedAsset}`, {
       position: "top-center",
     });
   };
 
   const handleWithdraw = () => {
+     if(!amount || new Decimal(amount).lte(0)) {
+      toast.warning("Amount should be minimum 0.01", { position : "top-center"});
+      return;
+    }
     toast.success(`Withdrawing ${amount} ${selectedAsset}`, {
       position: "top-center",
     });
@@ -153,7 +162,7 @@ export default function PortfolioPage() {
                 </p>
                 <div className="flex items-center gap-3">
                   <h2 className="text-4xl font-bold text-white">
-                    {hideBalances ? "••••••" : `$${totalUSDValue}`}
+                    {hideBalances ? "••••••" : `$${totalUSDValue.toFixed(2)}`}
                   </h2>
                   <button
                     onClick={() => setHideBalances(!hideBalances)}

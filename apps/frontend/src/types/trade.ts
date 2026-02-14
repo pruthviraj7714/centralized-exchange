@@ -12,3 +12,12 @@ export interface ITrade {
   takerFee: string;
   executedAt: string;
 }
+
+export interface TradeData {
+  buyOrderId: string;
+  sellOrderId: string;
+  price: string;
+  quantity: string;
+  pair: string;
+  timestamp: number;
+}

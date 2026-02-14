@@ -1,51 +1,20 @@
 import { WS_URL } from "@/lib/config";
+import { IUpdatedMarketData } from "@/types/market";
+import { IOrderBookOrder, OrderbookData } from "@/types/orderbook";
+import { TradeData } from "@/types/trade";
 import Decimal from "decimal.js";
 import { useEffect, useState, useCallback, useRef } from "react"
 
-interface OrderbookLevel {
-    price: string;
-    totalQuantity: string;
-    orderCount: number;
-    orders: Array<{ orderId: string; quantity: string }>;
-}
-
-interface OrderbookData {
-    bids: OrderbookLevel[];
-    asks: OrderbookLevel[];
-    pair: string;
-    timestamp: number;
-}
-
-interface TradeData {
-    buyOrderId: string;
-    sellOrderId: string;
-    price: string;
-    quantity: string;
-    pair: string;
-    timestamp: number;
-}
-
-interface IUpdatedMarketData {
-    lastPrice: string;
-    change: string;
-    changePercent: string;
-    high: string;
-    low: string;
-    volume: string;
-}
-
 const useOrderbook = (pair: string, chartInterval: string) => {
-    const [socket, setSocket] = useState<WebSocket | null>(null);
+    const socketRef = useRef<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState<boolean>(false);
     const [orderbook, setOrderbook] = useState<OrderbookData | null>(null);
     const [recentTrades, setRecentTrades] = useState<TradeData[]>([]);
     const [candles, setCandles] = useState<any[]>([]);
     const [updatedMarketData, setUpdatedMarketData] = useState<IUpdatedMarketData | null>(null);
     const [error, setError] = useState<null | string>(null);
-    const orderbookBuffer = useRef<OrderbookData | null>(null);
-    const tradesBuffer = useRef<TradeData[]>([]);
-    const marketBuffer = useRef<IUpdatedMarketData | null>(null);
-
+    const [bids, setBids] = useState<IOrderBookOrder[]>([]);
+    const [asks, setAsks] = useState<IOrderBookOrder[]>([]);
 
     const applyOrderbookUpdate = useCallback(
         (prev: OrderbookData | null, update: any): OrderbookData => {
@@ -69,34 +38,11 @@ const useOrderbook = (pair: string, chartInterval: string) => {
     );
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            if (orderbookBuffer.current) {
-                setOrderbook(orderbookBuffer.current);
-            }
-
-            if (tradesBuffer.current.length) {
-                setRecentTrades(prev => [
-                    ...tradesBuffer.current,
-                    ...prev,
-                ].slice(0, 20));
-                tradesBuffer.current = [];
-            }
-
-            if (marketBuffer.current) {
-                setUpdatedMarketData(marketBuffer.current);
-            }
-        }, 100); // 🔥 sweet spot
-
-        return () => clearInterval(interval);
-    }, []);
-
-
-    useEffect(() => {
         const ws = new WebSocket(`${WS_URL}?pair=${pair}`);
 
         ws.onopen = () => {
             console.log('WebSocket connected for pair:', pair);
-            setSocket(ws);
+            socketRef.current = ws;
             setIsConnected(true);
 
             ws.send(JSON.stringify({
@@ -108,45 +54,51 @@ const useOrderbook = (pair: string, chartInterval: string) => {
             }))
         };
 
-
-
         ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                console.log('Received WebSocket message:', data);
 
                 switch (data.type) {
                     case "ORDERBOOK_SNAPSHOT":
                         console.log('Orderbook snapshot received:', data);
-                        orderbookBuffer.current = {
+                        setOrderbook({
                             bids: data.bids || [],
                             asks: data.asks || [],
                             pair: data.pair,
                             timestamp: data.timestamp,
-                        };
+                        });
                         break;
 
                     case "ORDERBOOK_UPDATE":
                         console.log('Orderbook update received:', data);
-                        orderbookBuffer.current = applyOrderbookUpdate(orderbookBuffer.current, data);
-                        break;
-
-                    case "ORDERBOOK_UPDATE":
-                        console.log('Orderbook update received:', data);
-                        orderbookBuffer.current = applyOrderbookUpdate(orderbookBuffer.current, data)
+                        setOrderbook(prev => applyOrderbookUpdate(prev, data));
                         break;
 
                     case "TRADE_EXECUTED":
                         console.log('Trade executed:', data.trade);
-                        marketBuffer.current = {
-                            lastPrice: data.trade.price,
-                            change: marketBuffer.current?.lastPrice ? Decimal(marketBuffer.current?.lastPrice).minus(data.trade.price).toString() : "0",
-                            changePercent: marketBuffer.current?.lastPrice ? Decimal(marketBuffer.current?.lastPrice).minus(data.trade.price).div(marketBuffer.current?.lastPrice).times(100).toString() : "0",
-                            high: Decimal.max(marketBuffer.current?.high || "0", data.trade.price).toString(),
-                            low: Decimal.min(marketBuffer.current?.low || "0", data.trade.price).toString(),
-                            volume: marketBuffer.current?.volume ? Decimal(marketBuffer.current?.volume).plus(data.trade.quantity).toString() : "0"
-                        }
-                        tradesBuffer.current = [...tradesBuffer.current, data.trade];
+                        setUpdatedMarketData(prev => {
+                            const prevLast = prev?.lastPrice ?? data.trade.price;
+
+                            return {
+                                lastPrice: data.trade.price,
+                                change: Decimal(prevLast).minus(data.trade.price).toString(),
+                                changePercent: Decimal(prevLast)
+                                    .minus(data.trade.price)
+                                    .div(prevLast)
+                                    .times(100)
+                                    .toString(),
+                                high: Decimal.max(prev?.high || "0", data.trade.price).toString(),
+                                low: Decimal.min(prev?.low || data.trade.price, data.trade.price).toString(),
+                                volume: prev?.volume
+                                    ? Decimal(prev.volume).plus(data.trade.quantity).toString()
+                                    : data.trade.quantity,
+                            };
+                        });
+
+                        setRecentTrades(prev => {
+                            const updated = [...prev, data.trade];
+                            return updated.slice(-20);
+                        });
                         break;
 
                     case "CANDLE_NEW":
@@ -175,30 +127,72 @@ const useOrderbook = (pair: string, chartInterval: string) => {
 
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
-            setSocket(null);
+            socketRef.current = null;
             setIsConnected(false);
         };
 
         ws.onclose = (event) => {
             console.log('WebSocket disconnected:', event.code, event.reason);
-            setSocket(null);
+            socketRef.current = null;
             setIsConnected(false);
         };
 
         return () => {
             console.log('Cleaning up WebSocket connection');
+            ws.onmessage = null;
+            ws.onerror = null;
+            ws.onclose = null;
             ws.close();
         };
     }, [pair, chartInterval]);
 
+    useEffect(() => {
+        if (orderbook) {
+            console.log("Updating orderbook display:", orderbook);
+
+            let cumulativeBid = new Decimal(0);
+            let cumulativeAsk = new Decimal(0);
+
+            const transformedBids = orderbook.bids.map((level, index) => {
+                const qty = new Decimal(level.totalQuantity);
+                cumulativeBid = cumulativeBid.plus(qty);
+
+                return {
+                    price: new Decimal(level.price),
+                    quantity: qty,
+                    total: cumulativeBid,
+                    requestId: `bid-${index}`,
+                    orderCount: level.orderCount,
+                };
+            });
+
+            const transformedAsks = orderbook.asks.map((level, index) => {
+                const qty = new Decimal(level.totalQuantity);
+                cumulativeAsk = cumulativeAsk.plus(qty);
+
+                return {
+                    price: new Decimal(level.price),
+                    quantity: qty,
+                    total: cumulativeAsk,
+                    requestId: `ask-${index}`,
+                    orderCount: level.orderCount,
+                };
+            });
+
+            setBids(transformedBids);
+            setAsks(transformedAsks);
+        }
+    }, [orderbook]);
+
     return {
-        socket,
         isConnected,
         orderbook,
         recentTrades,
         candles,
         updatedMarketData,
-        error
+        error,
+        bids,
+        asks
     };
 };
 
