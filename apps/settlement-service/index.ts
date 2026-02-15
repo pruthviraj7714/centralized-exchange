@@ -4,7 +4,6 @@ import Decimal from "decimal.js";
 import type { OrderEvent, TradeEvent } from "./types";
 import redisclient from "@repo/redisclient";
 
-
 const settleExectuedTrades = async (trade: TradeEvent) => {
   try {
     const { buyOrderId, sellOrderId, executedAt, quantity, price, event } = trade;
@@ -187,7 +186,7 @@ const settleUpdatedOrders = async (order: OrderEvent) => {
         throw new Error('Order not found');
       }
 
-      if (odr.status === "CANCELLED" || odr.status === "PENDING") {
+      if (odr.status === "CANCELLED") {
         return;
       }
 
@@ -263,16 +262,12 @@ const settleCancelledOrders = async (order: OrderEvent) => {
 
       const refundAsset = order.side === "BUY" ? odr.quoteAsset : odr.baseAsset;
 
-      const wallet = await tx.wallet.findFirst({
-        where: {
-          userId: odr.userId,
-          asset: refundAsset,
-        },
-      });
+      const [wallet] = await tx.$queryRaw<{id : string, available : Decimal, locked : Decimal}[]>`SELECT * FROM "Wallet" WHERE "userId" = ${odr.userId} AND "asset" = ${refundAsset} FOR UPDATE`;
 
       if (!wallet) {
         throw new Error('Wallet not found');
       }
+
       await tx.wallet.update({
         where: {
           id: wallet.id
@@ -283,7 +278,8 @@ const settleCancelledOrders = async (order: OrderEvent) => {
           },
           locked: {
             decrement: odr.side === "BUY" ? Decimal(odr.price).mul(odr.remainingQuantity) : odr.remainingQuantity
-          }
+          },
+          updatedAt: new Date(order.updatedAt),
         }
       })
 
@@ -305,8 +301,7 @@ const settleCancelledOrders = async (order: OrderEvent) => {
       })
       await tx.order.update({
         where: {
-          id: odr.id,
-          userId: odr.userId,
+          id: order.orderId,
         },
         data: {
           status: "CANCELLED",
@@ -407,12 +402,7 @@ const settleExpiredOrders = async (order: OrderEvent) => {
 
       const userId = order.userId;
 
-      const wallet = await tx.wallet.findFirst({
-        where: {
-          userId: userId,
-          asset: refundAsset
-        }
-      });
+      const [wallet] = await tx.$queryRaw<{id : string, available : Decimal, locked : Decimal}[]>`SELECT * FROM "Wallet" WHERE "userId" = ${userId} AND "asset" = ${refundAsset} FOR UPDATE`;
 
       if (!wallet) {
         throw new Error('Wallet not found');

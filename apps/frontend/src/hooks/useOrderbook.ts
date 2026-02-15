@@ -76,24 +76,24 @@ const useOrderbook = (pair: string, chartInterval: string) => {
 
                     case "TRADE_EXECUTED":
                         console.log('Trade executed:', data.trade);
-                        setUpdatedMarketData(prev => {
-                            const prevLast = prev?.lastPrice ?? data.trade.price;
+                        // setUpdatedMarketData(prev => {
+                        //     const prevLast = prev?.lastPrice ?? data.trade.price;
 
-                            return {
-                                lastPrice: data.trade.price,
-                                change: Decimal(prevLast).minus(data.trade.price).toString(),
-                                changePercent: Decimal(prevLast)
-                                    .minus(data.trade.price)
-                                    .div(prevLast)
-                                    .times(100)
-                                    .toString(),
-                                high: Decimal.max(prev?.high || "0", data.trade.price).toString(),
-                                low: Decimal.min(prev?.low || data.trade.price, data.trade.price).toString(),
-                                volume: prev?.volume
-                                    ? Decimal(prev.volume).plus(data.trade.quantity).toString()
-                                    : data.trade.quantity,
-                            };
-                        });
+                        //     return {
+                        //         lastPrice: data.trade.price,
+                        //         change: Decimal(prevLast).minus(data.trade.price).toString(),
+                        //         changePercent: Decimal(prevLast)
+                        //             .minus(data.trade.price)
+                        //             .div(prevLast)
+                        //             .times(100)
+                        //             .toString(),
+                        //         high: Decimal.max(prev?.high || "0", data.trade.price).toString(),
+                        //         low: Decimal.min(prev?.low || data.trade.price, data.trade.price).toString(),
+                        //         volume: prev?.volume
+                        //             ? Decimal(prev.volume).plus(data.trade.quantity).toString()
+                        //             : data.trade.quantity,
+                        //     };
+                        // });
 
                         setRecentTrades(prev => {
                             const updated = [...prev, data.trade];
@@ -106,10 +106,30 @@ const useOrderbook = (pair: string, chartInterval: string) => {
                         break;
 
                     case "CANDLE_UPDATE":
-                        setCandles((prev) => prev.map(candle => candle.open === data.candle.open ? {
+                        setCandles((prev) => prev.map(candle => candle.timestamp === data.candle.timestamp ? {
                             ...candle,
                             ...data.candle
                         } : candle))
+                        break;
+                    
+                    case "MARKET_UPDATE":
+                        console.log("market updated", data)
+                        const { 
+                            price,
+                            low24h,
+                            high24h,
+                            volume24h,
+                            change24h,
+                            priceChange24h,
+                         } = data.data;
+                        setUpdatedMarketData({
+                            high : high24h,
+                            low : low24h,
+                            lastPrice : price,
+                            change : priceChange24h,
+                            changePercent : change24h,
+                            volume : volume24h,
+                        })
                         break;
 
                     case "ERROR":

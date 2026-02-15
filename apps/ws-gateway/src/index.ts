@@ -97,15 +97,46 @@ async function initializeKafka() {
         console.log("Kafka consumer connected successfully");
 
         await redisSubscriber.psubscribe("candle:update:*");
+        await redisSubscriber.psubscribe("market-metrics:*");
 
         redisSubscriber.on("pmessage", (pattern, channel, message) => {
             if (!message) return;
 
+            const data = JSON.parse(message);
             try {
-                const data = JSON.parse(message);
-                if (!data?.pair) return;
-                console.log("Received candle message", data);
-                handleCandle(data);
+                switch (pattern) {
+                    case "candle:update:*":
+                        if (!data?.pair) return;
+                        handleCandle(data);
+                        break;
+                    case "market-metrics:*":
+                        if (data.type !== "MARKET_UPDATE") return;
+                        const pair = channel.split(":")[1];
+                        if(!pair) return;
+                        const {
+                            marketId,
+                            price,
+                            open24h,
+                            low24h,
+                            volume24h,
+                            quoteVolume24h,
+                            change24h,
+                            priceChange24h
+                        } = data.data;
+
+                        broadcastMarketUpdate(pair, {
+                            marketId,
+                            price,
+                            open24h,
+                            low24h,
+                            volume24h,
+                            quoteVolume24h,
+                            change24h,
+                            priceChange24h
+                        });
+                        break;
+
+                }
             } catch (err) {
                 console.error("Invalid candle message", err);
             }
@@ -249,6 +280,24 @@ function broadcastCandle(pair: string, interval: string, message: string) {
     })
 }
 
+function broadcastMarketUpdate(pair: string, data: {
+    marketId: string;
+    price: string;
+    open24h: string;
+    low24h: string;
+    volume24h: string;
+    quoteVolume24h: string;
+    change24h: string;
+    priceChange24h: string;
+}) {
+    broadcastToPair(pair, JSON.stringify({
+        type: "MARKET_UPDATE",
+        pair,
+        data,
+        timestamp: Date.now()
+    }));
+}
+
 function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
     try {
         const book = getBook(pair);
@@ -269,7 +318,6 @@ function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
         }));
     }
 }
-
 
 wss.on("connection", async (ws, req) => {
     const pair = getPairFromQuery(req);

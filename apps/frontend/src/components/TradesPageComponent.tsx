@@ -15,7 +15,6 @@ import {
 } from "@/lib/api/user.api";
 import { cancelOrder, placeOrder } from "@/lib/api/order.api";
 import { IOrder, BottomTab } from "@/types/order";
-import { IOrderBookOrder } from "@/types/orderbook";
 import { ITrade } from "@/types/trade";
 import BottomOrdersComponent from "./BottomOrdersComponent";
 import MarketDataHeader from "./MarketDataHeader";
@@ -120,9 +119,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       ),
     mutationKey: ["place-order", ticker, activeTab, price, quantity, orderType],
     onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: ["user-orders", ticker],
-      });
       toast.success(data.message ? data.message : "Order placed successfully", {
         position: "top-center",
       });
@@ -141,9 +137,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     mutationFn: (orderId: string) => cancelOrder(orderId, data?.accessToken!),
     mutationKey: ["cancel-order", ticker],
     onSuccess: (data: { message?: string }) => {
-      queryClient.invalidateQueries({
-        queryKey: ["user-orders", ticker],
-      });
       toast.success(
         data.message ? data.message : "Order cancelled successfully",
         {

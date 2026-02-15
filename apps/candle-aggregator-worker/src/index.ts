@@ -34,7 +34,6 @@ async function initializeKafka() {
 
 const processInterval = async (trade: ITradeEvent, interval: string, intervalMs: number) => {
     try {
-        
         const openTime = Math.floor(trade.timestamp / intervalMs) * intervalMs
         const closeTime = openTime + intervalMs;
     

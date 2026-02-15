@@ -93,8 +93,8 @@ export default function MarketChart({
       wickDownColor: "#ef4444",
       priceFormat: {
         type: "price",
-        precision: 2,
-        minMove: 0.01,
+        precision: 6,
+        minMove: 0.000001,
       },
     });
 

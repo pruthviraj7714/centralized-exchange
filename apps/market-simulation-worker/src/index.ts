@@ -17,11 +17,13 @@ const Users = [
     `retail1-${Date.now()}`,
 ]
 
-const TEST_BASE_ASSET = "DOGE"
+const TEST_BASE_ASSET = "ADA"
 const TEST_QUOTE_ASSET = "USDC"
 
+const jitter = Math.random() * 1000;
+
 // Market state
-let currentPrice = new Decimal(10); // Starting SOL price
+let currentPrice = new Decimal(200.10); // Starting SOL price
 let priceVolatility = 0.02; // 2% volatility
 let spreadBps = 10; // 10 basis points spread (0.1%)
 
@@ -133,10 +135,10 @@ const updateMarketPrice = () => {
     const meanReversionStrength = 0.05;
     const randomChange = (Math.random() - 0.5) * 2 * priceVolatility;
     const meanReversion = (new Decimal(150).sub(currentPrice)).mul(meanReversionStrength);
-    
+
     const priceChange = currentPrice.mul(randomChange).add(meanReversion);
     currentPrice = currentPrice.add(priceChange);
-    
+
     // Keep price in reasonable range
     if (currentPrice.lt(100)) currentPrice = new Decimal(100);
     if (currentPrice.gt(200)) currentPrice = new Decimal(200);
@@ -147,37 +149,37 @@ const marketMakerStrategy = async (profile: UserProfile) => {
     const spreadSize = currentPrice.mul(spreadBps / 10000);
     const bidPrice = currentPrice.sub(spreadSize);
     const askPrice = currentPrice.add(spreadSize);
-    
+
     // Place multiple orders at different levels
     const levels = 5;
     const quantityPerLevel = new Decimal(Math.random() * 5 + 2); // 2-7 SOL per level
-    
+
+    const promises = [];
+
     for (let i = 0; i < levels; i++) {
         const priceStep = spreadSize.mul(i * 0.5);
-        
-        // Buy orders
-        await placeOrder(
+
+        promises.push(placeOrder(
             profile.jwt,
             "BUY",
             bidPrice.sub(priceStep),
             quantityPerLevel.mul(1 + i * 0.2)
-        );
-        
-        // Sell orders
-        await placeOrder(
+        ), placeOrder(
             profile.jwt,
             "SELL",
             askPrice.add(priceStep),
             quantityPerLevel.mul(1 + i * 0.2)
-        );
+        ))
     }
+
+    await Promise.all(promises);
 }
 
 // Trader behavior - takes directional positions
 const traderStrategy = async (profile: UserProfile) => {
     const side = Math.random() > 0.5 ? "BUY" : "SELL";
     const quantity = new Decimal(Math.random() * 10 + 1); // 1-11 SOL
-    
+
     // Sometimes market order, sometimes limit near current price
     if (Math.random() > 0.7) {
         await placeOrder(profile.jwt, side, currentPrice, quantity, "MARKET");
@@ -192,11 +194,11 @@ const scalperStrategy = async (profile: UserProfile) => {
     const side = Math.random() > 0.5 ? "BUY" : "SELL";
     const quantity = new Decimal(Math.random() * 2 + 0.5); // 0.5-2.5 SOL
     const tightSpread = currentPrice.mul(0.0005); // 0.05% from mid
-    
-    const price = side === "BUY" 
+
+    const price = side === "BUY"
         ? currentPrice.sub(tightSpread)
         : currentPrice.add(tightSpread);
-    
+
     await placeOrder(profile.jwt, side, price, quantity);
 }
 
@@ -206,7 +208,7 @@ const whaleStrategy = async (profile: UserProfile) => {
         const side = Math.random() > 0.5 ? "BUY" : "SELL";
         const quantity = new Decimal(Math.random() * 50 + 20); // 20-70 SOL
         const priceOffset = currentPrice.mul((Math.random() - 0.5) * 0.01); // ±1%
-        
+
         await placeOrder(profile.jwt, side, currentPrice.add(priceOffset), quantity);
     }
 }
@@ -215,7 +217,7 @@ const whaleStrategy = async (profile: UserProfile) => {
 const arbitrageStrategy = async (profile: UserProfile) => {
     const quantity = new Decimal(Math.random() * 5 + 2); // 2-7 SOL
     const offset = currentPrice.mul(0.003); // 0.3% spread
-    
+
     // Place both buy and sell to capture spread
     await placeOrder(profile.jwt, "BUY", currentPrice.sub(offset), quantity);
     await placeOrder(profile.jwt, "SELL", currentPrice.add(offset), quantity);
@@ -226,7 +228,7 @@ const retailStrategy = async (profile: UserProfile) => {
     const side = Math.random() > 0.5 ? "BUY" : "SELL";
     const quantity = new Decimal(Math.random() * 3 + 0.1); // 0.1-3.1 SOL
     const priceOffset = currentPrice.mul((Math.random() - 0.5) * 0.02); // ±2%
-    
+
     await placeOrder(profile.jwt, side, currentPrice.add(priceOffset), quantity);
 }
 
@@ -263,13 +265,13 @@ async function main() {
 
     console.log("Getting JWT tokens...");
     for (let i = 0; i < users.length; i++) {
-        const user = users[i];
+        const user = users[i]!;
         const jwt = await getJWTToken(user);
-        
+
         let type: UserProfile['type'];
         let baseAmount: number;
         let quoteAmount: number;
-        
+
         if (i < 2) {
             type = 'market_maker';
             baseAmount = 10000;
@@ -295,16 +297,16 @@ async function main() {
             baseAmount = 100;
             quoteAmount = 15000;
         }
-        
+
         await fillUserWalletForTestAssets(jwt, baseAmount, quoteAmount);
-        
-        userProfiles.set(user.id, {
+
+        userProfiles.set(user!.id, {
             jwt,
             type,
             capital: new Decimal(quoteAmount)
         });
-        
-        console.log(`Created ${type} user: ${user.email}`);
+
+        console.log(`Created ${type} user: ${user!.email}`);
     }
 
     console.log("Starting market simulation...");
@@ -318,42 +320,42 @@ async function main() {
     // Market makers update frequently
     userProfiles.forEach((profile, userId) => {
         if (profile.type === 'market_maker') {
-            setInterval(() => executeStrategy(profile), 3000);
+            setInterval(() => executeStrategy(profile), 3000 + jitter);
         }
     });
 
     // Scalpers trade frequently
     userProfiles.forEach((profile) => {
         if (profile.type === 'scalper') {
-            setInterval(() => executeStrategy(profile), 2000);
+            setInterval(() => executeStrategy(profile), 2000 + jitter);
         }
     });
 
     // Traders trade moderately
     userProfiles.forEach((profile) => {
         if (profile.type === 'trader') {
-            setInterval(() => executeStrategy(profile), 5000);
+            setInterval(() => executeStrategy(profile), 5000 + jitter);
         }
     });
 
     // Arbitrage bots trade frequently
     userProfiles.forEach((profile) => {
         if (profile.type === 'arbitrage') {
-            setInterval(() => executeStrategy(profile), 4000);
+            setInterval(() => executeStrategy(profile), 4000 + jitter);
         }
     });
 
     // Whales trade infrequently
     userProfiles.forEach((profile) => {
         if (profile.type === 'whale') {
-            setInterval(() => executeStrategy(profile), 30000);
+            setInterval(() => executeStrategy(profile), 30000 + jitter);
         }
     });
 
     // Retail traders trade occasionally
     userProfiles.forEach((profile) => {
         if (profile.type === 'retail') {
-            setInterval(() => executeStrategy(profile), 8000);
+            setInterval(() => executeStrategy(profile), 8000 + jitter);
         }
     });
 

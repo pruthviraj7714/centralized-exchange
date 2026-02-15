@@ -118,7 +118,7 @@ export default function PlaceOrderComponent({
               Price ({quoteAsset})
             </label>
             <input
-              type="text"
+              type="number"
               value={price.toString()}
               onChange={(e) => setPrice(e.target.value)}
               placeholder="0.00"
@@ -133,7 +133,7 @@ export default function PlaceOrderComponent({
               Spend Amount ({quoteAsset})
             </label>
             <input
-              type="text"
+              type="number"
               value={spendAmount.toString()}
               onChange={(e) => setSpendAmount(e.target.value)}
               placeholder="0.00"
@@ -149,7 +149,7 @@ export default function PlaceOrderComponent({
               Quantity ({baseAsset})
             </label>
             <input
-              type="text"
+              type="number"
               value={quantity.toString()}
               onChange={(e) => setQuantity(e.target.value)}
               placeholder="0.00"
