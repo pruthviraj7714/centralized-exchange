@@ -10,7 +10,6 @@ const wss = new WebSocketServer({
     perMessageDeflate: false
 });
 
-
 const books = new Map<string, OrderbookView>();
 const orderbookClients = new Map<string, Set<WebSocket>>();
 const candleClients = new Map<string, Map<string, Set<WebSocket>>>();

@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import type { EngineOrder, OrderEvent, Trade } from "./types";
+import type { EngineOrder, ORDER_STATUS, OrderEvent, Trade } from "./types";
 import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
 import { MatchEngine } from "@repo/matching-engine-core";
@@ -19,12 +19,16 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
       userId: data.userId,
       side: data.side,
       marketId: data.marketId,
+      type : data.type,
       price: data.type === "MARKET" ? null : new Decimal(data.price),
-      quantity: new Decimal(data.originalQuantity),
+      quantity: data.type === "LIMIT" ? new Decimal(data.originalQuantity || 0) : new Decimal(data.originalQuantity || 0),
+      quoteSpent: data.type === "MARKET" ? new Decimal(data.quoteSpent || 0) : null,
+      quoteAmount: data.type === "MARKET" ? new Decimal(data.quoteAmount || 0) : null,
+      quoteRemaining: data.type === "MARKET" ? new Decimal(data.quoteRemaining || 0) : null,
       pair: data.pair,
       filled: new Decimal(0),
       createdAt: data.timestamp,
-      status: data.status
+      status: data.status as ORDER_STATUS
     };
   }
   return null;
@@ -33,6 +37,8 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
 const sendTradeToKafka = async (trade: Trade) => {
   const event = {
     ...trade,
+    price: trade.price.toString(),
+    quantity: trade.quantity.toString(),
     eventId : crypto.randomUUID(),
     event: "TRADE_EXECUTED",
     executedAt: Date.now(),
@@ -55,8 +61,11 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
     orderId: order.id,
     eventId : crypto.randomUUID(),
     pair: order.pair,
+    type : order.type,
     userId: order.userId,
-    price: order.price,
+    price: order.price?.toString() || null,
+    quoteSpent : order.quoteSpent?.toString() || null,
+    quoteRemaining : order.quoteRemaining?.toString() || null,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -81,8 +90,11 @@ const sendCanceledOrderToKafka = async (order: EngineOrder) => {
     orderId: order.id,
     eventId : crypto.randomUUID(),
     pair: order.pair,
+    type : order.type,
     userId: order.userId,
-    price: order.price,
+    price: order.price?.toString() || null,
+    quoteSpent : order.quoteSpent?.toString() || null,
+    quoteRemaining : order.quoteRemaining?.toString() || null,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -107,8 +119,9 @@ const sendOpenedOrderToKafka = async (order: EngineOrder) => {
     orderId: order.id,
     eventId : crypto.randomUUID(),
     pair: order.pair,
+    type : order.type,
     userId: order.userId,
-    price: order.price,
+    price: order.price?.toString() || null,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -157,6 +170,11 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
     sendOpenedOrderToKafka(order);
   })
 
+  engine.on("order_cancelled", (order: EngineOrder) => {
+    orderIndex.delete(order.id);
+    sendCanceledOrderToKafka(order);
+  });
+
   engine.on("order_removed", (order: EngineOrder) => {
     orderIndex.delete(order.id);
     sendCanceledOrderToKafka(order);
@@ -204,10 +222,9 @@ function processOrder(data: OrderEvent): boolean {
         return false;
       }
 
-      const cancelled = orderbookData.engine.cancelOrder(data.orderId, meta.side);
+      const cancelled = orderbookData.engine.cancelOrder(data.orderId);
 
       if (cancelled) {
-        orderIndex.delete(data.orderId);
         console.log(`Cancelled order ${data.orderId}`);
         return true;
       } else {
@@ -217,7 +234,7 @@ function processOrder(data: OrderEvent): boolean {
     }
 
     if(data.event === "ORDER_EXPIRED") {
-    const meta = orderIndex.get(data.orderId);
+      const meta = orderIndex.get(data.orderId);
       if (!meta) {
         console.log(`Order ${data.orderId} not found in index`);
         return false;
@@ -229,14 +246,13 @@ function processOrder(data: OrderEvent): boolean {
         return false;
       }
 
-      const cancelled = orderbookData.engine.cancelOrder(data.orderId, meta.side);
+      const cancelled = orderbookData.engine.cancelOrder(data.orderId);
 
       if (cancelled) {
-        orderIndex.delete(data.orderId);
-        console.log(`Cancelled order ${data.orderId}`);
+        console.log(`Expired order ${data.orderId}`);
         return true;
       } else {
-        console.log(`Failed to cancel order ${data.orderId}`);
+        console.log(`Failed to expire order ${data.orderId}`);
         return false;
       }
     }
@@ -283,14 +299,11 @@ export class MatchingEngineService {
     orderbookData.engine.addOrder(order);
   }
 
-  static cancelOrder(pair: string, orderId: string, side: "BUY" | "SELL"): boolean {
+  static cancelOrder(pair: string, orderId: string): boolean {
     const orderbookData = orderbookMap.get(pair);
     if (!orderbookData) return false;
 
-    const cancelled = orderbookData.engine.cancelOrder(orderId, side);
-    if (cancelled) {
-      orderIndex.delete(orderId);
-    }
+    const cancelled = orderbookData.engine.cancelOrder(orderId);
     return cancelled;
   }
 
@@ -312,4 +325,3 @@ export class MatchingEngineService {
     return orderIndex.size;
   }
 }
-

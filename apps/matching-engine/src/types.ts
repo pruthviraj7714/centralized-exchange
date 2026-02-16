@@ -5,6 +5,8 @@ export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
 
 export type Side = "BUY" | "SELL";
 
+export type OrderType = "LIMIT" | "MARKET"
+
 export type EngineOrder = {
   id: string;
   userId: string;
@@ -12,8 +14,12 @@ export type EngineOrder = {
   price: Decimal | null; // null for MARKET
   quantity: Decimal;
   pair : string;
+  quoteAmount: Decimal | null;
+  quoteRemaining: Decimal | null;
+  quoteSpent : Decimal | null;
   marketId : string;
   filled: Decimal;
+  type : OrderType;
   status: ORDER_STATUS;
   createdAt: number;
 };
@@ -30,7 +36,7 @@ export type Trade = {
 
 export interface IOrder {
   id: string;
-  type: "LIMIT" | "MARKET";
+  type: OrderType;
   side: "BUY" | "SELL";
   price: number;
   quantity: number;
@@ -59,9 +65,12 @@ export interface ITrade {
 export type OrderEvent =
   | {
     marketId: string
-    status: "OPEN",
-    originalQuantity: string,
-    remainingQuantity: string,
+    status: "OPEN" | "PENDING",
+    originalQuantity?: string,
+    remainingQuantity?: string,
+    quoteSpent?: string,
+    quoteAmount: string,
+    quoteRemaining: string,
     createdAt: string,
     updatedAt: string,
     event: "CREATE_ORDER",

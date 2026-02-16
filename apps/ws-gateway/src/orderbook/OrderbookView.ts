@@ -1,123 +1,111 @@
 import { Decimal } from "decimal.js";
 import type { OrderEvent, TradeEvent } from "./types";
-
+import BTree from "sorted-btree";
 type PriceLevel = Map<string, Decimal>;
 
 export class OrderbookView {
-    private bids: Map<string, PriceLevel>;
-    private asks: Map<string, PriceLevel>;
+    private bids: BTree<Decimal, PriceLevel>;
+    private asks: BTree<Decimal, PriceLevel>;
+    private orderIndex: Map<
+        string,
+        { side: "BUY" | "SELL"; price: Decimal }
+    >;
 
     constructor() {
-        this.bids = new Map();
-        this.asks = new Map();
+        this.bids = new BTree<Decimal, PriceLevel>(
+            undefined,
+            (a, b) => b.comparedTo(a)
+        );
+
+        this.asks = new BTree<Decimal, PriceLevel>(
+            undefined,
+            (a, b) => a.comparedTo(b)
+        );
+
+        this.orderIndex = new Map();
     }
 
-    private serialize(levels: Map<string, PriceLevel>) {
-        return Array.from(levels.entries())
-            .map(([price, level]) => {
-                const totalQuantity = Array.from(level.values())
-                    .reduce((sum, quantity) => sum.plus(quantity), new Decimal(0));
+    private serialize(levels: BTree<Decimal, PriceLevel>) {
+        return Array.from(levels.entries()).map(([price, level]) => {
+            const totalQuantity = Array.from(level.values())
+                .reduce((sum, quantity) => sum.plus(quantity), new Decimal(0));
 
-                return {
-                    price,
-                    totalQuantity: totalQuantity.toString(),
-                    orderCount: level.size,
-                    orders: Array.from(level.entries()).map(([orderId, quantity]) => ({
-                        orderId,
-                        quantity: quantity.toString()
-                    }))
-                };
-            })
-            .sort((a, b) => {
-                const priceA = new Decimal(a.price);
-                const priceB = new Decimal(b.price);
-                return priceB.minus(priceA).toNumber();
-            });
-    }
-
-    private serializeAsks() {
-        return Array.from(this.asks.entries())
-            .map(([price, level]) => {
-                const totalQuantity = Array.from(level.values())
-                    .reduce((sum, quantity) => sum.plus(quantity), new Decimal(0));
-
-                return {
-                    price,
-                    totalQuantity: totalQuantity.toString(),
-                    orderCount: level.size,
-                    orders: Array.from(level.entries()).map(([orderId, quantity]) => ({
-                        orderId,
-                        quantity: quantity.toString()
-                    }))
-                };
-            })
-            .sort((a, b) => {
-                const priceA = new Decimal(a.price);
-                const priceB = new Decimal(b.price);
-                return priceA.minus(priceB).toNumber();
-            });
+            return {
+                price: price.toString(),
+                totalQuantity: totalQuantity.toString(),
+                orderCount: level.size,
+                orders: Array.from(level.entries()).map(([orderId, quantity]) => ({
+                    orderId,
+                    quantity: quantity.toString()
+                }))
+            };
+        });
     }
 
     applyTrade(trade: TradeEvent) {
-        this.bids.forEach((level, price) => {
-            const orderQuantity = level.get(trade.buyOrderId);
-            if (orderQuantity) {
-                const remaining = orderQuantity.minus(trade.quantity);
-                if (remaining.lte(0)) {
-                    level.delete(trade.buyOrderId);
-                    if (level.size === 0) {
-                        this.bids.delete(price);
-                    }
-                } else {
-                    level.set(trade.buyOrderId, remaining);
-                }
-            }
-        });
-
-        this.asks.forEach((level, price) => {
-            const orderQuantity = level.get(trade.sellOrderId);
-            if (orderQuantity) {
-                const remaining = orderQuantity.minus(trade.quantity);
-                if (remaining.lte(0)) {
-                    level.delete(trade.sellOrderId);
-                    if (level.size === 0) {
-                        this.asks.delete(price);
-                    }
-                } else {
-                    level.set(trade.sellOrderId, remaining);
-                }
-            }
-        });
+        this.updateOrder(trade.buyOrderId, trade.quantity);
+        this.updateOrder(trade.sellOrderId, trade.quantity);
     }
+
+    private updateOrder(orderId: string, tradedQty: Decimal) {
+        const info = this.orderIndex.get(orderId);
+        if (!info) return;
+
+        const book = info.side === "BUY" ? this.bids : this.asks;
+        const level = book.get(info.price);
+        if (!level) return;
+
+        const current = level.get(orderId);
+        if (!current) return;
+
+        const remaining = current.minus(tradedQty);
+
+        if (remaining.lte(0)) {
+            level.delete(orderId);
+            this.orderIndex.delete(orderId);
+
+            if (level.size === 0) {
+                book.delete(info.price);
+            }
+        } else {
+            level.set(orderId, remaining);
+        }
+    }
+
 
     applyOrderOpened(order: OrderEvent) {
         const sidebook = order.side === "BUY" ? this.bids : this.asks;
-        const priceKey = order.price.toString();
-
-        if (new Decimal(order.remainingQuantity).lte(0)) {
-            return;
-        }
+        const priceKey = new Decimal(order.price);
 
         if (!sidebook.has(priceKey)) {
             sidebook.set(priceKey, new Map());
         }
 
-        sidebook.get(priceKey)!.set(order.orderId, new Decimal(order.remainingQuantity));
+        const remaining = new Decimal(order.remainingQuantity);
+        if (remaining.lte(0)) return;
+
+        sidebook.get(priceKey)!.set(order.orderId, remaining);
+
+        this.orderIndex.set(order.orderId, {
+            side: order.side,
+            price: priceKey
+        });
     }
 
     applyOrderCancel(order: OrderEvent) {
-        this.bids.forEach((level, price) => {
-            level.delete(order.orderId)
-            if (level.size === 0) {
-                this.bids.delete(price);
-            }
-        })
-        this.asks.forEach((level, price) => {
-            level.delete(order.orderId)
-            if (level.size === 0) {
-                this.asks.delete(price);
-            }
-        })
+        const info = this.orderIndex.get(order.orderId);
+        if (!info) return;
+
+        const book = info.side === "BUY" ? this.bids : this.asks;
+        const level = book.get(info.price);
+        if (!level) return;
+
+        level.delete(order.orderId);
+        this.orderIndex.delete(order.orderId);
+
+        if (level.size === 0) {
+            book.delete(info.price);
+        }
     }
 
     restoreOrderbook(snapshot: any) {
@@ -125,13 +113,18 @@ export class OrderbookView {
 
         this.bids.clear();
         this.asks.clear();
+        this.orderIndex.clear();
 
         if (snapshot.bids) {
             for (const level of snapshot.bids) {
-                const priceKey = level.price;
+                const priceKey = new Decimal(level.price);
                 const map = new Map<string, Decimal>();
                 for (const order of level.orders) {
                     map.set(order.orderId, new Decimal(order.quantity));
+                    this.orderIndex.set(order.orderId, {
+                        side: "BUY",
+                        price: priceKey
+                    });
                 }
                 this.bids.set(priceKey, map);
             }
@@ -140,20 +133,25 @@ export class OrderbookView {
 
         if (snapshot.asks) {
             for (const level of snapshot.asks) {
-                const priceKey = level.price;
+                const priceKey = new Decimal(level.price);
                 const map = new Map<string, Decimal>();
                 for (const order of level.orders) {
                     map.set(order.orderId, new Decimal(order.quantity));
+                    this.orderIndex.set(order.orderId, {
+                        side: "SELL",
+                        price: priceKey
+                    });
                 }
                 this.asks.set(priceKey, map);
             }
         }
+
     }
 
     snapshot() {
         return {
             bids: this.serialize(this.bids),
-            asks: this.serializeAsks(),
+            asks: this.serialize(this.asks),
         };
     }
 }

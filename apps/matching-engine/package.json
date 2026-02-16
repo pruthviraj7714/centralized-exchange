@@ -20,6 +20,7 @@
     "@types/ws": "^8.18.1",
     "decimal.js": "^10.6.0",
     "jsonwebtoken": "^9.0.2",
+    "sorted-btree": "^2.1.0",
     "ws": "^8.18.3"
   }
 }

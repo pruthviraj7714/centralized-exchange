@@ -5,10 +5,12 @@ import { SUPPORTED_MARKETS } from "@repo/common";
 import { SnapshotService } from "./snapshotService";
 import redisclient from "@repo/redisclient";
 import { producer } from "@repo/kafka/src/producer";
+import type BTree from "sorted-btree";
+import type Decimal from "decimal.js";
 
 function debugOrderBook(ob: {
-  bids: Map<string, OrderQueue>;
-  asks: Map<string, OrderQueue>;
+  bids: BTree<Decimal, OrderQueue>;
+  asks: BTree<Decimal, OrderQueue>;
 } | null) {
   console.log("---- ORDERBOOK ----");
 

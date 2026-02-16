@@ -1,134 +1,130 @@
 import { OrderQueue } from "./OrderQueue";
 import type { EngineOrder, Side } from "../types";
 import Decimal from "decimal.js";
+import BTree from "sorted-btree";
 
 class Orderbook {
-    bids: Map<string, OrderQueue>;
-    asks: Map<string, OrderQueue>;
+    bids: BTree<Decimal, OrderQueue>;
+    asks: BTree<Decimal, OrderQueue>;
+    private orderIndex: Map<string, { side: Side; price: Decimal }>;
 
     constructor() {
-        this.bids = new Map<string, OrderQueue>();
-        this.asks = new Map<string, OrderQueue>();
+        this.bids = new BTree<Decimal, OrderQueue>(undefined, (a: Decimal, b: Decimal) =>
+            b.comparedTo(a)
+        );
+
+        this.asks = new BTree<Decimal, OrderQueue>(undefined, (a: Decimal, b: Decimal) =>
+            a.comparedTo(b)
+        );
+
+        this.orderIndex = new Map();
     }
 
     serialize() {
         return {
             bids: Array.from(this.bids.entries()).map(([price, queue]) => ({
-                price,
+                price: price.toString(), 
                 orders: queue.toArray()
             })),
             asks: Array.from(this.asks.entries()).map(([price, queue]) => ({
-                price,
+                price: price.toString(), 
                 orders: queue.toArray()
             }))
         };
     }
 
     addOrder(order: EngineOrder): void {
-        if (order.price === null) {
+        if (order.price === null || order.type === "MARKET") {
             throw new Error("Market orders must never be added to orderbook");
         }
 
-        const priceKey = order.price.toString();
+        const priceKey = order.price;
+        const tree = order.side === "BUY" ? this.bids : this.asks;
 
-        if (order.side === "BUY") {
-            if (!this.bids.has(priceKey)) {
-                this.bids.set(priceKey, new OrderQueue());
-            }
-            this.bids.get(priceKey)?.enqueue(order);
-        } else {
-            if (!this.asks.has(priceKey)) {
-                this.asks.set(priceKey, new OrderQueue());
-            }
-            this.asks.get(priceKey)?.enqueue(order);
+        if (!tree.has(priceKey)) {
+            tree.set(priceKey, new OrderQueue())
         }
+
+        tree.get(priceKey)?.enqueue(order);
+        this.orderIndex.set(order.id, { side: order.side, price: priceKey });
     }
 
     getBestBid(): { price: Decimal; queue: OrderQueue } | null {
         if (this.bids.size === 0) return null;
+        
+        const entry = this.bids.entries().next().value;
+        if (!entry) return null;
 
-        let bestPrice: Decimal | null = null;
-        let bestQueue: OrderQueue | null = null;
-
-        for (const [priceStr, queue] of this.bids.entries()) {
-            if (queue.isEmpty()) continue;
-
-            const price = new Decimal(priceStr);
-            if (bestPrice === null || price.greaterThan(bestPrice)) {
-                bestPrice = price;
-                bestQueue = queue;
-            }
+        const [price, queue] = entry;
+        if (queue.isEmpty()) {
+            this.bids.delete(price);
+            return this.getBestBid();
         }
 
-        return bestPrice && bestQueue ? { price: bestPrice, queue: bestQueue } : null;
+        return { price, queue };
     }
 
     getBestAsk(): { price: Decimal; queue: OrderQueue } | null {
         if (this.asks.size === 0) return null;
+        
+        const entry = this.asks.entries().next().value;
+        if (!entry) return null;
 
-        let bestPrice: Decimal | null = null;
-        let bestQueue: OrderQueue | null = null;
-
-        for (const [priceStr, queue] of this.asks.entries()) {
-            if (queue.isEmpty()) continue;
-
-            const price = new Decimal(priceStr);
-            if (bestPrice === null || price.lessThan(bestPrice)) {
-                bestPrice = price;
-                bestQueue = queue;
-            }
-        }
-
-        return bestPrice && bestQueue ? { price: bestPrice, queue: bestQueue } : null;
-    }
-
-    removePriceLevel(side: Side, price: string): void {
-        if (side === "BUY") {
-            this.bids.delete(price);
-        } else {
+        const [price, queue] = entry;
+        if (queue.isEmpty()) {
             this.asks.delete(price);
+            return this.getBestAsk();
         }
+
+        return { price, queue };
     }
 
     getOrder(orderId: string): EngineOrder | null {
-        for (const queue of this.bids.values()) {
-            const order = queue.getOrder(orderId);
-            if (order) return order;
-        }
+        const orderInfo = this.orderIndex.get(orderId);
 
-        for (const queue of this.asks.values()) {
-            const order = queue.getOrder(orderId);
-            if (order) return order;
+        if (!orderInfo) return null;
+
+        const { side, price } = orderInfo;
+        const tree = side === "BUY" ? this.bids : this.asks;
+
+        const queue = tree.get(price);
+        if (queue) {
+            return queue.getOrder(orderId) ?? null;
         }
 
         return null;
     }
 
-    removeOrder(orderId: string, side: Side): void {
-        if (side === "BUY") {
-            for (const [price, queue] of this.bids.entries()) {
-                if (queue.getOrder(orderId)) {
-                    queue.removeOrder(orderId);
-                    if (queue.isEmpty()) {
-                        this.bids.delete(price);
-                    }
-                    return;
-                }
-            }
-        } else {
-            for (const [price, queue] of this.asks.entries()) {
-                if (queue.getOrder(orderId)) {
-                    queue.removeOrder(orderId);
-                    if (queue.isEmpty()) {
-                        this.asks.delete(price);
-                    }
-                    return;
-                }
-            }
+    removeOrder(orderId: string): void {
+        const order = this.orderIndex.get(orderId);
+
+        if (!order) return;
+
+        const { price, side } = order;
+
+        const tree = side === "BUY" ? this.bids : this.asks;
+        const queue = tree.get(price);
+
+        if (!queue) return;
+
+        queue.removeOrder(orderId);
+
+        if (queue.isEmpty()) {
+            tree.delete(price);
         }
+
+        this.orderIndex.delete(orderId);
     }
 
-    restoreOrderbook(snapshot: any): void {
+    removePriceLevel(side: Side, price: Decimal): void {
+        const tree = side === "BUY" ? this.bids : this.asks;
+        tree.delete(price);
+    }
+
+    restoreOrderbook(snapshot: {
+        bids: Array<{ price: Decimal | string; orders: EngineOrder[] }>;
+        asks: Array<{ price: Decimal | string; orders: EngineOrder[] }>;
+    }): void {
         if (!snapshot) return;
 
         if (!Array.isArray(snapshot.bids) || !Array.isArray(snapshot.asks)) {
@@ -136,46 +132,54 @@ class Orderbook {
             return;
         }
 
-        // Clear existing
         this.bids.clear();
         this.asks.clear();
+        this.orderIndex.clear();
 
         for (const level of snapshot.bids) {
             const queue = new OrderQueue();
+            const priceDecimal = new Decimal(level.price);
 
             for (const rawOrder of level.orders) {
                 const restoredOrder = {
                     ...rawOrder,
                     price: rawOrder.price ? new Decimal(rawOrder.price) : null,
                     quantity: new Decimal(rawOrder.quantity),
-                    filled: new Decimal(rawOrder.filled)
+                    filled: new Decimal(rawOrder.filled),
+                    quoteAmount: rawOrder.quoteAmount ? new Decimal(rawOrder.quoteAmount) : null,
+                    quoteRemaining: rawOrder.quoteRemaining ? new Decimal(rawOrder.quoteRemaining) : null,
+                    quoteSpent: rawOrder.quoteSpent ? new Decimal(rawOrder.quoteSpent) : null,
                 };
 
                 queue.enqueue(restoredOrder);
+                this.orderIndex.set(restoredOrder.id, { side: "BUY", price: priceDecimal });
             }
 
-            this.bids.set(level.price, queue);
+            this.bids.set(priceDecimal, queue);
         }
 
         for (const level of snapshot.asks) {
             const queue = new OrderQueue();
+            const priceDecimal = new Decimal(level.price);
 
             for (const rawOrder of level.orders) {
                 const restoredOrder = {
                     ...rawOrder,
                     price: rawOrder.price ? new Decimal(rawOrder.price) : null,
                     quantity: new Decimal(rawOrder.quantity),
-                    filled: new Decimal(rawOrder.filled)
+                    filled: new Decimal(rawOrder.filled),
+                    quoteAmount: rawOrder.quoteAmount ? new Decimal(rawOrder.quoteAmount) : null,
+                    quoteRemaining: rawOrder.quoteRemaining ? new Decimal(rawOrder.quoteRemaining) : null,
+                    quoteSpent: rawOrder.quoteSpent ? new Decimal(rawOrder.quoteSpent) : null,
                 };
 
                 queue.enqueue(restoredOrder);
+                this.orderIndex.set(restoredOrder.id, { side: "SELL", price: priceDecimal });
             }
 
-            this.asks.set(level.price, queue);
+            this.asks.set(priceDecimal, queue);
         }
-
     }
-
 }
 
 export default Orderbook;

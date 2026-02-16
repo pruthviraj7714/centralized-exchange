@@ -1,6 +1,7 @@
 import Orderbook from "./Orderbook";
-import type { EngineOrder, Trade, Side } from "../types";
+import type { EngineOrder, Trade } from "../types";
 import { EventEmitter } from "events";
+import { Decimal } from "decimal.js"
 
 export class MatchEngine extends EventEmitter {
     private orderbook: Orderbook;
@@ -14,6 +15,35 @@ export class MatchEngine extends EventEmitter {
         return this.orderbook.serialize();
     }
 
+    private finalizeMarketBuy(order: EngineOrder) {
+        if (order.quoteSpent!.eq(0)) {
+            order.status = "CANCELLED";
+            this.emit("order_cancelled", order);
+            return;
+        }
+
+        if (order.quoteRemaining!.gt(0)) {
+            order.status = "PARTIALLY_FILLED";
+        } else {
+            order.status = "FILLED";
+        }
+
+        this.emit("order_updated", order);
+    }
+
+    private finalizeMarketSell(order: EngineOrder) {
+        if (order.filled.eq(0)) {
+            order.status = "CANCELLED";
+            this.emit("order_cancelled", order);
+        } else if (order.filled.lessThan(order.quantity)) {
+            order.status = "PARTIALLY_FILLED";
+            this.emit("order_updated", order);
+        } else {
+            order.status = "FILLED";
+            this.emit("order_updated", order);
+        }
+    }
+
     addOrder(order: EngineOrder): void {
         if (order.side === "BUY") {
             this.matchBuyOrder(order);
@@ -21,8 +51,10 @@ export class MatchEngine extends EventEmitter {
             this.matchSellOrder(order);
         }
     }
-    
+
     private updateOrderStatus(order: EngineOrder) {
+        const previousStatus = order.status;
+
         if (order.filled.equals(0)) {
             order.status = "OPEN";
         } else if (order.filled.lessThan(order.quantity)) {
@@ -30,65 +62,87 @@ export class MatchEngine extends EventEmitter {
         } else {
             order.status = "FILLED";
         }
+
+        if (order.status !== previousStatus) {
+            if (order.status === "OPEN") {
+                this.emit("order_opened", order);
+            } else {
+                this.emit("order_updated", order);
+            }
+        }
     }
 
     private matchBuyOrder(buyOrder: EngineOrder): void {
-        while (buyOrder.filled.lessThan(buyOrder.quantity)) {
-            const bestAsk = this.orderbook.getBestAsk();
-            
-            // Market BUY: Must have opposite side (SELL) orders available
-            if (!bestAsk) {
-                if (buyOrder.price === null) {
-                    // Market order with no liquidity - cancel remaining quantity
-                    this.updateOrderStatus(buyOrder)
-                    this.emit("order_updated", buyOrder);
-                    console.log(`Market BUY order ${buyOrder.id} cancelled due to no liquidity`);
+        while (true) {
+            if (buyOrder.type === "MARKET") {
+                if (!buyOrder.quoteRemaining || buyOrder.quoteRemaining.lte(0)) {
+                    this.finalizeMarketBuy(buyOrder);
                     return;
-                } else {
-                    // Limit order - add to orderbook
-                    buyOrder.status = "OPEN";
-                    this.orderbook.addOrder(buyOrder);
-                    this.emit("order_opened", buyOrder);
-                    break;
+                }
+            } else {
+                if (buyOrder.filled.gte(buyOrder.quantity)) {
+                    this.updateOrderStatus(buyOrder);
+                    return;
                 }
             }
 
-            // Market orders ignore price limits, limit orders respect their price
-            if (buyOrder.price !== null && bestAsk.price.greaterThan(buyOrder.price)) {
-                // Limit order with price too high - add to orderbook
-                buyOrder.status = "OPEN";
-                this.orderbook.addOrder(buyOrder);
-                this.emit("order_opened", buyOrder);
-                break;
+            const bestAsk = this.orderbook.getBestAsk();
+            if (!bestAsk) {
+                if (buyOrder.type === "MARKET") {
+                    this.finalizeMarketBuy(buyOrder);
+                } else {
+                    this.orderbook.addOrder(buyOrder);
+                    this.updateOrderStatus(buyOrder);
+                }
+                return;
             }
 
             const sellOrder = bestAsk.queue.peek();
             if (!sellOrder) {
-                if(bestAsk.queue.isEmpty()) {
-                    this.orderbook.removePriceLevel("SELL", bestAsk.price.toString());
-                }
+                this.orderbook.removePriceLevel("SELL", bestAsk.price);
                 continue;
             }
 
-            // Trade executes at ask price (market taker takes maker price)
-            const tradePrice = bestAsk.price;
-            const availableQuantity = sellOrder.quantity.minus(sellOrder.filled);
-            const neededQuantity = buyOrder.quantity.minus(buyOrder.filled);
-            const tradeQuantity = availableQuantity.lessThan(neededQuantity) ? availableQuantity : neededQuantity;
-
-            // Execute trade
-            this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
-
-            // Remove fully filled orders
-            if (sellOrder.filled.equals(sellOrder.quantity)) {
-                bestAsk.queue.dequeue();
-                if (bestAsk.queue.isEmpty()) {
-                    this.orderbook.removePriceLevel("SELL", bestAsk.price.toString());
-                }
+            if (buyOrder.userId === sellOrder.userId) {
+                buyOrder.status = "CANCELLED";
+                this.emit("order_cancelled", buyOrder);
+                return;
             }
 
-            if (buyOrder.filled.equals(buyOrder.quantity)) {
-                break;
+            const price = bestAsk.price;
+            const availableBase = sellOrder.quantity.minus(sellOrder.filled);
+
+            let tradeBase: Decimal;
+
+            if (buyOrder.type === "MARKET") {
+                const affordableBase = buyOrder.quoteRemaining!.div(price);
+                tradeBase = Decimal.min(availableBase, affordableBase);
+            } else {
+                if (price.gt(buyOrder.price!)) {
+                    this.orderbook.addOrder(buyOrder);
+                    this.updateOrderStatus(buyOrder);
+                    return;
+                }
+
+                const remainingBase = buyOrder.quantity.minus(buyOrder.filled);
+                tradeBase = Decimal.min(availableBase, remainingBase);
+            }
+
+            if (tradeBase.lte(0)) {
+                if (buyOrder.type === "LIMIT" && buyOrder.filled.lt(buyOrder.quantity)) {
+                    this.orderbook.addOrder(buyOrder);
+                    this.updateOrderStatus(buyOrder);
+                }
+                return;
+            }
+
+            this.executeTrade(buyOrder, sellOrder, price, tradeBase);
+
+            if (sellOrder.filled.eq(sellOrder.quantity)) {
+                bestAsk.queue.dequeue();
+                sellOrder.status = "FILLED";
+                this.emit("order_updated", sellOrder);
+                this.orderbook.removeOrder(sellOrder.id);
             }
         }
     }
@@ -96,42 +150,37 @@ export class MatchEngine extends EventEmitter {
     private matchSellOrder(sellOrder: EngineOrder): void {
         while (sellOrder.filled.lessThan(sellOrder.quantity)) {
             const bestBid = this.orderbook.getBestBid();
-            
-            // Market SELL: Must have opposite side (BUY) orders available
+
             if (!bestBid) {
                 if (sellOrder.price === null) {
-                    // Market order with no liquidity - cancel remaining quantity
-                    this.updateOrderStatus(sellOrder);
-                    this.emit("order_updated", sellOrder);
+                    this.finalizeMarketSell(sellOrder);
                     console.log(`Market SELL order ${sellOrder.id} cancelled due to no liquidity`);
                     return;
                 } else {
-                    // Limit order - add to orderbook
-                    this.updateOrderStatus(sellOrder);
                     this.orderbook.addOrder(sellOrder);
-                    sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
+                    this.updateOrderStatus(sellOrder);
                     break;
                 }
             }
 
-            // Market orders ignore price limits, limit orders respect their price
             if (sellOrder.price !== null && bestBid.price.lessThan(sellOrder.price)) {
-                // Limit order with price too low - add to orderbook
-                this.updateOrderStatus(sellOrder);
                 this.orderbook.addOrder(sellOrder);
-                sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
+                this.updateOrderStatus(sellOrder);
                 break;
             }
 
             const buyOrder = bestBid.queue.peek();
             if (!buyOrder) {
-                if(bestBid.queue.isEmpty()) {
-                    this.orderbook.removePriceLevel("BUY", bestBid.price.toString());
-                }
+                this.orderbook.removePriceLevel("BUY", bestBid.price);
                 continue;
             }
 
-            // Trade executes at bid price (market taker takes maker price)
+            if (buyOrder.userId === sellOrder.userId) {
+                sellOrder.status = "CANCELLED";
+                this.emit("order_cancelled", sellOrder);
+                return;
+            }
+
             const tradePrice = bestBid.price;
             const availableQuantity = buyOrder.quantity.minus(buyOrder.filled);
             const neededQuantity = sellOrder.quantity.minus(sellOrder.filled);
@@ -141,35 +190,51 @@ export class MatchEngine extends EventEmitter {
 
             if (buyOrder.filled.equals(buyOrder.quantity)) {
                 bestBid.queue.dequeue();
-                if (bestBid.queue.isEmpty()) {
-                    this.orderbook.removePriceLevel("BUY", bestBid.price.toString());
-                }
+                buyOrder.status = "FILLED";
+                this.emit("order_updated", buyOrder);
+                this.orderbook.removeOrder(buyOrder.id);
                 continue;
             }
 
             if (sellOrder.filled.equals(sellOrder.quantity)) {
+                this.updateOrderStatus(sellOrder);
                 break;
             }
         }
     }
 
-    private executeTrade(buyOrder: EngineOrder, sellOrder: EngineOrder, price: any, quantity: any): void {
-        // Update filled quantities
+    private executeTrade(
+        buyOrder: EngineOrder,
+        sellOrder: EngineOrder,
+        price: Decimal,
+        quantity: Decimal
+    ): void {
+        const tradeQuote = price.mul(quantity);
+
         buyOrder.filled = buyOrder.filled.plus(quantity);
+
+        if (buyOrder.type === "MARKET") {
+            buyOrder.quoteSpent = buyOrder.quoteSpent!.plus(tradeQuote);
+            buyOrder.quoteRemaining = buyOrder.quoteRemaining!.minus(tradeQuote);
+        }
+
         sellOrder.filled = sellOrder.filled.plus(quantity);
 
-        this.updateOrderStatus(buyOrder);
-        this.updateOrderStatus(sellOrder);
-
-        buyOrder.status === "OPEN" ? this.emit("order_opened", buyOrder) : this.emit("order_updated", buyOrder);
-        sellOrder.status === "OPEN" ? this.emit("order_opened", sellOrder) : this.emit("order_updated", sellOrder);
+        if (buyOrder.type === "LIMIT") {
+            this.updateOrderStatus(buyOrder);
+        }
+        if (sellOrder.type === "LIMIT") {
+            this.updateOrderStatus(sellOrder);
+        }
 
         const trade: Trade = {
             buyOrderId: buyOrder.id,
             sellOrderId: sellOrder.id,
-            price: price,
-            quantity: quantity,
-            marketId : buyOrder.marketId,   
+            price,
+            quantity,
+            quoteSpent : buyOrder.quoteSpent,
+            quoteRemaining : buyOrder.quoteRemaining,
+            marketId: buyOrder.marketId,
             pair: buyOrder.pair,
             timestamp: Date.now()
         };
@@ -177,18 +242,18 @@ export class MatchEngine extends EventEmitter {
         this.emit("trade", trade);
     }
 
-    cancelOrder(orderId: string, side: Side): boolean {
+    cancelOrder(orderId: string): boolean {
         const order = this.orderbook.getOrder(orderId);
 
-        if(!order) {
+        if (!order) {
             return false;
         }
 
-        if(order.status === "FILLED" || order.status === "CANCELLED") {
+        if (order.status === "FILLED" || order.status === "CANCELLED") {
             return false;
         }
 
-        this.orderbook.removeOrder(orderId, side);
+        this.orderbook.removeOrder(orderId);
 
         order.status = "CANCELLED";
         this.emit("order_removed", order);
@@ -196,16 +261,16 @@ export class MatchEngine extends EventEmitter {
         return true;
     }
 
-    removeExpiredOrder(orderId: string, side : Side): boolean {
+    removeExpiredOrder(orderId: string): boolean {
         const order = this.orderbook.getOrder(orderId);
 
-        if(!order) return false;
+        if (!order) return false;
 
-        if(order.status === "PENDING" || order.status === "FILLED") {
+        if (order.status === "PENDING" || order.status === "FILLED") {
             return false;
         }
 
-        this.orderbook.removeOrder(orderId, side);
+        this.orderbook.removeOrder(orderId);
 
         return true;
     }
@@ -213,7 +278,7 @@ export class MatchEngine extends EventEmitter {
     restoreOrderbook(snapshot: any): void {
         this.orderbook.restoreOrderbook(snapshot);
     }
-   
+
     getOrderbook() {
         return {
             bids: this.orderbook.bids,
