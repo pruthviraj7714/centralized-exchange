@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import prisma from "@repo/db";
 import { producer } from "@repo/kafka/src/producer";
 import { COMMAND_TOPICS } from "@repo/kafka/src/topics";
+import { Decimal } from 'decimal.js'
 
 await producer.connect();
 
@@ -30,28 +31,28 @@ const placeOrderController = async (req: Request, res: Response) => {
     const { pair, price, quantity, side, type, quoteAmount } = validationResult.data;
 
     if (type === "LIMIT" && (!price || price === undefined || price.lte(0))) {
-      res.status(400).json({
+      res.status(422).json({
         message: "Price is required for limit orders and must be greater than 0",
       });
       return;
     }
 
     if (type === "LIMIT" && (!quantity || quantity === undefined || quantity.lte(0))) {
-      res.status(400).json({
+      res.status(422).json({
         message: "Quantity is required for limit orders and must be greater than 0"
       });
       return;
     }
 
     if (type === "MARKET" && side === "BUY" && !quoteAmount) {
-      res.status(400).json({
+      res.status(422).json({
         message: "Spend amount is required for market buy orders",
       });
       return;
     }
 
     if (type === "MARKET" && side === "SELL" && !quantity) {
-      res.status(400).json({
+      res.status(422).json({
         message: "Quantity is required for market sell orders",
       });
       return;
@@ -67,7 +68,7 @@ const placeOrderController = async (req: Request, res: Response) => {
     });
 
     if (!market) {
-      res.status(400).json({
+      res.status(404).json({
         message: "Invalid Market",
       });
       return;
@@ -80,31 +81,21 @@ const placeOrderController = async (req: Request, res: Response) => {
       if (side === "BUY") {
         const totalAmount = price!.mul(qty);
 
-        const wallet = await prisma.wallet.findFirst({
-          where: {
-            asset: quoteAsset,
-            userId,
-          },
-        });
-
-        if (!wallet) {
-          res.status(400).json({
-            message: "Invalid Wallet",
-          });
-          return;
-        }
-
-        if (wallet.available.lt(totalAmount)) {
-          res.status(400).json({
-            message: "Insufficient Balance",
-          });
-          return;
-        }
-
         order = await prisma.$transaction(async (tx) => {
-          await tx.wallet.update({
+          const [quoteAssetWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "asset" = ${quoteAsset} AND "userId" = ${userId} FOR UPDATE`;
+
+          if (!quoteAssetWallet) {
+            res.status(404).json({
+              message: "Wallet not found for asset",
+            });
+            return;
+          }
+          const updated = await tx.wallet.updateMany({
             where: {
-              id: wallet.id,
+              id: quoteAssetWallet.id,
+              available: {
+                gte: totalAmount
+              }
             },
             data: {
               available: {
@@ -115,6 +106,10 @@ const placeOrderController = async (req: Request, res: Response) => {
               },
             },
           });
+
+          if (updated.count === 0) {
+            throw new Error("Insufficient Balance");
+          }
 
           const order = await tx.order.create({
             data: {
@@ -133,31 +128,22 @@ const placeOrderController = async (req: Request, res: Response) => {
       } else {
         const qtyToSell = quantity!;
 
-        const wallet = await prisma.wallet.findFirst({
-          where: {
-            asset: baseAsset,
-            userId,
-          },
-        });
-
-        if (!wallet) {
-          res.status(400).json({
-            message: "Invalid Wallet",
-          });
-          return;
-        }
-
-        if (wallet.available.lt(qtyToSell)) {
-          res.status(400).json({
-            message: "Insufficient Balance",
-          });
-          return;
-        }
-
         order = await prisma.$transaction(async (tx) => {
-          await tx.wallet.update({
+          const [baseAssetWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "asset" = ${baseAsset} AND "userId" = ${userId} FOR UPDATE`;
+
+          if (!baseAssetWallet) {
+            res.status(404).json({
+              message: "Wallet not found for asset",
+            });
+            return;
+          }
+
+          const updated = await tx.wallet.updateMany({
             where: {
-              id: wallet.id,
+              id: baseAssetWallet.id,
+              available: {
+                gte: qtyToSell
+              }
             },
             data: {
               available: {
@@ -168,6 +154,10 @@ const placeOrderController = async (req: Request, res: Response) => {
               },
             },
           });
+
+          if (updated.count === 0) {
+            throw new Error("Insufficient Balance")
+          }
 
           const order = await tx.order.create({
             data: {
@@ -187,33 +177,23 @@ const placeOrderController = async (req: Request, res: Response) => {
     } else {
       if (side === "BUY") {
         const spendAmount = quoteAmount!;
-        const wallet = await prisma.wallet.findFirst({
-          where: {
-            asset: quoteAsset,
-            userId,
-          },
-        });
-
-        if (!wallet) {
-          res.status(400).json({
-            message: "Invalid Wallet",
-          });
-          return;
-        }
-
-        if (wallet.available.lt(spendAmount)) {
-          res.status(400).json({
-            message: "Insufficient Balance",
-          });
-          return;
-        }
-
 
         order = await prisma.$transaction(async (tx) => {
+          const [quoteAssetWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "asset" = ${quoteAsset} AND "userId" = ${userId} FOR UPDATE`;
 
-          await tx.wallet.update({
+          if (!quoteAssetWallet) {
+            res.status(404).json({
+              message: "Wallet not found for asset",
+            });
+            return;
+          }
+
+          const updated = await tx.wallet.updateMany({
             where: {
-              id: wallet.id
+              id: quoteAssetWallet.id,
+              available: {
+                gte: spendAmount
+              }
             },
             data: {
               available: {
@@ -226,19 +206,24 @@ const placeOrderController = async (req: Request, res: Response) => {
 
           })
 
+          if (updated.count === 0) {
+            throw new Error("Insufficient Balance")
+          }
+
           const order = await tx.order.create({
             data: {
-              originalQuantity: spendAmount!,
-              remainingQuantity: spendAmount!,
+              originalQuantity: new Decimal(0),
+              remainingQuantity: new Decimal(0),
+              quoteAmount: spendAmount,
+              quoteRemaining: spendAmount,
+              quoteSpent: new Decimal(0),
               price: null,
-              side: side,
-              type: type,
-              userId: userId,
+              side,
+              type,
+              userId,
               marketId: market.id,
-              createdAt: new Date(),
-              updatedAt: new Date(),
             }
-          })
+          });
 
           return order;
         })
@@ -246,32 +231,23 @@ const placeOrderController = async (req: Request, res: Response) => {
       } else {
         const qtyToSell = quantity!;
 
-        const wallet = await prisma.wallet.findFirst({
-          where: {
-            asset: baseAsset,
-            userId,
-          },
-        });
-
-        if (!wallet) {
-          res.status(400).json({
-            message: "Invalid Wallet",
-          });
-          return;
-        }
-
-        if (wallet.available.lt(qtyToSell)) {
-          res.status(400).json({
-            message: "Insufficient Balance",
-          });
-          return;
-        }
-
         order = await prisma.$transaction(async (tx) => {
 
-          await tx.wallet.update({
+          const [baseAssetWallet] = await tx.$queryRaw<{ id: string }[]>`SELECT * FROM "Wallet" WHERE "asset" = ${baseAsset} AND "userId" = ${userId} FOR UPDATE`;
+
+          if (!baseAssetWallet) {
+            res.status(404).json({
+              message: "Wallet not found for asset",
+            });
+            return;
+          }
+
+          const updated = await tx.wallet.updateMany({
             where: {
-              id: wallet.id
+              id: baseAssetWallet.id,
+              available: {
+                gte: qtyToSell
+              }
             },
             data: {
               available: {
@@ -283,10 +259,14 @@ const placeOrderController = async (req: Request, res: Response) => {
             }
           })
 
+          if (updated.count === 0) {
+            throw new Error("Insufficient Balance");
+          }
+
           const order = await tx.order.create({
             data: {
-              originalQuantity: qtyToSell,
-              remainingQuantity: qtyToSell,
+              originalQuantity: new Decimal(qtyToSell),
+              remainingQuantity: new Decimal(qtyToSell),
               price: null,
               side: side,
               type: type,
@@ -299,6 +279,12 @@ const placeOrderController = async (req: Request, res: Response) => {
         })
 
       }
+    }
+
+    if (!order) {
+      return res.status(500).json({
+        message: "Failed to create order"
+      });
     }
 
     const result = await producer.send({
@@ -316,13 +302,19 @@ const placeOrderController = async (req: Request, res: Response) => {
     res.status(202).json({
       message: "Order request accepted",
     });
-  } catch (error) {
+  } catch (error: any) {
+    if (error.message?.includes("Insufficient Balance")) {
+      return res.status(409).json({
+        message: "Insufficient Balance"
+      });
+
+    }
     console.log(error);
     res.status(500).json({
       message: "Internal Server Error",
     });
-  }
-};
+  };
+}
 
 const cancelOrderController = async (req: Request, res: Response) => {
   try {
