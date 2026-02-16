@@ -215,7 +215,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       toast.error("Please login to place an order", { position: "top-center" });
       return;
     }
-    if (!quantity || (orderType === "LIMIT" && !price)) {
+    if ((orderType === "LIMIT" && !price && !quantity) || (orderType === "MARKET" && !spendAmount && !quantity)) {
       toast.error("Please fill in all required fields", {
         position: "top-center",
       });
@@ -233,7 +233,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   };
 
   const handlePlaceOrderDisabled = () => {
-    if (!isReady || !quantity || (orderType === "LIMIT" && !price)) return true;
+    if (!isReady) return true;
     if (
       orderType === "LIMIT" &&
       (!price || new Decimal(price).eq(0)) &&

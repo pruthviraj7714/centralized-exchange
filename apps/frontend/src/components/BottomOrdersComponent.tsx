@@ -82,7 +82,9 @@ const BottomOrdersComponent = ({
                       {order.side}
                     </td>
 
-                    <td className="p-2 text-right">{order.price}</td>
+                    <td className="p-2 text-right">
+                      {order.price ? order.price : "Market"}
+                    </td>
 
                     <td className="p-2 text-right">{order.originalQuantity}</td>
 
@@ -145,7 +147,9 @@ const BottomOrdersComponent = ({
                       {order.side}
                     </td>
 
-                    <td className="p-2 text-right">{order.price}</td>
+                    <td className="p-2 text-right">
+                      {order.price ? order.price : "Market"}
+                    </td>
 
                     <td className="p-2 text-right">{order.originalQuantity}</td>
 

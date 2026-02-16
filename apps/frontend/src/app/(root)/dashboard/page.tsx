@@ -524,7 +524,7 @@ export default function MarketDashboard() {
               <div
                 key={coin.id}
                 className="p-4 hover:bg-slate-800/30 transition-colors cursor-pointer"
-                onClick={() => alert(`Navigate to /trade/${coin.symbol}`)}
+                onClick={() => router.push(`/trade/${coin.symbol}`)}
               >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">

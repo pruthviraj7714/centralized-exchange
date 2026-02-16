@@ -17,13 +17,13 @@ const Users = [
     `retail1-${Date.now()}`,
 ]
 
-const TEST_BASE_ASSET = "ADA"
+const TEST_BASE_ASSET = "ETH"
 const TEST_QUOTE_ASSET = "USDC"
 
 const jitter = Math.random() * 1000;
 
 // Market state
-let currentPrice = new Decimal(200.10); // Starting SOL price
+let currentPrice = new Decimal(50.10); // Starting SOL price
 let priceVolatility = 0.02; // 2% volatility
 let spreadBps = 10; // 10 basis points spread (0.1%)
 
