@@ -87,6 +87,9 @@ model Order {
   price             Decimal? @db.Decimal(36, 18) // null for MARKET
   originalQuantity  Decimal  @db.Decimal(36, 18)
   remainingQuantity Decimal  @db.Decimal(36, 18)
+  quoteAmount       Decimal? // how much quote user wants to spend
+  quoteRemaining    Decimal? // remaining quote to spend
+  quoteSpent        Decimal? // how much actually spent
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
