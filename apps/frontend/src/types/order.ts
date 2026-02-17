@@ -11,6 +11,9 @@ export interface IOrder {
   status: "OPEN" | "FILLED" | "CANCELLED";
   type: "LIMIT" | "MARKET";
   updatedAt: Date;
+  quoteAmount: string;
+  quoteRemaining: string;
+  quoteSpent: string;
   userId: string;
 }
 

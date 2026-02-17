@@ -1,6 +1,7 @@
 import { BottomTab } from "@/types/order";
 import { IOrder } from "@/types/order";
 import { ITrade } from "@/types/trade";
+import Decimal from "decimal.js";
 
 const sideColor = {
   BUY: "text-green-500",
@@ -34,6 +35,20 @@ const BottomOrdersComponent = ({
   baseAsset,
   quoteAsset,
 }: BottomOrdersComponentProps) => {
+
+  const filledBase = new Decimal(order.originalQuantity)
+  .minus(order.remainingQuantity);
+
+const filledQuote =
+  order.quoteSpent ??
+  (order.price
+    ? filledBase.mul(order.price)
+    : new Decimal(0));
+
+const avgPrice =
+  filledBase.gt(0)
+    ? filledQuote.div(filledBase)
+    : new Decimal(0);
   return (
     <div className="bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
       <div className="flex gap-2 p-3 border-b border-slate-800 bg-slate-900/50">
@@ -83,13 +98,23 @@ const BottomOrdersComponent = ({
                     </td>
 
                     <td className="p-2 text-right">
-                      {order.price ? order.price : "Market"}
+                      {order.type === "LIMIT" ? order.price : "—"}
                     </td>
 
-                    <td className="p-2 text-right">{order.originalQuantity}</td>
+                    <td className="p-2 text-right">
+                      {order.type === "LIMIT"
+                        ? order.originalQuantity
+                        : order.side === "BUY"
+                          ? order.quoteAmount
+                          : order.originalQuantity}
+                    </td>
 
                     <td className="p-2 text-right">
-                      {order.remainingQuantity}
+                      {order.type === "LIMIT"
+                        ? order.remainingQuantity
+                        : order.side === "BUY"
+                          ? order.quoteRemaining
+                          : order.remainingQuantity}
                     </td>
 
                     <td className="p-2 text-center text-gray-300">
@@ -128,6 +153,7 @@ const BottomOrdersComponent = ({
                   <th className="text-left p-2">Side</th>
                   <th className="text-right p-2">Price ({quoteAsset})</th>
                   <th className="text-right p-2">Qty ({baseAsset})</th>
+                  <th className="text-right p-2">Filled</th>
                   <th className="text-center p-2">Type</th>
                   <th className="text-center p-2">Status</th>
                 </tr>
@@ -152,6 +178,12 @@ const BottomOrdersComponent = ({
                     </td>
 
                     <td className="p-2 text-right">{order.originalQuantity}</td>
+
+                    <td className="p-2 text-right">
+                      {new Decimal(order.originalQuantity)
+                        .minus(order.remainingQuantity)
+                        .toNumber()}
+                    </td>
 
                     <td className="p-2 text-center text-gray-300">
                       {order.type}

@@ -92,7 +92,7 @@ export default function MarketDataHeader({
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Volume</span>
                 <span className="text-white font-semibold">
-                  {live.volume} {marketData.baseAsset}
+                  {new Decimal(live.volume || 0).toFixed(2)} {marketData.baseAsset}
                 </span>
               </div>
             </div>

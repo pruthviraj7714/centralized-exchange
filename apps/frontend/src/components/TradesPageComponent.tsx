@@ -215,7 +215,10 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       toast.error("Please login to place an order", { position: "top-center" });
       return;
     }
-    if ((orderType === "LIMIT" && !price && !quantity) || (orderType === "MARKET" && !spendAmount && !quantity)) {
+    if (
+      (orderType === "LIMIT" && !price && !quantity) ||
+      (orderType === "MARKET" && !spendAmount && !quantity)
+    ) {
       toast.error("Please fill in all required fields", {
         position: "top-center",
       });
@@ -310,13 +313,22 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       : "0.000";
 
   const totalValue =
-    orderType === "LIMIT" && price && quantity
-      ? new Decimal(price).mul(quantity).toFixed(2)
-      : orderType === "MARKET" && quantity
-        ? (new Decimal(marketData?.price || 0))
-            .mul(quantity)
-            .toFixed(2)
-        : "0.00";
+    orderType === "LIMIT"
+      ? new Decimal(price || 0).mul(quantity || 0).toFixed(2)
+      : activeTab === "BUY"
+        ? new Decimal(marketData?.price || 0).mul(spendAmount || 0).toFixed(2)
+        : activeTab === "SELL"
+          ? new Decimal(marketData?.price || 0).mul(quantity || 0).toFixed(2)
+          : "0.00";
+
+  const marketValue =
+    orderType === "LIMIT"
+      ? "0.00"
+      : activeTab === "BUY"
+        ? new Decimal(spendAmount || 0).div(marketData?.price || 0).toFixed(2)
+        : activeTab === "SELL"
+          ? new Decimal(quantity || 0).mul(marketData?.price || 0).toFixed(2)
+          : "0.00";
 
   const maxDepth = useMemo(() => {
     const maxBid = Math.max(...bids.map((b) => b.total.toNumber()));
@@ -384,6 +396,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
               baseAsset={baseAsset}
               quoteAsset={quoteAsset}
               price={price}
+              marketValue={marketValue}
               orderType={orderType}
               totalValue={totalValue}
               quantity={quantity}

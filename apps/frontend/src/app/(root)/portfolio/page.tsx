@@ -448,7 +448,7 @@ export default function PortfolioPage() {
                       TOKEN_METADATA[
                         balance.asset as keyof typeof TOKEN_METADATA
                       ];
-                    const totalAmount = balance.available.plus(balance.locked);
+                    const totalAmount = balance.available.plus(balance.locked).toFixed(metadata.displayDecimals);
                     const availablePercent = balance.available
                       .div(totalAmount)
                       .mul(100);
@@ -493,7 +493,7 @@ export default function PortfolioPage() {
                             <p className="text-sm font-semibold text-emerald-400">
                               {hideBalances
                                 ? "••••"
-                                : balance.available.toString()}
+                                : balance.available.toFixed(metadata.displayDecimals)}
                             </p>
                           </div>
 
@@ -504,7 +504,7 @@ export default function PortfolioPage() {
                             <p className="text-sm font-semibold text-orange-400">
                               {hideBalances
                                 ? "••••"
-                                : balance.locked.toString()}
+                                : balance.locked.toFixed(metadata.displayDecimals)}
                             </p>
                           </div>
 
@@ -518,7 +518,7 @@ export default function PortfolioPage() {
                               {balance.change24h.greaterThanOrEqualTo(0)
                                 ? "+"
                                 : ""}
-                              {balance.change24h.toFixed(2)}%
+                              {balance.change24h.toString()}%
                             </p>
                           </div>
                         </div>

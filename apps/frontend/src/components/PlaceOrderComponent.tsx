@@ -1,5 +1,4 @@
 import { IUserBalancesData } from "@/types/wallet";
-import Decimal from "decimal.js";
 import { Wallet } from "lucide-react";
 
 interface PlaceOrderComponentProps {
@@ -18,6 +17,7 @@ interface PlaceOrderComponentProps {
   price: string;
   spendAmount: string;
   quantity: string;
+  marketValue: string;
   setSpendAmount: (spendAmount: string) => void;
   setQuantity: (quantity: string) => void;
   setPrice: (price: string) => void;
@@ -39,6 +39,7 @@ export default function PlaceOrderComponent({
   price,
   spendAmount,
   quantity,
+  marketValue,
   setSpendAmount,
   setQuantity,
   setPrice,
@@ -171,18 +172,18 @@ export default function PlaceOrderComponent({
         </div>
 
         <div className="p-3 bg-slate-900/50 rounded-lg border border-slate-800 space-y-2">
+        {orderType === "LIMIT" ? (
           <div className="flex justify-between text-sm">
             <span className="text-slate-400">Total Value</span>
             <span className="text-white font-bold">${totalValue}</span>
           </div>
-          {orderType === "LIMIT" && (
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-500">Est. Fee (0.1%)</span>
-              <span className="text-slate-400">
-                ${(parseFloat(totalValue) * 0.001).toFixed(2)}
-              </span>
-            </div>
-          )}
+
+        ) : (
+           <div className="flex justify-between text-sm">
+            <span className="text-slate-400">Quantity</span>
+            <span className="text-white font-bold">≈ {marketValue || 0} {activeTab === "BUY" ? baseAsset : quoteAsset}</span>
+          </div>
+        )}
         </div>
 
         <button
