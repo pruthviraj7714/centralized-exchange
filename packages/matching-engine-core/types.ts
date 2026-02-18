@@ -16,6 +16,7 @@ export type EngineOrder = {
   quoteAmount : Decimal | null;
   quoteRemaining : Decimal | null;
   quantity: Decimal;
+  remainingQuantity: Decimal;
   pair : string;
   marketId : string;
   filled: Decimal;

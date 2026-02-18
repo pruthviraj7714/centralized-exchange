@@ -2,6 +2,15 @@ import Orderbook from "./Orderbook";
 import type { EngineOrder, Trade } from "../types";
 import { EventEmitter } from "events";
 import { Decimal } from "decimal.js"
+import BTree from "sorted-btree"
+import type { OrderQueue } from "./OrderQueue";
+
+export interface OrderbookLevel {
+    price: string;
+    totalQuantity: string;
+    orderCount: number;
+    orders: Array<{ orderId: string; quantity: string }>;
+}
 
 export class MatchEngine extends EventEmitter {
     private orderbook: Orderbook;
@@ -13,6 +22,38 @@ export class MatchEngine extends EventEmitter {
 
     serializeOrderbook() {
         return this.orderbook.serialize();
+    }
+
+    treeToLevels(
+        tree: BTree<Decimal, OrderQueue>
+    ): OrderbookLevel[] {
+        const levels: OrderbookLevel[] = [];
+
+        tree.forEach((queue, price) => {
+            const orders = queue.toArray();
+
+            let total = new Decimal(0);
+
+            const formattedOrders = orders.map(order => {
+                const qty = order.remainingQuantity ?? order.quantity;
+
+                total = total.plus(qty);
+
+                return {
+                    orderId: order.id,
+                    quantity: qty.toString()
+                };
+            });
+
+            levels.push({
+                price: price.toString(),
+                totalQuantity: total.toString(),
+                orderCount: orders.length,
+                orders: formattedOrders
+            });
+        });
+
+        return levels;
     }
 
     private finalizeMarketBuy(order: EngineOrder) {
@@ -139,10 +180,9 @@ export class MatchEngine extends EventEmitter {
             this.executeTrade(buyOrder, sellOrder, price, tradeBase);
 
             if (sellOrder.filled.eq(sellOrder.quantity)) {
-                bestAsk.queue.dequeue();
+                this.orderbook.removeOrder(sellOrder.id);
                 sellOrder.status = "FILLED";
                 this.emit("order_updated", sellOrder);
-                this.orderbook.removeOrder(sellOrder.id);
             }
         }
     }
@@ -189,10 +229,9 @@ export class MatchEngine extends EventEmitter {
             this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
 
             if (buyOrder.filled.equals(buyOrder.quantity)) {
-                bestBid.queue.dequeue();
+                this.orderbook.removeOrder(buyOrder.id);
                 buyOrder.status = "FILLED";
                 this.emit("order_updated", buyOrder);
-                this.orderbook.removeOrder(buyOrder.id);
                 continue;
             }
 
@@ -232,8 +271,8 @@ export class MatchEngine extends EventEmitter {
             sellOrderId: sellOrder.id,
             price,
             quantity,
-            quoteSpent : buyOrder.quoteSpent,
-            quoteRemaining : buyOrder.quoteRemaining,
+            quoteSpent: buyOrder.quoteSpent,
+            quoteRemaining: buyOrder.quoteRemaining,
             marketId: buyOrder.marketId,
             pair: buyOrder.pair,
             timestamp: Date.now()
@@ -281,8 +320,8 @@ export class MatchEngine extends EventEmitter {
 
     getOrderbook() {
         return {
-            bids: this.orderbook.bids,
-            asks: this.orderbook.asks
+            bids: this.treeToLevels(this.orderbook.bids),
+            asks: this.treeToLevels(this.orderbook.asks)
         };
     }
 }

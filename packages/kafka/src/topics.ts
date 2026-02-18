@@ -10,4 +10,5 @@ export const EVENT_TOPICS = {
   ORDER_CANCELLED: "orders.cancelled",
   ORDER_EXPIRED: "orders.expired",
   ORDERBOOK_UPDATE: "orderbook.updated",
+  ORDERBOOK_SNAPSHOT: "orderbook.snapshot"
 } as const;

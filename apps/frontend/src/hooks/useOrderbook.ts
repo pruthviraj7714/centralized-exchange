@@ -6,9 +6,7 @@ import Decimal from "decimal.js";
 import { useEffect, useState, useCallback, useRef } from "react"
 
 const useOrderbook = (pair: string, chartInterval: string) => {
-    const socketRef = useRef<WebSocket | null>(null);
     const [isConnected, setIsConnected] = useState<boolean>(false);
-    const [orderbook, setOrderbook] = useState<OrderbookData | null>(null);
     const [recentTrades, setRecentTrades] = useState<TradeData[]>([]);
     const [candles, setCandles] = useState<any[]>([]);
     const [updatedMarketData, setUpdatedMarketData] = useState<IUpdatedMarketData | null>(null);
@@ -16,197 +14,175 @@ const useOrderbook = (pair: string, chartInterval: string) => {
     const [bids, setBids] = useState<IOrderBookOrder[]>([]);
     const [asks, setAsks] = useState<IOrderBookOrder[]>([]);
 
-    const applyOrderbookUpdate = useCallback(
-        (prev: OrderbookData | null, update: any): OrderbookData => {
-            if (!prev) {
-                return {
-                    bids: update.bids || [],
-                    asks: update.asks || [],
-                    pair: update.pair,
-                    timestamp: update.timestamp,
-                };
-            }
+    const lastSequenceRef = useRef<number>(0);
+    const wsRef = useRef<WebSocket | null>(null);
 
+    const applyToDisplay = useCallback((data: OrderbookData) => {
+        let cumulativeBid = new Decimal(0);
+        let cumulativeAsk = new Decimal(0);
+
+        const transformedBids = data.bids.map((level, index) => {
+            const qty = new Decimal(level.totalQuantity);
+            cumulativeBid = cumulativeBid.plus(qty);
             return {
-                ...prev,
-                bids: update.bids || prev.bids,
-                asks: update.asks || prev.asks,
-                timestamp: update.timestamp,
+                price: new Decimal(level.price),
+                quantity: qty,
+                total: cumulativeBid,
+                requestId: `bid-${index}`,
+                orderCount: level.orderCount,
             };
-        },
-        []
-    );
+        });
+
+        const transformedAsks = data.asks.map((level, index) => {
+            const qty = new Decimal(level.totalQuantity);
+            cumulativeAsk = cumulativeAsk.plus(qty);
+            return {
+                price: new Decimal(level.price),
+                quantity: qty,
+                total: cumulativeAsk,
+                requestId: `ask-${index}`,
+                orderCount: level.orderCount,
+            };
+        });
+
+        setBids(transformedBids);
+        setAsks(transformedAsks);
+    }, []);
 
     useEffect(() => {
-        const ws = new WebSocket(`${WS_URL}?pair=${pair}`);
+        let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-        ws.onopen = () => {
-            console.log('WebSocket connected for pair:', pair);
-            socketRef.current = ws;
-            setIsConnected(true);
+        const connect = () => {
+            const ws = new WebSocket(`${WS_URL}?pair=${pair}`);
+            wsRef.current = ws;
 
-            ws.send(JSON.stringify({
-                type: "SUBSCRIBE_ORDERBOOK"
-            }));
-            ws.send(JSON.stringify({
-                type: "SUBSCRIBE_CANDLES",
-                interval: chartInterval
-            }))
-        };
+            ws.onopen = () => {
+                console.log('WebSocket connected for pair:', pair);
+                setIsConnected(true);
+                setError(null);
+                lastSequenceRef.current = 0;
 
-        ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+                ws.send(JSON.stringify({
+                    type: "SUBSCRIBE_ORDERBOOK"
+                }));
+                ws.send(JSON.stringify({
+                    type: "SUBSCRIBE_CANDLES",
+                    interval: chartInterval
+                }))
+            };
 
-                switch (data.type) {
-                    case "ORDERBOOK_SNAPSHOT":
-                        console.log('Orderbook snapshot received:', data);
-                        setOrderbook({
-                            bids: data.bids || [],
-                            asks: data.asks || [],
-                            pair: data.pair,
-                            timestamp: data.timestamp,
-                        });
-                        break;
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
 
-                    case "ORDERBOOK_UPDATE":
-                        console.log('Orderbook update received:', data);
-                        setOrderbook(prev => applyOrderbookUpdate(prev, data));
-                        break;
+                    switch (data.type) {
+                        case "ORDERBOOK_SNAPSHOT":
+                            const snapshotSequence = data.sequence;
+                            if (snapshotSequence <= lastSequenceRef.current) {
+                                console.log('skipping out-of-order update');
+                                return;
+                            }
+                            lastSequenceRef.current = data.sequence;
+                            const snapshotData: OrderbookData = {
+                                bids: data.bids || [],
+                                asks: data.asks || [],
+                                pair: data.pair,
+                                timestamp: data.timestamp,
+                            };
+                            applyToDisplay(snapshotData);
+                            break;
 
-                    case "TRADE_EXECUTED":
-                        console.log('Trade executed:', data.trade);
-                        // setUpdatedMarketData(prev => {
-                        //     const prevLast = prev?.lastPrice ?? data.trade.price;
+                        case "ORDERBOOK_UPDATE":
+                            const currentSequence = data.sequence;
+                            if (currentSequence <= lastSequenceRef.current) {
+                                console.log('Skipping out-of-order update');
+                                return;
+                            }
+                            lastSequenceRef.current = currentSequence;
+                            const updated: OrderbookData = {
+                                bids: data.bids || [],
+                                asks: data.asks || [],
+                                pair: data.pair,
+                                timestamp: data.timestamp,
+                            };
+                            applyToDisplay(updated);
+                            break;
 
-                        //     return {
-                        //         lastPrice: data.trade.price,
-                        //         change: Decimal(prevLast).minus(data.trade.price).toString(),
-                        //         changePercent: Decimal(prevLast)
-                        //             .minus(data.trade.price)
-                        //             .div(prevLast)
-                        //             .times(100)
-                        //             .toString(),
-                        //         high: Decimal.max(prev?.high || "0", data.trade.price).toString(),
-                        //         low: Decimal.min(prev?.low || data.trade.price, data.trade.price).toString(),
-                        //         volume: prev?.volume
-                        //             ? Decimal(prev.volume).plus(data.trade.quantity).toString()
-                        //             : data.trade.quantity,
-                        //     };
-                        // });
+                        case "TRADE_EXECUTED":
+                            setRecentTrades(prev => {
+                                const updated = [data.trade, ...prev];
+                                return updated.slice(-20);
+                            });
+                            break;
 
-                        setRecentTrades(prev => {
-                            const updated = [...prev, data.trade];
-                            return updated.slice(-20);
-                        });
-                        break;
+                        case "CANDLE_NEW":
+                            setCandles(prev => [...prev, data.candle]);
+                            break;
 
-                    case "CANDLE_NEW":
-                        setCandles(prev => [...prev, data.candle]);
-                        break;
+                        case "CANDLE_UPDATE":
+                            setCandles((prev) => prev.map(candle => candle.timestamp === data.candle.timestamp ? {
+                                ...candle,
+                                ...data.candle
+                            } : candle))
+                            break;
 
-                    case "CANDLE_UPDATE":
-                        setCandles((prev) => prev.map(candle => candle.timestamp === data.candle.timestamp ? {
-                            ...candle,
-                            ...data.candle
-                        } : candle))
-                        break;
-                    
-                    case "MARKET_UPDATE":
-                        console.log("market updated", data)
-                        const { 
-                            price,
-                            low24h,
-                            high24h,
-                            volume24h,
-                            change24h,
-                            priceChange24h,
-                         } = data.data;
-                        setUpdatedMarketData({
-                            high : high24h,
-                            low : low24h,
-                            lastPrice : price,
-                            change : priceChange24h,
-                            changePercent : change24h,
-                            volume : volume24h,
-                        })
-                        break;
+                        case "MARKET_UPDATE":
+                            const {
+                                price,
+                                low24h,
+                                high24h,
+                                volume24h,
+                                change24h,
+                                priceChange24h,
+                            } = data.data;
+                            setUpdatedMarketData({
+                                high: high24h,
+                                low: low24h,
+                                lastPrice: price,
+                                change: priceChange24h,
+                                changePercent: change24h,
+                                volume: volume24h,
+                            })
+                            break;
 
-                    case "ERROR":
-                        setError(data.message);
-                        console.error('WebSocket error:', data.message);
-                        break;
+                        case "ERROR":
+                            setError(data.message);
+                            console.error('WebSocket error:', data.message);
+                            break;
 
-                    default:
-                        console.log('Unknown message type:', data.type);
+                    }
+                } catch (error) {
+                    console.error('Error parsing WebSocket message:', error);
                 }
-            } catch (error) {
-                console.error('Error parsing WebSocket message:', error);
-            }
-        };
+            };
 
-        ws.onerror = (error) => {
-            console.error('WebSocket error:', error);
-            socketRef.current = null;
-            setIsConnected(false);
-        };
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                setIsConnected(false);
+            };
 
-        ws.onclose = (event) => {
-            console.log('WebSocket disconnected:', event.code, event.reason);
-            socketRef.current = null;
-            setIsConnected(false);
-        };
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected:', event.code, event.reason);
+                setIsConnected(false);
+                wsRef.current = null;
+
+                if (event.code !== 1000) {
+                    reconnectTimeout = setTimeout(connect, 2000);
+                }
+            };
+        }
+
+        connect();
 
         return () => {
-            console.log('Cleaning up WebSocket connection');
-            ws.onmessage = null;
-            ws.onerror = null;
-            ws.onclose = null;
-            ws.close();
-        };
-    }, [pair, chartInterval]);
-
-    useEffect(() => {
-        if (orderbook) {
-            console.log("Updating orderbook display:", orderbook);
-
-            let cumulativeBid = new Decimal(0);
-            let cumulativeAsk = new Decimal(0);
-
-            const transformedBids = orderbook.bids.map((level, index) => {
-                const qty = new Decimal(level.totalQuantity);
-                cumulativeBid = cumulativeBid.plus(qty);
-
-                return {
-                    price: new Decimal(level.price),
-                    quantity: qty,
-                    total: cumulativeBid,
-                    requestId: `bid-${index}`,
-                    orderCount: level.orderCount,
-                };
-            });
-
-            const transformedAsks = orderbook.asks.map((level, index) => {
-                const qty = new Decimal(level.totalQuantity);
-                cumulativeAsk = cumulativeAsk.plus(qty);
-
-                return {
-                    price: new Decimal(level.price),
-                    quantity: qty,
-                    total: cumulativeAsk,
-                    requestId: `ask-${index}`,
-                    orderCount: level.orderCount,
-                };
-            });
-
-            setBids(transformedBids);
-            setAsks(transformedAsks);
+            if (reconnectTimeout) clearTimeout(reconnectTimeout);
+            wsRef.current?.close(1000, "pair changed")
         }
-    }, [orderbook]);
+
+    }, [pair, chartInterval]);
 
     return {
         isConnected,
-        orderbook,
         recentTrades,
         candles,
         updatedMarketData,

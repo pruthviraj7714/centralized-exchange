@@ -263,74 +263,6 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
 
 }
 
-// const settleUpdatedOrders = async (order: OrderEvent) => {
-//   try {
-//     const updatedOrder = await prisma.$transaction(async (tx) => {
-//       const [odr] = await tx.$queryRaw<
-//         {
-//           id: string;
-//           userId: string;
-//           side: string;
-//           price: string;
-//           originalQuantity: string;
-//           remainingQuantity: string;
-//           baseAsset: string;
-//           quoteAsset: string;
-//           status: string;
-//         }[]
-//       >`
-//   SELECT
-//     o.id,
-//     o."userId",
-//     o.side,
-//     o.status,
-//     o."remainingQuantity",
-//     o."price",
-//     o."originalQuantity",
-//     m."baseAsset",
-//     m."quoteAsset"
-//   FROM "Order" o
-//   JOIN "Market" m ON o."marketId" = m.id
-//   WHERE o.id = ${order.orderId} FOR UPDATE
-// `;
-
-//       if (!odr) {
-//         throw new Error('Order not found');
-//       }
-
-//       if (odr.status === "CANCELLED") {
-//         return;
-//       }
-
-//       if (Decimal(order.remainingQuantity).lt(0)) {
-//         throw new Error("Invalid remaining quantity on cancel");
-//       }
-
-//       const newRemainingQty = Decimal(order.remainingQuantity);
-
-//       const updateOrder = await tx.order.update({
-//         where: {
-//           id: odr.id,
-//           userId: odr.userId,
-//         },
-//         data: {
-//           remainingQuantity: newRemainingQty,
-//           status: newRemainingQty.gt(0) ? "PARTIALLY_FILLED" : "FILLED",
-//           updatedAt: new Date(order.updatedAt),
-//         },
-//       });
-
-//       return updateOrder;
-//     })
-
-//     console.log('updated order in db', updatedOrder);
-//   } catch (error) {
-//     console.error('Error updating order:', error);
-//     throw error;
-//   }
-
-// }
-
 const settleCancelledOrders = async (order: OrderEvent) => {
   try {
     await prisma.$transaction(async (tx) => {
@@ -464,7 +396,7 @@ const settleOpenedOrders = async (order: OrderEvent) => {
       >`
   SELECT
     o.id,
-    o."status",
+    o."status"
   FROM "Order" o
   WHERE o.id = ${order.orderId} FOR UPDATE
 `;
@@ -606,7 +538,6 @@ async function main() {
   await consumer.connect();
 
   await consumer.subscribe({ topic: "trades.executed" });
-  // await consumer.subscribe({ topic: "orders.updated" });
   await consumer.subscribe({ topic: "orders.cancelled" })
   await consumer.subscribe({ topic: "orders.opened" })
   await consumer.subscribe({ topic: "orders.expired" })
@@ -637,9 +568,6 @@ async function main() {
       try {
         console.log('Received message:', event);
         switch (event.event) {
-          // case "ORDER_UPDATED":
-          //   await settleUpdatedOrders(event);
-          //   break;
           case "TRADE_EXECUTED":
             await settleExectuedTrades(event);
             break;

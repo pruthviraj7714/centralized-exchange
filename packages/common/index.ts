@@ -53,6 +53,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
     decimals: 8,
     color: "#F7931A",
+    displayDecimals : 4,
   },
   ETH: {
     name: "Ethereum",
@@ -60,6 +61,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
     decimals: 18,
     color: "#627EEA",
+    displayDecimals : 4,
   },
   SOL: {
     name: "Solana",
@@ -67,6 +69,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
     decimals: 9,
     color: "#14F195",
+    displayDecimals : 4,
   },
   USDC: {
     name: "USD Coin",
@@ -74,6 +77,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
     decimals: 6,
     color: "#2775CA",
+    displayDecimals : 2,
   },
   BNB: {
     name: "BNB",
@@ -81,6 +85,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/bnb-bnb-logo.png",
     decimals: 18,
     color: "#F3BA2F",
+    displayDecimals : 4,
   },
   XRP: {
     name: "Ripple",
@@ -88,6 +93,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/xrp-xrp-logo.png",
     decimals: 6,
     color: "#23292F",
+    displayDecimals : 2,
   },
   ADA: {
     name: "Cardano",
@@ -95,6 +101,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/cardano-ada-logo.png",
     decimals: 6,
     color: "#0033AD",
+    displayDecimals : 4,
   },
   AVAX: {
     name: "Avalanche",
@@ -102,6 +109,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
     decimals: 18,
     color: "#E84142",
+    displayDecimals : 4,
   },
   DOGE: {
     name: "Dogecoin",
@@ -109,6 +117,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/dogecoin-doge-logo.png",
     decimals: 8,
     color: "#C2A633",
+    displayDecimals : 2,
   },
   MATIC: {
     name: "Polygon",
@@ -116,6 +125,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/polygon-matic-logo.png",
     decimals: 18,
     color: "#8247E5",
+    displayDecimals : 2,
   },
   DOT: {
     name: "Polkadot",
@@ -123,6 +133,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/polkadot-new-dot-logo.png",
     decimals: 10,
     color: "#E6007A",
+    displayDecimals : 2,
   },
 } as const;
 

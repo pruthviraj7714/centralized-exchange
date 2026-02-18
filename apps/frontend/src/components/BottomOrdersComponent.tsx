@@ -35,20 +35,25 @@ const BottomOrdersComponent = ({
   baseAsset,
   quoteAsset,
 }: BottomOrdersComponentProps) => {
+  const calculateFilledBase = (order: IOrder): Decimal => {
+    return new Decimal(order.originalQuantity).minus(order.remainingQuantity);
+  };
 
-  const filledBase = new Decimal(order.originalQuantity)
-  .minus(order.remainingQuantity);
+  const calculateFilledQuote = (order: IOrder): Decimal => {
+    return (
+      new Decimal(order.quoteSpent ?? 0) ??
+      (order.price
+        ? calculateFilledBase(order).mul(order.price)
+        : new Decimal(0))
+    );
+  };
 
-const filledQuote =
-  order.quoteSpent ??
-  (order.price
-    ? filledBase.mul(order.price)
-    : new Decimal(0));
+  const calculateAvgPrice = (order: IOrder): Decimal => {
+    const filledBase = calculateFilledBase(order);
+    const filledQuote = calculateFilledQuote(order);
+    return filledBase.gt(0) ? filledQuote.div(filledBase) : new Decimal(0);
+  };
 
-const avgPrice =
-  filledBase.gt(0)
-    ? filledQuote.div(filledBase)
-    : new Decimal(0);
   return (
     <div className="bg-slate-900/30 border border-slate-800 rounded-lg overflow-hidden">
       <div className="flex gap-2 p-3 border-b border-slate-800 bg-slate-900/50">
@@ -174,15 +179,15 @@ const avgPrice =
                     </td>
 
                     <td className="p-2 text-right">
-                      {order.price ? order.price : "Market"}
+                      {order.type === "LIMIT"
+                        ? order.price
+                        : calculateAvgPrice(order).toFixed(6)}
                     </td>
 
-                    <td className="p-2 text-right">{order.originalQuantity}</td>
+                    <td className="p-2 text-right">{order.type === "LIMIT" ? order.originalQuantity : order.side === "BUY" ? order.quoteSpent : order.originalQuantity}</td>
 
                     <td className="p-2 text-right">
-                      {new Decimal(order.originalQuantity)
-                        .minus(order.remainingQuantity)
-                        .toNumber()}
+                      {order.type === "LIMIT" ? calculateFilledBase(order).toFixed(6) : order.side === "BUY" ? calculateFilledQuote(order).toFixed(6) : calculateFilledBase(order).toFixed(6)}
                     </td>
 
                     <td className="p-2 text-center text-gray-300">

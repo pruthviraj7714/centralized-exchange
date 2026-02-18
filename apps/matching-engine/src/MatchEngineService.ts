@@ -3,6 +3,7 @@ import type { EngineOrder, ORDER_STATUS, OrderEvent, Trade } from "./types";
 import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
 import { MatchEngine } from "@repo/matching-engine-core";
+import { nextSequence } from ".";
 
 interface OrderbookData {
   engine: MatchEngine;
@@ -19,7 +20,8 @@ const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
       userId: data.userId,
       side: data.side,
       marketId: data.marketId,
-      type : data.type,
+      type: data.type,
+      remainingQuantity: data.type === "LIMIT" ? new Decimal(data.originalQuantity || 0) : new Decimal(0),
       price: data.type === "MARKET" ? null : new Decimal(data.price),
       quantity: data.type === "LIMIT" ? new Decimal(data.originalQuantity || 0) : new Decimal(data.originalQuantity || 0),
       quoteSpent: data.type === "MARKET" ? new Decimal(data.quoteSpent || 0) : null,
@@ -39,7 +41,7 @@ const sendTradeToKafka = async (trade: Trade) => {
     ...trade,
     price: trade.price.toString(),
     quantity: trade.quantity.toString(),
-    eventId : crypto.randomUUID(),
+    eventId: crypto.randomUUID(),
     event: "TRADE_EXECUTED",
     executedAt: Date.now(),
   }
@@ -59,13 +61,13 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_UPDATED",
     orderId: order.id,
-    eventId : crypto.randomUUID(),
+    eventId: crypto.randomUUID(),
     pair: order.pair,
-    type : order.type,
+    type: order.type,
     userId: order.userId,
     price: order.price?.toString() || null,
-    quoteSpent : order.quoteSpent?.toString() || null,
-    quoteRemaining : order.quoteRemaining?.toString() || null,
+    quoteSpent: order.quoteSpent?.toString() || null,
+    quoteRemaining: order.quoteRemaining?.toString() || null,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -88,13 +90,13 @@ const sendCanceledOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_CANCELED",
     orderId: order.id,
-    eventId : crypto.randomUUID(),
+    eventId: crypto.randomUUID(),
     pair: order.pair,
-    type : order.type,
+    type: order.type,
     userId: order.userId,
     price: order.price?.toString() || null,
-    quoteSpent : order.quoteSpent?.toString() || null,
-    quoteRemaining : order.quoteRemaining?.toString() || null,
+    quoteSpent: order.quoteSpent?.toString() || null,
+    quoteRemaining: order.quoteRemaining?.toString() || null,
     side: order.side,
     status: order.status,
     filledQuantity: order.filled.toString(),
@@ -117,9 +119,9 @@ const sendOpenedOrderToKafka = async (order: EngineOrder) => {
   const event = {
     event: "ORDER_OPENED",
     orderId: order.id,
-    eventId : crypto.randomUUID(),
+    eventId: crypto.randomUUID(),
     pair: order.pair,
-    type : order.type,
+    type: order.type,
     userId: order.userId,
     price: order.price?.toString() || null,
     side: order.side,
@@ -134,6 +136,34 @@ const sendOpenedOrderToKafka = async (order: EngineOrder) => {
     messages: [
       {
         key: order.marketId,
+        value: JSON.stringify(event)
+      }
+    ]
+  })
+}
+
+const sendOrderbookUpdateToKafka = async (pair: string) => {
+  const orderbookData = orderbookMap.get(pair);
+  if (!orderbookData) {
+    return;
+  }
+
+  const event = {
+    event: "ORDERBOOK_UPDATE",
+    pair,
+    bids: orderbookData.engine.getOrderbook().bids,
+    asks: orderbookData.engine.getOrderbook().asks,
+    lastTrades: orderbookData.lastTrades,
+    updatedAt: Date.now(),
+    eventId: crypto.randomUUID(),
+    sequence: nextSequence(pair)
+  };
+
+  await producer.send({
+    topic: EVENT_TOPICS.ORDERBOOK_UPDATE,
+    messages: [
+      {
+        key: pair,
         value: JSON.stringify(event)
       }
     ]
@@ -164,20 +194,24 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
       orderIndex.delete(order.id);
     }
     sendUpdatedOrderToKafka(order);
+    sendOrderbookUpdateToKafka(pair);
   });
 
   engine.on("order_opened", (order: EngineOrder) => {
     sendOpenedOrderToKafka(order);
+    sendOrderbookUpdateToKafka(pair);
   })
 
   engine.on("order_cancelled", (order: EngineOrder) => {
     orderIndex.delete(order.id);
     sendCanceledOrderToKafka(order);
+    sendOrderbookUpdateToKafka(pair);
   });
 
   engine.on("order_removed", (order: EngineOrder) => {
     orderIndex.delete(order.id);
     sendCanceledOrderToKafka(order);
+    sendOrderbookUpdateToKafka(pair);
   });
 
   const orderbookData: OrderbookData = {
@@ -233,7 +267,7 @@ function processOrder(data: OrderEvent): boolean {
       }
     }
 
-    if(data.event === "ORDER_EXPIRED") {
+    if (data.event === "ORDER_EXPIRED") {
       const meta = orderIndex.get(data.orderId);
       if (!meta) {
         console.log(`Order ${data.orderId} not found in index`);
@@ -281,7 +315,7 @@ export class MatchingEngineService {
 
   static getRecentTrades(pair: string): Trade[] {
     const orderbookData = orderbookMap.get(pair);
-    return orderbookData ? orderbookData.lastTrades : [];
+    return orderbookData ? [...orderbookData.lastTrades] : [];
   }
 
   static getActivePairs(): string[] {

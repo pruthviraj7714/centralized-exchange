@@ -330,6 +330,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
           ? new Decimal(quantity || 0).mul(marketData?.price || 0).toFixed(2)
           : "0.00";
 
+
   const maxDepth = useMemo(() => {
     const maxBid = Math.max(...bids.map((b) => b.total.toNumber()));
     const maxAsk = Math.max(...asks.map((a) => a.total.toNumber()));

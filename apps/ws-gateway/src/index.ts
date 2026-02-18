@@ -2,7 +2,6 @@ import type { WebSocket } from "ws";
 import { WebSocketServer } from "ws";
 import { IncomingMessage } from 'http';
 import { createConsumer } from "@repo/kafka/src/consumer";
-import { OrderbookView } from "./orderbook/OrderbookView";
 import redisclient from "@repo/redisclient"
 
 const wss = new WebSocketServer({
@@ -10,16 +9,8 @@ const wss = new WebSocketServer({
     perMessageDeflate: false
 });
 
-const books = new Map<string, OrderbookView>();
 const orderbookClients = new Map<string, Set<WebSocket>>();
 const candleClients = new Map<string, Map<string, Set<WebSocket>>>();
-
-function getBook(pair: string) {
-    if (!books.has(pair)) {
-        books.set(pair, new OrderbookView())
-    }
-    return books.get(pair);
-}
 
 function handleCandle(data: any) {
     const { pair, interval, type } = data;
@@ -41,43 +32,12 @@ function handleCandle(data: any) {
     }
 }
 
-const restoreAllBooks = async () => {
-    let cursor = "0";
-
-    do {
-        const [nextCursor, keys] = await redisclient.scan(
-            cursor,
-            "MATCH",
-            "snapshot:*",
-            "COUNT",
-            100
-        );
-
-        cursor = nextCursor;
-
-        for (const key of keys) {
-            const pair = key.split(":")[1];
-            if (!pair) continue;
-
-            const raw = await redisclient.get(key);
-            if (!raw) continue;
-
-            const snapshot = JSON.parse(raw);
-            const book = getBook(pair);
-            book?.restoreOrderbook(snapshot);
-        }
-    } while (cursor !== "0");
-
-}
-
 const redisSubscriber = redisclient.duplicate();
 
 let consumer: ReturnType<typeof createConsumer>;
 
 async function initializeKafka() {
     try {
-        await restoreAllBooks();
-
         consumer = createConsumer("ws-gateway-service");
 
         consumer.on("consumer.crash", async (e: any) => {
@@ -90,8 +50,8 @@ async function initializeKafka() {
 
         await consumer.connect();
         await consumer.subscribe({ topic: "trades.executed" });
-        await consumer.subscribe({ topic: "orders.cancelled" });
-        await consumer.subscribe({ topic: "orders.opened" });
+        await consumer.subscribe({ topic: "orderbook.updated" });
+        await consumer.subscribe({ topic: "orderbook.snapshot" });
 
         console.log("Kafka consumer connected successfully");
 
@@ -101,8 +61,9 @@ async function initializeKafka() {
         redisSubscriber.on("pmessage", (pattern, channel, message) => {
             if (!message) return;
 
-            const data = JSON.parse(message);
             try {
+                const data = JSON.parse(message);
+
                 switch (pattern) {
                     case "candle:update:*":
                         if (!data?.pair) return;
@@ -111,7 +72,7 @@ async function initializeKafka() {
                     case "market-metrics:*":
                         if (data.type !== "MARKET_UPDATE") return;
                         const pair = channel.split(":")[1];
-                        if(!pair) return;
+                        if (!pair) return;
                         const {
                             marketId,
                             price,
@@ -134,10 +95,9 @@ async function initializeKafka() {
                             priceChange24h
                         });
                         break;
-
                 }
             } catch (err) {
-                console.error("Invalid candle message", err);
+                console.error("Invalid Redis pubsub message:", err);
             }
         });
 
@@ -152,55 +112,49 @@ async function initializeKafka() {
                         return;
                     }
 
-                    const key = `ws-gateway:${event.eventId}`;
+                    const key = `ws-gateway:${topic}:${event.eventId}`;
 
                     const isAlreadyProcessed = await redisclient.get(key);
 
                     if (isAlreadyProcessed) {
-                        console.log("Event Already Processed", event.eventId);
+                        console.log("Event already processed:", event.eventId);
                         return;
                     }
 
-                    const book = getBook(event.pair);
+                    if (event.event === "ORDERBOOK_SNAPSHOT") {
+                        broadcastToPair(event.pair, JSON.stringify({
+                            type: "ORDERBOOK_SNAPSHOT",
+                            pair: event.pair,
+                            bids: event.bids,
+                            asks: event.asks,
+                            timestamp: Date.now(),
+                            sequence: event.sequence
+                        }));
+                        return;
+                    }
 
-                    if (event.event === "ORDER_OPENED") {
-                        book?.applyOrderOpened(event);
-                        const snapshot = book?.snapshot();
+                    if (event.event === "ORDERBOOK_UPDATE") {
+                        console.log(event)
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "ORDERBOOK_UPDATE",
                             pair: event.pair,
-                            bids: snapshot?.bids || [],
-                            asks: snapshot?.asks || [],
-                            timestamp: Date.now()
+                            bids: event.bids,
+                            asks: event.asks,
+                            timestamp: Date.now(),
+                            sequence: event.sequence
                         }));
                     }
-
                     if (event.event === "TRADE_EXECUTED") {
-                        book?.applyTrade(event);
-                        const snapshot = book?.snapshot();
                         broadcastToPair(event.pair, JSON.stringify({
                             type: "TRADE_EXECUTED",
                             pair: event.pair,
-                            trade: event,
-                            timestamp: Date.now()
-                        }));
-                        broadcastToPair(event.pair, JSON.stringify({
-                            type: "ORDERBOOK_UPDATE",
-                            pair: event.pair,
-                            bids: snapshot?.bids || [],
-                            asks: snapshot?.asks || [],
-                            timestamp: Date.now()
-                        }));
-                    }
-
-                    if (event.event === "ORDER_CANCELED") {
-                        book?.applyOrderCancel(event);
-                        const snapshot = book?.snapshot();
-                        broadcastToPair(event.pair, JSON.stringify({
-                            type: "ORDERBOOK_UPDATE",
-                            pair: event.pair,
-                            bids: snapshot?.bids || [],
-                            asks: snapshot?.asks || [],
+                            trade: {
+                                buyOrderId: event.buyOrderId,
+                                sellOrderId: event.sellOrderId,
+                                price: event.price,
+                                quantity: event.quantity,
+                                timestamp: event.executedAt ?? Date.now()
+                            },
                             timestamp: Date.now()
                         }));
                     }
@@ -213,7 +167,7 @@ async function initializeKafka() {
                             partition,
                             topic
                         }
-                    ])
+                    ]);
                 } catch (error) {
                     console.error("Error processing Kafka message:", error);
                 }
@@ -243,40 +197,44 @@ const getPairFromQuery = (req: IncomingMessage) => {
 
 function broadcastToPair(pair: string, message: string) {
     const clients = orderbookClients.get(pair);
-    if (clients) {
-        const deadClients: WebSocket[] = [];
+    if (!clients) return;
 
-        clients.forEach(client => {
-            try {
-                if (client.readyState === 1) {
-                    client.send(message);
-                } else {
-                    deadClients.push(client);
-                }
-            } catch (error) {
-                console.error("Error sending message to client:", error);
+    const deadClients: WebSocket[] = [];
+
+    clients.forEach(client => {
+        try {
+            if (client.readyState === 1) {
+                client.send(message);
+            } else {
                 deadClients.push(client);
             }
-        });
+        } catch (error) {
+            console.error("Error sending message to client:", error);
+            deadClients.push(client);
+        }
+    });
 
-        deadClients.forEach(client => {
-            clients.delete(client);
-        });
-    }
+    deadClients.forEach(client => clients.delete(client));
 }
 
 function broadcastCandle(pair: string, interval: string, message: string) {
     const pairMap = candleClients.get(pair);
     if (!pairMap) return;
 
-    const clients = pairMap?.get(interval);
+    const clients = pairMap.get(interval);
     if (!clients) return;
+
+    const deadClients: WebSocket[] = [];
 
     clients.forEach((client) => {
         if (client.readyState === 1) {
-            client.send(message)
+            client.send(message);
+        } else {
+            deadClients.push(client);
         }
-    })
+    });
+
+    deadClients.forEach(client => clients.delete(client));
 }
 
 function broadcastMarketUpdate(pair: string, data: {
@@ -295,27 +253,6 @@ function broadcastMarketUpdate(pair: string, data: {
         data,
         timestamp: Date.now()
     }));
-}
-
-function sendOrderbookSnapshot(ws: WebSocket, pair: string) {
-    try {
-        const book = getBook(pair);
-        const snapshot = book?.snapshot();
-
-        ws.send(JSON.stringify({
-            type: "ORDERBOOK_SNAPSHOT",
-            pair,
-            bids: snapshot?.bids || [],
-            asks: snapshot?.asks || [],
-            timestamp: Date.now()
-        }));
-    } catch (error) {
-        console.error("Error sending orderbook snapshot:", error);
-        ws.send(JSON.stringify({
-            type: "ERROR",
-            message: "Failed to get orderbook snapshot"
-        }));
-    }
 }
 
 wss.on("connection", async (ws, req) => {
@@ -337,16 +274,25 @@ wss.on("connection", async (ws, req) => {
 
     console.log(`Client connected to pair: ${pair}`);
 
-    sendOrderbookSnapshot(ws, pair);
-
-    ws.on("message", (data: WebSocket.Data) => {
+    ws.on("message", async (data: WebSocket.Data) => {
         try {
             const message = JSON.parse(data.toString());
-            console.log('received message:', message);
 
             if (message.type === "SUBSCRIBE_ORDERBOOK") {
-                sendOrderbookSnapshot(ws, pair);
-            } else if (message.type === "SUBSCRIBE_CANDLES") {
+                const raw = await redisclient.get(`snapshot:rendered:${pair}`);
+                broadcastToPair(pair, JSON.stringify({
+                    type: "ORDERBOOK_SNAPSHOT",
+                    pair,
+                    bids: raw ? JSON.parse(raw).bids : [],
+                    asks: raw ? JSON.parse(raw).asks : [],
+                    timestamp: Date.now()
+                }))
+                ws.send(JSON.stringify({
+                    type: "SUBSCRIBED_ORDERBOOK",
+                    pair
+                }))
+            }
+            else if (message.type === "SUBSCRIBE_CANDLES") {
                 const interval = message.interval;
 
                 if (!interval) {
@@ -371,16 +317,11 @@ wss.on("connection", async (ws, req) => {
                     type: "CANDLE_SUBSCRIBED",
                     interval,
                     pair
-                }))
+                }));
             } else if (message.type === "PING") {
                 ws.send(JSON.stringify({
                     type: "PONG",
                     timestamp: Date.now()
-                }));
-            } else {
-                ws.send(JSON.stringify({
-                    type: "ERROR",
-                    message: `Unknown message type: ${message.type}`
                 }));
             }
         } catch (error) {
@@ -393,13 +334,12 @@ wss.on("connection", async (ws, req) => {
     });
 
     ws.on("close", (code, reason) => {
+        clearInterval(pingInterval);
+
         orderbookClients.get(pair)?.delete(ws);
         const pairMap = candleClients.get(pair);
-
         if (pairMap) {
-            pairMap.forEach((clients, interval) => {
-                clients.delete(ws);
-            })
+            pairMap.forEach((clients) => clients.delete(ws));
         }
 
         console.log(`WebSocket connection closed for ${pair}, code: ${code}, reason: ${reason}`);
@@ -409,11 +349,8 @@ wss.on("connection", async (ws, req) => {
         console.error(`WebSocket error for ${pair}:`, error);
         orderbookClients.get(pair)?.delete(ws);
         const pairMap = candleClients.get(pair);
-
         if (pairMap) {
-            pairMap.forEach((clients, interval) => {
-                clients.delete(ws);
-            })
+            pairMap.forEach((clients) => clients.delete(ws));
         }
     });
 
@@ -424,10 +361,6 @@ wss.on("connection", async (ws, req) => {
             clearInterval(pingInterval);
         }
     }, 30000);
-
-    ws.on("close", () => {
-        clearInterval(pingInterval);
-    });
 });
 
 wss.on("listening", () => {
@@ -437,4 +370,3 @@ wss.on("listening", () => {
 wss.on("error", (error) => {
     console.error("WebSocket server error:", error);
 });
-
