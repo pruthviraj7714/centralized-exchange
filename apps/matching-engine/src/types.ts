@@ -1,7 +1,7 @@
 import type Decimal from "decimal.js"
 import type Orderbook from "../../../packages/matching-engine-core/engine/Orderbook";
 
-export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
+export type ORDER_STATUS = "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED" | "EXPIRED" | "PENDING";
 
 export type Side = "BUY" | "SELL";
 

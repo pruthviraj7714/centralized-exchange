@@ -13,7 +13,7 @@ const sendOrderExpiredEvent = async (order: IOrder) => {
                     key: order.marketId,
                     value: JSON.stringify({
                         eventId: crypto.randomUUID(),
-                        type: "ORDER_EXPIRED",
+                        event: "ORDER_EXPIRED",
                         orderId: order.id,
                         marketId: order.marketId,
                         timestamp: Date.now(),

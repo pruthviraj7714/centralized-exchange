@@ -35,7 +35,7 @@ export class MatchEngine extends EventEmitter {
             let total = new Decimal(0);
 
             const formattedOrders = orders.map(order => {
-                const qty = order.remainingQuantity ?? order.quantity;
+                const qty = order.quantity.minus(order.filled)
 
                 total = total.plus(qty);
 
@@ -63,12 +63,8 @@ export class MatchEngine extends EventEmitter {
             return;
         }
 
-        if (order.quoteRemaining!.gt(0)) {
-            order.status = "PARTIALLY_FILLED";
-        } else {
-            order.status = "FILLED";
-        }
-
+        order.status = "FILLED";
+        this.orderbook.removeOrder(order.id);
         this.emit("order_updated", order);
     }
 
@@ -76,13 +72,11 @@ export class MatchEngine extends EventEmitter {
         if (order.filled.eq(0)) {
             order.status = "CANCELLED";
             this.emit("order_cancelled", order);
-        } else if (order.filled.lessThan(order.quantity)) {
-            order.status = "PARTIALLY_FILLED";
-            this.emit("order_updated", order);
-        } else {
-            order.status = "FILLED";
-            this.emit("order_updated", order);
+            return;
         }
+        order.status = "FILLED";
+        this.orderbook.removeOrder(order.id);
+        this.emit("order_updated", order);
     }
 
     addOrder(order: EngineOrder): void {
@@ -145,10 +139,12 @@ export class MatchEngine extends EventEmitter {
             }
 
             if (buyOrder.userId === sellOrder.userId) {
-                buyOrder.status = "CANCELLED";
-                this.emit("order_cancelled", buyOrder);
-                return;
+                this.orderbook.removeOrder(sellOrder.id);
+                sellOrder.status = "CANCELLED";
+                this.emit("order_removed", sellOrder);
+                continue;
             }
+
 
             const price = bestAsk.price;
             const availableBase = sellOrder.quantity.minus(sellOrder.filled);
@@ -216,9 +212,10 @@ export class MatchEngine extends EventEmitter {
             }
 
             if (buyOrder.userId === sellOrder.userId) {
-                sellOrder.status = "CANCELLED";
-                this.emit("order_cancelled", sellOrder);
-                return;
+                this.orderbook.removeOrder(buyOrder.id);
+                buyOrder.status = "CANCELLED";
+                this.emit("order_removed", buyOrder);
+                continue;
             }
 
             const tradePrice = bestBid.price;
@@ -258,13 +255,6 @@ export class MatchEngine extends EventEmitter {
         }
 
         sellOrder.filled = sellOrder.filled.plus(quantity);
-
-        if (buyOrder.type === "LIMIT") {
-            this.updateOrderStatus(buyOrder);
-        }
-        if (sellOrder.type === "LIMIT") {
-            this.updateOrderStatus(sellOrder);
-        }
 
         const trade: Trade = {
             buyOrderId: buyOrder.id,

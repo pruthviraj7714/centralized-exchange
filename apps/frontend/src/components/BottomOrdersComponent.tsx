@@ -1,7 +1,7 @@
 import { BottomTab } from "@/types/order";
 import { IOrder } from "@/types/order";
 import { ITrade } from "@/types/trade";
-import Decimal from "decimal.js";
+import  { Decimal } from "decimal.js";
 
 const sideColor = {
   BUY: "text-green-500",
@@ -108,18 +108,18 @@ const BottomOrdersComponent = ({
 
                     <td className="p-2 text-right">
                       {order.type === "LIMIT"
-                        ? order.originalQuantity
+                        ? new Decimal(order.originalQuantity).toFixed(4)
                         : order.side === "BUY"
-                          ? order.quoteAmount
-                          : order.originalQuantity}
+                          ? new Decimal(order.quoteAmount).toFixed(2)
+                          : new Decimal(order.originalQuantity).toFixed(2)}
                     </td>
 
                     <td className="p-2 text-right">
                       {order.type === "LIMIT"
-                        ? order.remainingQuantity
+                        ? new Decimal(order.remainingQuantity).toFixed(4)
                         : order.side === "BUY"
-                          ? order.quoteRemaining
-                          : order.remainingQuantity}
+                          ? new Decimal(order.quoteRemaining).toFixed(2)
+                          : new Decimal(order.remainingQuantity).toFixed(2)}
                     </td>
 
                     <td className="p-2 text-center text-gray-300">
@@ -184,7 +184,7 @@ const BottomOrdersComponent = ({
                         : calculateAvgPrice(order).toFixed(6)}
                     </td>
 
-                    <td className="p-2 text-right">{order.type === "LIMIT" ? order.originalQuantity : order.side === "BUY" ? order.quoteSpent : order.originalQuantity}</td>
+                    <td className="p-2 text-right">{order.type === "LIMIT" ? order.originalQuantity : order.side === "BUY" ? new Decimal(order.quoteSpent).toFixed(2) : new Decimal(order.originalQuantity).toFixed(2)}</td>
 
                     <td className="p-2 text-right">
                       {order.type === "LIMIT" ? calculateFilledBase(order).toFixed(6) : order.side === "BUY" ? calculateFilledQuote(order).toFixed(6) : calculateFilledBase(order).toFixed(6)}

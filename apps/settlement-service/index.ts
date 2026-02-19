@@ -518,7 +518,7 @@ const settleExpiredOrders = async (order: OrderEvent) => {
         },
         data: {
           status: "EXPIRED",
-          updatedAt: new Date(order.updatedAt)
+          updatedAt: new Date(order.timestamp)
         }
       })
 

@@ -17,7 +17,7 @@ const Users = [
     `retail1-${Date.now()}`,
 ]
 
-const TEST_BASE_ASSET = "BNB"
+const TEST_BASE_ASSET = "SOL"
 const TEST_QUOTE_ASSET = "USDC"
 
 const jitter = Math.random() * 1000;

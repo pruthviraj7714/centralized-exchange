@@ -23,11 +23,11 @@ class Orderbook {
     serialize() {
         return {
             bids: Array.from(this.bids.entries()).map(([price, queue]) => ({
-                price: price.toString(), 
+                price: price.toString(),
                 orders: queue.toArray()
             })),
             asks: Array.from(this.asks.entries()).map(([price, queue]) => ({
-                price: price.toString(), 
+                price: price.toString(),
                 orders: queue.toArray()
             }))
         };
@@ -51,7 +51,7 @@ class Orderbook {
 
     getBestBid(): { price: Decimal; queue: OrderQueue } | null {
         if (this.bids.size === 0) return null;
-        
+
         const entry = this.bids.entries().next().value;
         if (!entry) return null;
 
@@ -66,7 +66,7 @@ class Orderbook {
 
     getBestAsk(): { price: Decimal; queue: OrderQueue } | null {
         if (this.asks.size === 0) return null;
-        
+
         const entry = this.asks.entries().next().value;
         if (!entry) return null;
 
@@ -146,6 +146,9 @@ class Orderbook {
                     price: rawOrder.price ? new Decimal(rawOrder.price) : null,
                     quantity: new Decimal(rawOrder.quantity),
                     filled: new Decimal(rawOrder.filled),
+                    remainingQuantity: rawOrder.remainingQuantity
+                        ? new Decimal(rawOrder.remainingQuantity)
+                        : new Decimal(rawOrder.quantity).minus(new Decimal(rawOrder.filled)),
                     quoteAmount: rawOrder.quoteAmount ? new Decimal(rawOrder.quoteAmount) : null,
                     quoteRemaining: rawOrder.quoteRemaining ? new Decimal(rawOrder.quoteRemaining) : null,
                     quoteSpent: rawOrder.quoteSpent ? new Decimal(rawOrder.quoteSpent) : null,
@@ -169,6 +172,9 @@ class Orderbook {
                     quantity: new Decimal(rawOrder.quantity),
                     filled: new Decimal(rawOrder.filled),
                     quoteAmount: rawOrder.quoteAmount ? new Decimal(rawOrder.quoteAmount) : null,
+                    remainingQuantity: rawOrder.remainingQuantity
+                        ? new Decimal(rawOrder.remainingQuantity)
+                        : new Decimal(rawOrder.quantity).minus(new Decimal(rawOrder.filled)),
                     quoteRemaining: rawOrder.quoteRemaining ? new Decimal(rawOrder.quoteRemaining) : null,
                     quoteSpent: rawOrder.quoteSpent ? new Decimal(rawOrder.quoteSpent) : null,
                 };

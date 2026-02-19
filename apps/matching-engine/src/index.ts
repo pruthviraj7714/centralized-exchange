@@ -28,10 +28,11 @@ function debugOrderBook(ob: {
 const pairSequence = new Map<string, number>();
 
 export const nextSequence = (pair: string) => {
-  const seq = pairSequence.get(pair) || 0;
-  pairSequence.set(pair, seq + 1);
-  return seq;
-}
+  const current = pairSequence.get(pair) ?? 0;
+  const next = current + 1;
+  pairSequence.set(pair, next);
+  return next;
+};
 
 async function restoreSequence(pair: string) {
   const val = await redisclient.get(`seq:${pair}`);
@@ -44,6 +45,8 @@ async function restoreAllPairs() {
     if (snapshot) {
       MatchingEngineService.restoreOrderbook(snapshot, market);
       const orderbookSnapshot = MatchingEngineService.getOrderbook(market);
+
+      await restoreSequence(market);
 
       if (orderbookSnapshot) {
         const event = {
@@ -83,9 +86,14 @@ async function main() {
   await consumer.subscribe({ topic: "orders.cancel" });
   await consumer.subscribe({ topic: "orders.expired" });
 
-  consumer.run({
+ await consumer.run({
     eachMessage: async ({ message, partition, topic }) => {
       const event = JSON.parse(message.value?.toString() || "");
+
+      if (!event.eventId) {
+        console.error("Event missing eventId, skipping dedup:", event);
+        return;
+      }
 
       const key = `processed:${event.eventId}`;
 
@@ -139,7 +147,6 @@ const startSnapshotLoop = () => {
         "EX",
         300
       );
-      console.log("sending snapshot", pair);
 
       await producer.send({
         topic: "orderbook.snapshot",

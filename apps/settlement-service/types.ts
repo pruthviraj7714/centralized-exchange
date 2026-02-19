@@ -18,6 +18,7 @@ export interface OrderEvent {
   userId : string;
   orderId : string;
   quoteSpent : string;
+  timestamp : number
   price : string | null;
   type : "LIMIT" | "MARKET";
   quoteRemaining : string;
