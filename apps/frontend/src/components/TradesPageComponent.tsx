@@ -321,15 +321,15 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
           ? new Decimal(marketData?.price || 0).mul(quantity || 0).toFixed(2)
           : "0.00";
 
-  const marketValue =
-    orderType === "LIMIT"
+  const marketValue = useMemo(() => {
+    return orderType === "LIMIT"
       ? "0.00"
       : activeTab === "BUY"
         ? new Decimal(spendAmount || 0).div(marketData?.price || 0).toFixed(2)
         : activeTab === "SELL"
           ? new Decimal(quantity || 0).mul(marketData?.price || 0).toFixed(2)
           : "0.00";
-
+  }, [orderType, activeTab, spendAmount, quantity, marketData]);
 
   const maxDepth = useMemo(() => {
     const maxBid = Math.max(...bids.map((b) => b.total.toNumber()));

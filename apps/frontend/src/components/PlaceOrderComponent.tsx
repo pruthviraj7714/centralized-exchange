@@ -1,4 +1,5 @@
 import { IUserBalancesData } from "@/types/wallet";
+import Decimal from "decimal.js";
 import { Wallet } from "lucide-react";
 
 interface PlaceOrderComponentProps {
@@ -105,9 +106,13 @@ export default function PlaceOrderComponent({
               {userBalancesLoading ? (
                 <div className="w-20 h-5 bg-slate-800/50 rounded animate-pulse"></div>
               ) : activeTab === "BUY" ? (
-                userBalancesData?.quoteAssetWallet.available.toString()
+                <>
+                  {Decimal(userBalancesData?.quoteAssetWallet.available || 0).toFixed(4)} {quoteAsset}
+                </>
               ) : (
-                userBalancesData?.baseAssetWallet.available.toString()
+                <>
+                  {Decimal(userBalancesData?.baseAssetWallet.available || 0).toFixed(4)} {baseAsset}
+                </>
               )}
             </span>
           </div>

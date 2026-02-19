@@ -21,6 +21,7 @@ import { TOKEN_LOGOS } from "@repo/common";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "next-auth/react";
 import { fetchWalletTransactions } from "@/lib/api/wallet.api";
+import Decimal from "decimal.js";
 
 interface ITransaction {
   amount: string;
@@ -55,97 +56,106 @@ interface ITransaction {
   createdAt: Date;
 }
 
+const getTransactionConfig = (type: ITransaction["entryType"]) => {
+  const configs = {
+    DEPOSIT: {
+      label: "Deposit",
+      icon: ArrowDownLeft,
+      color: "text-emerald-400",
+      bgColor: "bg-emerald-500/10",
+      borderColor: "border-emerald-500/30",
+      iconBg: "bg-emerald-500/20",
+    },
+    WITHDRAWAL: {
+      label: "Withdrawal",
+      icon: ArrowUpRight,
+      color: "text-red-400",
+      bgColor: "bg-red-500/10",
+      borderColor: "border-red-500/30",
+      iconBg: "bg-red-500/20",
+    },
+    TRADE_EXECUTE: {
+      label: "Trade Execute",
+      icon: TrendingUp,
+      color: "text-blue-400",
+      bgColor: "bg-blue-500/10",
+      borderColor: "border-blue-500/30",
+      iconBg: "bg-blue-500/20",
+    },
+    TRADE_DEBIT: {
+      label: "Trade Debit",
+      icon: TrendingDown,
+      color: "text-orange-400",
+      bgColor: "bg-orange-500/10",
+      borderColor: "border-orange-500/30",
+      iconBg: "bg-orange-500/20",
+    },
+    FEE: {
+      label: "Fee",
+      icon: Receipt,
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/30",
+      iconBg: "bg-purple-500/20",
+    },
+    TRADE_LOCK: {
+      label: "Trade Lock",
+      icon: Receipt,
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/30",
+      iconBg: "bg-purple-500/20",
+    },
+    TRADE_UNLOCK: {
+      label: "Trade Unlock",
+      icon: Receipt,
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/30",
+      iconBg: "bg-purple-500/20",
+    },
+    TRANSFER_IN: {
+      label: "Transfer In",
+      icon: Receipt,
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/30",
+      iconBg: "bg-purple-500/20",
+    },
+    TRANSFER_OUT: {
+      label: "Transfer Out",
+      icon: Receipt,
+      color: "text-purple-400",
+      bgColor: "bg-purple-500/10",
+      borderColor: "border-purple-500/30",
+      iconBg: "bg-purple-500/20",
+    },
+  };
+  return configs[type];
+};
+
 export default function WalletTransactions() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<string>("ALL");
   const [filterAsset, setFilterAsset] = useState<string>("ALL");
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(10);
   const [selectedTransaction, setSelectedTransaction] =
     useState<ITransaction | null>(null);
   const { data, status } = useSession();
   const isReady = status === "authenticated";
- const { data: transactions, isLoading } = useQuery<ITransaction[]>({
-  queryKey: ["transactions"],
-  queryFn: () => fetchWalletTransactions(data?.accessToken as string),
-  enabled: isReady,
-});
-
-  const getTransactionConfig = (type: ITransaction["entryType"]) => {
-    const configs = {
-      DEPOSIT: {
-        label: "Deposit",
-        icon: ArrowDownLeft,
-        color: "text-emerald-400",
-        bgColor: "bg-emerald-500/10",
-        borderColor: "border-emerald-500/30",
-        iconBg: "bg-emerald-500/20",
-      },
-      WITHDRAWAL: {
-        label: "Withdrawal",
-        icon: ArrowUpRight,
-        color: "text-red-400",
-        bgColor: "bg-red-500/10",
-        borderColor: "border-red-500/30",
-        iconBg: "bg-red-500/20",
-      },
-      TRADE_EXECUTE: {
-        label: "Trade Execute",
-        icon: TrendingUp,
-        color: "text-blue-400",
-        bgColor: "bg-blue-500/10",
-        borderColor: "border-blue-500/30",
-        iconBg: "bg-blue-500/20",
-      },
-      TRADE_DEBIT: {
-        label: "Trade Debit",
-        icon: TrendingDown,
-        color: "text-orange-400",
-        bgColor: "bg-orange-500/10",
-        borderColor: "border-orange-500/30",
-        iconBg: "bg-orange-500/20",
-      },
-      FEE: {
-        label: "Fee",
-        icon: Receipt,
-        color: "text-purple-400",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-500/30",
-        iconBg: "bg-purple-500/20",
-      },
-      TRADE_LOCK : {
-        label : "Trade Lock",
-        icon: Receipt,
-        color: "text-purple-400",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-500/30",
-        iconBg: "bg-purple-500/20",
-      },
-      TRADE_UNLOCK : {
-        label : "Trade Unlock",
-        icon: Receipt,
-        color: "text-purple-400",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-500/30",
-        iconBg: "bg-purple-500/20",
-      },
-      TRANSFER_IN : {
-        label : "Transfer In",
-        icon: Receipt,
-        color: "text-purple-400",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-500/30",
-        iconBg: "bg-purple-500/20",
-      },
-      TRANSFER_OUT : {
-        label : "Transfer Out",
-        icon: Receipt,
-        color: "text-purple-400",
-        bgColor: "bg-purple-500/10",
-        borderColor: "border-purple-500/30",
-        iconBg: "bg-purple-500/20",
-      }
-    };
-    return configs[type];
-  };
+  const { data: ledgersPageData, isLoading } = useQuery<{
+    ledgers: ITransaction[];
+    totalPages: number;
+    total: number;
+    page: number;
+    limit: number;
+  }>({
+    queryKey: ["transactions", currentPage, limit],
+    queryFn: () =>
+      fetchWalletTransactions(data?.accessToken as string, currentPage, limit),
+    enabled: isReady,
+  });
 
   const formatDate = (date: Date) => {
     return new Intl.DateTimeFormat("en-US", {
@@ -156,6 +166,13 @@ export default function WalletTransactions() {
       minute: "2-digit",
     }).format(new Date(date));
   };
+  const {
+    ledgers: transactions,
+    page = 1,
+    limit: pageLimit = 10,
+    total = 0,
+    totalPages = 1,
+  } = ledgersPageData || {};
 
   const filteredTransactions = transactions?.filter((tx) => {
     const matchesSearch =
@@ -227,7 +244,7 @@ export default function WalletTransactions() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm text-slate-400">Total Deposits</p>
@@ -271,7 +288,7 @@ export default function WalletTransactions() {
             </p>
             <p className="text-xs text-blue-400 mt-1">All time</p>
           </div>
-        </div>
+        </div> */}
 
         <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
@@ -430,19 +447,19 @@ export default function WalletTransactions() {
                           className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-400" : "text-red-400"}`}
                         >
                           {isCredit ? "+" : "-"}
-                          {transaction.amount}
+                          {Decimal(transaction.amount || 0).toFixed(2)} {transaction.asset}
                         </div>
                         <div className="text-xs text-slate-500 space-y-1">
                           <div>
                             Before:{" "}
                             <span className="text-slate-400 font-medium">
-                              {transaction.balanceBefore}
+                              {Decimal(transaction.balanceBefore || 0).toFixed(2)} {transaction.asset}
                             </span>
                           </div>
                           <div>
                             After:{" "}
-                            <span className="text-slate-400 font-medium">
-                              {transaction.balanceAfter}
+                            <span className="text-slate-400 font-medium"> 
+                              {Decimal(transaction.balanceAfter || 0).toFixed(2)} {transaction.asset}
                             </span>
                           </div>
                         </div>
@@ -470,16 +487,71 @@ export default function WalletTransactions() {
 
           {filteredTransactions && filteredTransactions.length > 0 && (
             <div className="px-6 py-4 border-t border-slate-800/50 bg-slate-900/50">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-3">
                 <p className="text-sm text-slate-400">
-                  Showing {filteredTransactions.length} of{" "}
-                  {transactions?.length} transactions
+                  Showing{" "}
+                  <span className="text-white font-medium">
+                    {(currentPage - 1) * pageLimit + 1}–
+                    {Math.min(currentPage * pageLimit, total)}
+                  </span>{" "}
+                  of <span className="text-white font-medium">{total}</span>{" "}
+                  transactions
                 </p>
-                <div className="flex gap-2">
-                  <button className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-all">
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.max(prev - 1, 1))
+                    }
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-800/50 disabled:hover:text-slate-400"
+                  >
                     Previous
                   </button>
-                  <button className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-all">
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(
+                      (p) =>
+                        p === 1 ||
+                        p === totalPages ||
+                        Math.abs(p - currentPage) <= 1,
+                    )
+                    .reduce<(number | "...")[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] as number) > 1)
+                        acc.push("...");
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((item, idx) =>
+                      item === "..." ? (
+                        <span
+                          key={`ellipsis-${idx}`}
+                          className="px-2 text-slate-500 select-none"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => setCurrentPage(item as number)}
+                          className={`w-8 h-8 text-sm rounded-lg border transition-all font-medium ${
+                            currentPage === item
+                              ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                              : "bg-slate-800/50 border-slate-700/50 text-slate-400 hover:bg-slate-800 hover:text-white"
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      ),
+                    )}
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-sm bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 rounded-lg text-slate-400 hover:text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-slate-800/50 disabled:hover:text-slate-400"
+                  >
                     Next
                   </button>
                 </div>

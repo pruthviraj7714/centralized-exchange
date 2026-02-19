@@ -49,6 +49,15 @@ This exchange follows an **event-driven microservices architecture** powered by 
 
 ---
 
+## 🖼️ Demo Images
+
+![Dashboard](./images/dashboard.png)
+![Market Page](./images/market-page.png)
+![Portfolio](./images/portfolio.png)
+![Ledgers](./images/ledgers.png)
+
+---
+
 # 📦 Services Breakdown
 
 ## 1️⃣ Primary Server
@@ -76,7 +85,8 @@ This exchange follows an **event-driven microservices architecture** powered by 
 - Maintains in-memory orderbook per market
 - Emits:
   - `ORDER_OPENED`
-  - `ORDER_UPDATED`
+  - `ORDERBOOK_SNAPSHOT`
+  - `ORDERBOOK_UPDATED`
   - `ORDER_CANCELLED`
   - `TRADE_EXECUTED`
 - Stores periodic snapshot in Redis
@@ -118,7 +128,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 8️⃣ WebSocket Gateway
-- Maintains in-memory orderbook copy
+- Listen to Kafka Events for Orderbook Snapshot & Orderbook Updates
 - Listens to Redis PubSub
 - Streams:
   - Orderbook updates

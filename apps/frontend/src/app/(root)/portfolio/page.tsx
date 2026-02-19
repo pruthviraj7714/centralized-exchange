@@ -480,7 +480,7 @@ export default function PortfolioPage() {
                               {hideBalances ? "••••" : totalAmount.toString()}
                             </p>
                             <p className="text-sm text-slate-400">
-                              {hideBalances ? "••••" : `≈ $${balance.usdValue}`}
+                              {hideBalances ? "••••" : `≈ $${balance.usdValue.toFixed(metadata.displayDecimals)}`}
                             </p>
                           </div>
                         </div>

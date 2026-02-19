@@ -142,6 +142,10 @@ const depositFunds = async (req: Request, res: Response) => {
 const fetchWalletTransactions = async (req: Request, res: Response) => {
     try {
         const userId = req.userId!;
+        const limit = Number(req.query.limit) || 10;
+        const pageNumber = Number(req.query.page) || 1;
+
+        const offset = (pageNumber - 1) * limit;
 
         const ledgers = await prisma.walletLedger.findMany({
             where: {
@@ -150,12 +154,24 @@ const fetchWalletTransactions = async (req: Request, res: Response) => {
             orderBy: {
                 sequence: "desc"
             },
+            take: limit,
+            skip: offset
+        });
+
+        const total = await prisma.walletLedger.count({
+            where: {
+                userId
+            }
         })
 
         res.status(200).json({
-            ledgers : ledgers.map(l => ({
+            totalPages: Math.floor(total / limit),
+            total,
+            limit,
+            page: pageNumber,
+            ledgers: ledgers.map(l => ({
                 ...l,
-                sequence : l.sequence.toString()
+                sequence: l.sequence.toString()
             }))
         })
     } catch (error) {

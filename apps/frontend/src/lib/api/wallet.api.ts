@@ -14,13 +14,13 @@ const depositAsset = async (asset : string, amount : Decimal, token : string) =>
     return data;
 }
 
-const fetchWalletTransactions = async (token : string) => {
-    const { data } = await api.get('/wallets/transactions', {
+const fetchWalletTransactions = async (token : string, page : number = 1, limit : number = 10) => {
+    const { data } = await api.get(`/wallets/transactions?limit=${limit}&page=${page}`, {
         headers : {
             Authorization : `Bearer ${token}`
         }
     })
-    return data.ledgers;
+    return data;
 }
 
 export { depositAsset, fetchWalletTransactions }
