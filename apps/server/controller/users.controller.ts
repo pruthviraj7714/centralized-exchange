@@ -84,7 +84,7 @@ const fetchUserPortfolio = async (req: Request, res: Response) => {
 
         markets.forEach(market => {
             const baseAsset = market.symbol.split("-")[0];
-            usdPriceMap[baseAsset as string] = baseAsset === "USDC" ? new Decimal(1) : market.price!;
+            usdPriceMap[baseAsset as string] = market.price!;
         });
 
         const portfolio = wallets.map(wallet => {
@@ -92,7 +92,7 @@ const fetchUserPortfolio = async (req: Request, res: Response) => {
                 asset: wallet.asset,
                 available: wallet.available,
                 locked: wallet.locked,
-                usdValue: wallet.available.mul(usdPriceMap[wallet.asset] || new Decimal(0)),
+                usdValue: wallet.asset === "USDC" ? wallet.available.mul(new Decimal(1)) : wallet.available.mul(usdPriceMap[wallet.asset] || new Decimal(0)),
                 change24h: markets.find(m => m.symbol === wallet.asset)?.change24h || new Decimal(0)
             }
         });
@@ -128,8 +128,8 @@ const fetchUserOrders = async (req: Request, res: Response) => {
                     { status: ORDER_STATUS.PARTIALLY_FILLED }
                 ]
             },
-            orderBy : {
-                createdAt : "desc"
+            orderBy: {
+                createdAt: "desc"
             }
         })
 
