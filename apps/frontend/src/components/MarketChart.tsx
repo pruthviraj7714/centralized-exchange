@@ -34,8 +34,6 @@ export default function MarketChart({
     isPositive: boolean;
   } | null>(null);
 
-  console.log(candles);
-
   useEffect(() => {
     if (!chartContainerRef.current) return;
 
@@ -103,7 +101,8 @@ export default function MarketChart({
 
     const handleResize = () => {
       if (chartContainerRef.current && chartRef.current) {
-        const { width, height } = chartContainerRef.current.getBoundingClientRect();
+        const { width, height } =
+          chartContainerRef.current.getBoundingClientRect();
         chartRef.current.applyOptions({
           width: width,
           height: height,
@@ -184,7 +183,7 @@ export default function MarketChart({
     if (chartRef.current) {
       const timeScale = chartRef.current.timeScale();
       const currentScrollPosition = timeScale.scrollPosition();
-      
+
       if (currentScrollPosition === 0) {
         chartRef.current.timeScale().fitContent();
       }

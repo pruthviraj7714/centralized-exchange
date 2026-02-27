@@ -6,10 +6,12 @@ import { SnapshotService } from "./snapshotService";
 import redisclient from "@repo/redisclient";
 import { producer } from "@repo/kafka/src/producer";
 
-function debugOrderBook(ob: {
-  bids: OrderbookLevel[];
-  asks: OrderbookLevel[];
-} | null) {
+function debugOrderBook(
+  ob: {
+    bids: OrderbookLevel[];
+    asks: OrderbookLevel[];
+  } | null,
+) {
   console.log("---- ORDERBOOK ----");
 
   console.log("BIDS:");
@@ -41,7 +43,7 @@ async function restoreSequence(pair: string) {
 
 async function restoreAllPairs() {
   for (const market of SUPPORTED_MARKETS) {
-    const snapshot = await SnapshotService.load(market)
+    const snapshot = await SnapshotService.load(market);
     if (snapshot) {
       MatchingEngineService.restoreOrderbook(snapshot, market);
       const orderbookSnapshot = MatchingEngineService.getOrderbook(market);
@@ -63,10 +65,10 @@ async function restoreAllPairs() {
           messages: [
             {
               value: JSON.stringify(event),
-              key: market
+              key: market,
             },
           ],
-        })
+        });
       }
     }
   }
@@ -86,7 +88,7 @@ async function main() {
   await consumer.subscribe({ topic: "orders.cancel" });
   await consumer.subscribe({ topic: "orders.expired" });
 
- await consumer.run({
+  await consumer.run({
     eachMessage: async ({ message, partition, topic }) => {
       const event = JSON.parse(message.value?.toString() || "");
 
@@ -111,8 +113,8 @@ async function main() {
             offset: (Number(message.offset) + 1).toString(),
             partition: partition,
             topic: topic,
-          }
-        ])
+          },
+        ]);
         const ob = MatchingEngineService.getOrderbook(event.pair);
         debugOrderBook(ob);
         console.log("Active pairs:", MatchingEngineService.getActivePairs());
@@ -121,8 +123,7 @@ async function main() {
 
         throw error;
       }
-
-    }
+    },
   });
 }
 
@@ -134,8 +135,7 @@ const startSnapshotLoop = () => {
 
       if (!snapshot) continue;
 
-      await SnapshotService.save(pair, snapshot)
-
+      await SnapshotService.save(pair, snapshot);
 
       const orderbook = MatchingEngineService.getOrderbook(pair);
 
@@ -145,29 +145,28 @@ const startSnapshotLoop = () => {
         `snapshot:rendered:${pair}`,
         JSON.stringify({ bids: orderbook.bids, asks: orderbook.asks }),
         "EX",
-        300
+        300,
       );
 
-      await producer.send({
-        topic: "orderbook.snapshot",
-        messages: [
-          {
-            value: JSON.stringify({
-              eventId: crypto.randomUUID(),
-              event: "ORDERBOOK_SNAPSHOT",
-              pair: pair,
-              bids: orderbook.bids,
-              asks: orderbook.asks,
-              sequence: nextSequence(pair),
-            }),
-            key: pair
-          },
-        ],
-      })
-
+      // await producer.send({
+      //   topic: "orderbook.snapshot",
+      //   messages: [
+      //     {
+      //       value: JSON.stringify({
+      //         eventId: crypto.randomUUID(),
+      //         event: "ORDERBOOK_SNAPSHOT",
+      //         pair: pair,
+      //         bids: orderbook.bids,
+      //         asks: orderbook.asks,
+      //         sequence: nextSequence(pair),
+      //       }),
+      //       key: pair
+      //     },
+      //   ],
+      // })
     }
   }, 10000);
-}
+};
 
 const retainSequenceLoop = () => {
   setInterval(async () => {
@@ -175,8 +174,6 @@ const retainSequenceLoop = () => {
       await redisclient.set(`seq:${pair}`, seq.toString());
     }
   }, 5000);
-}
+};
 
 main();
-
-
