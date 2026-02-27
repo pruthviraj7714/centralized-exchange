@@ -22,26 +22,26 @@ const useOrderbook = (pair: string, chartInterval: string) => {
     let cumulativeBid = new Decimal(0);
     let cumulativeAsk = new Decimal(0);
 
-    const transformedBids = data.bids.map((level, index) => {
+    const transformedBids = data.bids.map((level) => {
       const qty = new Decimal(level.totalQuantity);
       cumulativeBid = cumulativeBid.plus(qty);
       return {
         price: new Decimal(level.price),
         quantity: qty,
         total: cumulativeBid,
-        requestId: `bid-${level.price}`,
+        requestId: `bid-${level.price}-${level.orderCount}`,
         orderCount: level.orderCount,
       };
     });
 
-    const transformedAsks = data.asks.map((level, index) => {
+    const transformedAsks = data.asks.map((level) => {
       const qty = new Decimal(level.totalQuantity);
       cumulativeAsk = cumulativeAsk.plus(qty);
       return {
         price: new Decimal(level.price),
         quantity: qty,
         total: cumulativeAsk,
-        requestId: `ask-${level.price}`,
+        requestId: `ask-${level.price}-${level.orderCount}`,
         orderCount: level.orderCount,
       };
     });
@@ -84,10 +84,10 @@ const useOrderbook = (pair: string, chartInterval: string) => {
             case "ORDERBOOK_SNAPSHOT":
               const snapshotSequence = data.sequence;
               if (snapshotSequence <= lastSequenceRef.current) {
-                console.log("skipping out-of-order update");
+                console.warn("out-of-order snapshot ignored");
                 return;
               }
-              lastSequenceRef.current = data.sequence;
+              lastSequenceRef.current = snapshotSequence;
               const snapshotData: OrderbookData = {
                 bids: data.bids || [],
                 asks: data.asks || [],
@@ -100,7 +100,7 @@ const useOrderbook = (pair: string, chartInterval: string) => {
             case "ORDERBOOK_UPDATE":
               const currentSequence = data.sequence;
               if (currentSequence <= lastSequenceRef.current) {
-                console.log("Skipping out-of-order update");
+                console.warn("out-of-order update ignored");
                 return;
               }
               lastSequenceRef.current = currentSequence;
@@ -121,7 +121,10 @@ const useOrderbook = (pair: string, chartInterval: string) => {
               break;
 
             case "CANDLE_NEW":
-              setCandles((prev) => [...prev, data.candle]);
+              setCandles((prev) => {
+                const next = [...prev, data.candle];
+                return next.slice(-500);
+              });
               break;
 
             case "CANDLE_UPDATE":
@@ -187,6 +190,8 @@ const useOrderbook = (pair: string, chartInterval: string) => {
     return () => {
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       wsRef.current?.close(1000, "pair changed");
+      setRecentTrades([]);
+      setCandles([]);
     };
   }, [pair, chartInterval]);
 

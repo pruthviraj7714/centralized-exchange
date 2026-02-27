@@ -6,7 +6,15 @@ import redisclient from "@repo/redisclient";
 
 const settleExectuedTrades = async (trade: TradeEvent) => {
   try {
-    const { buyOrderId, sellOrderId, executedAt, quantity, price, quoteSpent, quoteRemaining } = trade;
+    const {
+      buyOrderId,
+      sellOrderId,
+      executedAt,
+      quantity,
+      price,
+      quoteSpent,
+      quoteRemaining,
+    } = trade;
 
     const tradeResult = await prisma.$transaction(async (tx) => {
       const orders = await tx.$queryRaw<
@@ -16,12 +24,17 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           marketId: string;
           baseAsset: string;
           quoteAsset: string;
-          type: "LIMIT" | "MARKET",
-          status: "PENDING" | "FILLED" | "PARTIALLY_FILLED" | "CANCELED" | "EXPIRED",
+          type: "LIMIT" | "MARKET";
+          status:
+            | "PENDING"
+            | "FILLED"
+            | "PARTIALLY_FILLED"
+            | "CANCELED"
+            | "EXPIRED";
           remainingQuantity: Decimal;
           originalQuantity: Decimal;
           quoteSpent: Decimal;
-          quoteRemaining: Decimal
+          quoteRemaining: Decimal;
         }[]
       >`
       SELECT 
@@ -49,17 +62,29 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         throw new Error("Invalid Order Id found!");
       }
 
-      console.log('buyOrder status', buyOrder.status);
-      console.log('sellOrder status', sellOrder.status);
+      console.log("buyOrder status", buyOrder.status);
+      console.log("sellOrder status", sellOrder.status);
 
       if (["CANCELLED", "EXPIRED"].includes(buyOrder.status)) {
-        throw new Error(`Buy order ${buyOrderId} is in invalid state: ${buyOrder.status}`);
+        throw new Error(
+          `Buy order ${buyOrderId} is in invalid state: ${buyOrder.status}`,
+        );
       }
       if (["CANCELLED", "EXPIRED"].includes(sellOrder.status)) {
-        throw new Error(`Sell order ${sellOrderId} is in invalid state: ${sellOrder.status}`);
+        throw new Error(
+          `Sell order ${sellOrderId} is in invalid state: ${sellOrder.status}`,
+        );
       }
 
-      const wallets = await tx.$queryRaw<{ id: string, userId: string, asset: string, available: Decimal, locked: Decimal }[]>`
+      const wallets = await tx.$queryRaw<
+        {
+          id: string;
+          userId: string;
+          asset: string;
+          available: Decimal;
+          locked: Decimal;
+        }[]
+      >`
         SELECT id, "userId", "asset", available, locked
         FROM "Wallet"
         WHERE ("userId", "asset") IN (
@@ -72,12 +97,33 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         FOR UPDATE
       `;
 
-      const baseAssetBuyerWallet = wallets.find((wallet) => wallet.userId === buyOrder.userId && wallet.asset === buyOrder.baseAsset);
-      const quoteAssetBuyerWallet = wallets.find((wallet) => wallet.userId === buyOrder.userId && wallet.asset === buyOrder.quoteAsset);
-      const baseAssetSellerWallet = wallets.find((wallet) => wallet.userId === sellOrder.userId && wallet.asset === sellOrder.baseAsset);
-      const quoteAssetSellerWallet = wallets.find((wallet) => wallet.userId === sellOrder.userId && wallet.asset === sellOrder.quoteAsset);
+      const baseAssetBuyerWallet = wallets.find(
+        (wallet) =>
+          wallet.userId === buyOrder.userId &&
+          wallet.asset === buyOrder.baseAsset,
+      );
+      const quoteAssetBuyerWallet = wallets.find(
+        (wallet) =>
+          wallet.userId === buyOrder.userId &&
+          wallet.asset === buyOrder.quoteAsset,
+      );
+      const baseAssetSellerWallet = wallets.find(
+        (wallet) =>
+          wallet.userId === sellOrder.userId &&
+          wallet.asset === sellOrder.baseAsset,
+      );
+      const quoteAssetSellerWallet = wallets.find(
+        (wallet) =>
+          wallet.userId === sellOrder.userId &&
+          wallet.asset === sellOrder.quoteAsset,
+      );
 
-      if (!baseAssetBuyerWallet || !quoteAssetBuyerWallet || !baseAssetSellerWallet || !quoteAssetSellerWallet) {
+      if (
+        !baseAssetBuyerWallet ||
+        !quoteAssetBuyerWallet ||
+        !baseAssetSellerWallet ||
+        !quoteAssetSellerWallet
+      ) {
         throw new Error("Invalid Wallet found!");
       }
 
@@ -88,12 +134,15 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
       const remainingSellOrderQty = sellOrder.remainingQuantity.minus(tradeQty);
 
       if (quoteAssetBuyerWallet.locked.lt(tradeValue)) {
-        throw new Error(`Buyer locked balance underflow: locked=${quoteAssetBuyerWallet.locked}, required=${tradeValue}`);
+        throw new Error(
+          `Buyer locked balance underflow: locked=${quoteAssetBuyerWallet.locked}, required=${tradeValue}`,
+        );
       }
       if (baseAssetSellerWallet.locked.lt(tradeQty)) {
-        throw new Error(`Seller locked balance underflow: locked=${baseAssetSellerWallet.locked}, required=${tradeQty}`);
+        throw new Error(
+          `Seller locked balance underflow: locked=${baseAssetSellerWallet.locked}, required=${tradeQty}`,
+        );
       }
-
 
       let remainingBuyOrderQty: Decimal;
       if (buyOrder.type === "MARKET") {
@@ -103,50 +152,49 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         remainingBuyOrderQty = buyOrder.remainingQuantity.minus(tradeQty);
       }
 
-
       await tx.wallet.update({
         where: {
-          id: baseAssetBuyerWallet.id
+          id: baseAssetBuyerWallet.id,
         },
         data: {
           available: {
-            increment: tradeQty
+            increment: tradeQty,
           },
-        }
-      })
+        },
+      });
 
       await tx.wallet.update({
         where: {
-          id: quoteAssetBuyerWallet.id
+          id: quoteAssetBuyerWallet.id,
         },
         data: {
           locked: {
-            decrement: tradeValue
-          }
-        }
-      })
+            decrement: tradeValue,
+          },
+        },
+      });
 
       await tx.wallet.update({
         where: {
-          id: baseAssetSellerWallet.id
+          id: baseAssetSellerWallet.id,
         },
         data: {
           locked: {
-            decrement: tradeQty
-          }
-        }
-      })
+            decrement: tradeQty,
+          },
+        },
+      });
 
       await tx.wallet.update({
         where: {
-          id: quoteAssetSellerWallet.id
+          id: quoteAssetSellerWallet.id,
         },
         data: {
           available: {
-            increment: tradeValue
-          }
-        }
-      })
+            increment: tradeValue,
+          },
+        },
+      });
 
       await tx.walletLedger.create({
         data: {
@@ -161,8 +209,11 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           balanceAfter: baseAssetBuyerWallet.available.plus(tradeQty),
           referenceType: "TRADE",
           referenceId: buyOrderId,
-          metadata: { tradePrice: tradePrice.toString(), tradeQty: tradeQty.toString() }
-        }
+          metadata: {
+            tradePrice: tradePrice.toString(),
+            tradeQty: tradeQty.toString(),
+          },
+        },
       });
 
       await tx.walletLedger.create({
@@ -178,8 +229,11 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           balanceAfter: quoteAssetBuyerWallet.locked.minus(tradeValue),
           referenceType: "TRADE",
           referenceId: buyOrderId,
-          metadata: { tradePrice: tradePrice.toString(), tradeQty: tradeQty.toString() }
-        }
+          metadata: {
+            tradePrice: tradePrice.toString(),
+            tradeQty: tradeQty.toString(),
+          },
+        },
       });
 
       await tx.walletLedger.create({
@@ -195,8 +249,11 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           balanceAfter: baseAssetSellerWallet.locked.minus(tradeQty),
           referenceType: "TRADE",
           referenceId: sellOrderId,
-          metadata: { tradePrice: tradePrice.toString(), tradeQty: tradeQty.toString() }
-        }
+          metadata: {
+            tradePrice: tradePrice.toString(),
+            tradeQty: tradeQty.toString(),
+          },
+        },
       });
 
       await tx.walletLedger.create({
@@ -212,30 +269,36 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           balanceAfter: quoteAssetSellerWallet.available.plus(tradeValue),
           referenceType: "TRADE",
           referenceId: sellOrderId,
-          metadata: { tradePrice: tradePrice.toString(), tradeQty: tradeQty.toString() }
-        }
+          metadata: {
+            tradePrice: tradePrice.toString(),
+            tradeQty: tradeQty.toString(),
+          },
+        },
       });
 
       await tx.order.update({
         where: {
-          id: buyOrder.id
+          id: buyOrder.id,
         },
         data: {
-          status: remainingBuyOrderQty.gt(0) ? 'PARTIALLY_FILLED' : 'FILLED',
+          status: remainingBuyOrderQty.gt(0) ? "PARTIALLY_FILLED" : "FILLED",
           remainingQuantity: remainingBuyOrderQty,
-          ...((buyOrder.type === "MARKET") && { quoteRemaining: new Decimal(quoteRemaining!), quoteSpent: new Decimal(quoteSpent!) })
-        }
-      })
+          ...(buyOrder.type === "MARKET" && {
+            quoteRemaining: new Decimal(quoteRemaining!),
+            quoteSpent: new Decimal(quoteSpent!),
+          }),
+        },
+      });
 
       await tx.order.update({
         where: {
-          id: sellOrder.id
+          id: sellOrder.id,
         },
         data: {
-          status: remainingSellOrderQty.gt(0) ? 'PARTIALLY_FILLED' : 'FILLED',
+          status: remainingSellOrderQty.gt(0) ? "PARTIALLY_FILLED" : "FILLED",
           remainingQuantity: remainingSellOrderQty,
-        }
-      })
+        },
+      });
 
       const trade = await tx.trade.create({
         data: {
@@ -249,19 +312,18 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           makerId: buyOrder.userId,
           takerId: sellOrder.userId,
           executedAt: new Date(executedAt),
-        }
-      })
+        },
+      });
 
       return trade;
-    })
+    });
 
-    console.log('executed trade in db', tradeResult);
+    console.log("executed trade in db", tradeResult);
   } catch (error) {
-    console.error('Error settling executed trade:', error);
+    console.error("Error settling executed trade:", error);
     throw error;
   }
-
-}
+};
 
 const settleCancelledOrders = async (order: OrderEvent) => {
   try {
@@ -297,57 +359,72 @@ const settleCancelledOrders = async (order: OrderEvent) => {
 `;
 
       if (!odr) {
-        throw new Error('Order not found');
+        throw new Error("Order not found");
       }
 
-      if (odr.status === "CANCELLED" || odr.status === "FILLED" || odr.status === "EXPIRED") return;
-
+      if (
+        odr.status === "CANCELLED" ||
+        odr.status === "FILLED" ||
+        odr.status === "EXPIRED"
+      )
+        return;
 
       if (order.type === "LIMIT" && Decimal(order.remainingQuantity).lte(0)) {
         throw new Error("Invalid remaining quantity on cancel");
       }
 
       if (odr.type === "MARKET" && odr.side === "BUY") {
-        const qr = odr.quoteRemaining ? new Decimal(odr.quoteRemaining) : new Decimal(0);
-        if (qr.lte(0)) throw new Error("Invalid quoteRemaining on market buy cancel");
+        const qr = odr.quoteRemaining
+          ? new Decimal(odr.quoteRemaining)
+          : new Decimal(0);
+        if (qr.lte(0))
+          throw new Error("Invalid quoteRemaining on market buy cancel");
       }
-
 
       const refundAsset = order.side === "BUY" ? odr.quoteAsset : odr.baseAsset;
 
-      const [wallet] = await tx.$queryRaw<{ id: string, available: Decimal, locked: Decimal }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${odr.userId} AND "asset" = ${refundAsset} FOR UPDATE`;
+      const [wallet] = await tx.$queryRaw<
+        { id: string; available: Decimal; locked: Decimal }[]
+      >`SELECT * FROM "Wallet" WHERE "userId" = ${odr.userId} AND "asset" = ${refundAsset} FOR UPDATE`;
 
       if (!wallet) {
-        throw new Error('Wallet not found');
+        throw new Error("Wallet not found");
       }
 
       let refundAmount: Decimal;
 
       if (order.type === "LIMIT") {
-        refundAmount = order.side === "BUY" ? Decimal(order.price!).mul(Decimal(order.remainingQuantity)) : Decimal(order.remainingQuantity);
+        refundAmount =
+          order.side === "BUY"
+            ? Decimal(order.price!).mul(Decimal(order.remainingQuantity))
+            : Decimal(order.remainingQuantity);
       } else {
-        refundAmount = order.side === "BUY" ? Decimal(order.quoteRemaining) : Decimal(order.remainingQuantity);
+        refundAmount =
+          order.side === "BUY"
+            ? Decimal(order.quoteRemaining)
+            : Decimal(order.remainingQuantity);
       }
 
       if (wallet.locked.lt(refundAmount)) {
-        throw new Error(`Locked balance underflow on cancel: locked=${wallet.locked}, refund=${refundAmount}`);
+        throw new Error(
+          `Locked balance underflow on cancel: locked=${wallet.locked}, refund=${refundAmount}`,
+        );
       }
-
 
       await tx.wallet.update({
         where: {
-          id: wallet.id
+          id: wallet.id,
         },
         data: {
           available: {
-            increment: refundAmount
+            increment: refundAmount,
           },
           locked: {
-            decrement: refundAmount
+            decrement: refundAmount,
           },
           updatedAt: new Date(order.updatedAt),
-        }
-      })
+        },
+      });
 
       await tx.walletLedger.create({
         data: {
@@ -363,7 +440,7 @@ const settleCancelledOrders = async (order: OrderEvent) => {
           referenceType: "ORDER",
           referenceId: order.orderId,
           metadata: { reason: "ORDER_CANCELLED" },
-        }
+        },
       });
 
       await tx.order.update({
@@ -375,23 +452,28 @@ const settleCancelledOrders = async (order: OrderEvent) => {
           updatedAt: new Date(order.updatedAt),
         },
       });
-    })
-    console.log('order cancelled successfully in db');
+    });
+    console.log("order cancelled successfully in db");
   } catch (error) {
-    console.error('Error cancelling order:', error);
+    console.error("Error cancelling order:", error);
     throw error;
   }
-}
+};
 
 const settleOpenedOrders = async (order: OrderEvent) => {
   try {
-    console.log('Received order opened event:', order);
+    console.log("Received order opened event:", order);
 
     await prisma.$transaction(async (tx) => {
       const [odr] = await tx.$queryRaw<
         {
           id: string;
-          status: "OPEN" | "CANCELLED" | "FILLED" | "PARTIALLY_FILLED" | "EXPIRED";
+          status:
+            | "OPEN"
+            | "CANCELLED"
+            | "FILLED"
+            | "PARTIALLY_FILLED"
+            | "EXPIRED";
         }[]
       >`
   SELECT
@@ -402,38 +484,51 @@ const settleOpenedOrders = async (order: OrderEvent) => {
 `;
 
       if (!odr) {
-        throw new Error('Order request not found');
+        throw new Error("Order request not found");
       }
 
       if (odr.status === "CANCELLED" || odr.status === "FILLED") {
-        console.warn(`ORDER_OPENED skipped — order ${order.orderId} already in state: ${odr.status}`);
+        console.warn(
+          `ORDER_OPENED skipped — order ${order.orderId} already in state: ${odr.status}`,
+        );
         return;
       }
 
       await tx.order.update({
         where: {
-          id: order.orderId
+          id: order.orderId,
         },
         data: {
           status: "OPEN",
           updatedAt: new Date(order.updatedAt),
-        }
-      })
-
-    })
-    console.log('order settled successfully in db');
+        },
+      });
+    });
+    console.log("order settled successfully in db");
   } catch (error) {
-    console.error('Error settling opened order:', error);
+    console.error("Error settling opened order:", error);
     throw error;
   }
-}
+};
 
 const settleExpiredOrders = async (order: OrderEvent) => {
   try {
-    console.log('Received order expired event:', order);
+    console.log("Received order expired event:", order);
 
     await prisma.$transaction(async (tx) => {
-      const [odr] = await tx.$queryRaw<{ id: string, userId: string, type: string, side: string, status: string, remainingQuantity: string, price: string, baseAsset: string, quoteAsset: string }[]>`
+      const [odr] = await tx.$queryRaw<
+        {
+          id: string;
+          userId: string;
+          type: string;
+          side: string;
+          status: string;
+          remainingQuantity: string;
+          price: string;
+          baseAsset: string;
+          quoteAsset: string;
+        }[]
+      >`
          SELECT
     o.id,
     o."userId",
@@ -447,14 +542,16 @@ const settleExpiredOrders = async (order: OrderEvent) => {
   FROM "Order" o
   JOIN "Market" m ON o."marketId" = m.id
   WHERE o.id = ${order.orderId} FOR UPDATE
-      `
+      `;
 
       if (!odr) {
-        throw new Error('Order request not found');
+        throw new Error("Order request not found");
       }
 
       if (odr.status === "CANCELLED" || odr.status === "FILLED") {
-        console.warn(`ORDER_EXPIRED skipped — order ${order.orderId} already in state: ${odr.status}`);
+        console.warn(
+          `ORDER_EXPIRED skipped — order ${order.orderId} already in state: ${odr.status}`,
+        );
         return;
       }
 
@@ -463,37 +560,47 @@ const settleExpiredOrders = async (order: OrderEvent) => {
 
       const userId = odr.userId;
 
-      const [wallet] = await tx.$queryRaw<{ id: string, available: Decimal, locked: Decimal }[]>`SELECT * FROM "Wallet" WHERE "userId" = ${userId} AND "asset" = ${refundAsset} FOR UPDATE`;
+      const [wallet] = await tx.$queryRaw<
+        { id: string; available: Decimal; locked: Decimal }[]
+      >`SELECT * FROM "Wallet" WHERE "userId" = ${userId} AND "asset" = ${refundAsset} FOR UPDATE`;
 
       if (!wallet) {
-        throw new Error('Wallet not found');
+        throw new Error("Wallet not found");
       }
 
       let refundAmount: Decimal;
 
       if (odr.type === "LIMIT") {
-        refundAmount = order.side === "BUY" ? Decimal(order.price!).mul(Decimal(order.remainingQuantity)) : Decimal(order.remainingQuantity);
+        refundAmount =
+          order.side === "BUY"
+            ? Decimal(order.price!).mul(Decimal(order.remainingQuantity))
+            : Decimal(order.remainingQuantity);
       } else {
-        refundAmount = order.side === "BUY" ? Decimal(order.quoteRemaining) : Decimal(order.remainingQuantity);
+        refundAmount =
+          order.side === "BUY"
+            ? Decimal(order.quoteRemaining)
+            : Decimal(order.remainingQuantity);
       }
 
       if (wallet.locked.lt(refundAmount)) {
-        throw new Error(`Locked balance underflow on expiry: locked=${wallet.locked}, refund=${refundAmount}`);
+        throw new Error(
+          `Locked balance underflow on expiry: locked=${wallet.locked}, refund=${refundAmount}`,
+        );
       }
 
       await tx.wallet.update({
         where: {
-          id: wallet.id
+          id: wallet.id,
         },
         data: {
           available: {
-            increment: refundAmount
+            increment: refundAmount,
           },
           locked: {
-            decrement: refundAmount
-          }
-        }
-      })
+            decrement: refundAmount,
+          },
+        },
+      });
 
       await tx.walletLedger.create({
         data: {
@@ -509,27 +616,26 @@ const settleExpiredOrders = async (order: OrderEvent) => {
           referenceType: "ORDER",
           referenceId: order.orderId,
           metadata: { reason: "ORDER_EXPIRED" },
-        }
+        },
       });
 
       await tx.order.update({
         where: {
-          id: order.orderId
+          id: order.orderId,
         },
         data: {
           status: "EXPIRED",
-          updatedAt: new Date(order.timestamp)
-        }
-      })
+          updatedAt: new Date(order.timestamp),
+        },
+      });
+    });
 
-    })
-
-    console.log('order expired & refunded successfully in db');
+    console.log("order expired & refunded successfully in db");
   } catch (error) {
-    console.error('Error settling expired order:', error);
+    console.error("Error settling expired order:", error);
     throw error;
   }
-}
+};
 
 async function main() {
   console.log("Settlement service is running...");
@@ -538,9 +644,9 @@ async function main() {
   await consumer.connect();
 
   await consumer.subscribe({ topic: "trades.executed" });
-  await consumer.subscribe({ topic: "orders.cancelled" })
-  await consumer.subscribe({ topic: "orders.opened" })
-  await consumer.subscribe({ topic: "orders.expired" })
+  await consumer.subscribe({ topic: "orders.cancelled" });
+  await consumer.subscribe({ topic: "orders.opened" });
+  await consumer.subscribe({ topic: "orders.expired" });
 
   await consumer.run({
     eachMessage: async ({ message, topic, partition }) => {
@@ -551,7 +657,9 @@ async function main() {
         event = JSON.parse(message.value.toString());
       } catch {
         console.error("Failed to parse Kafka message — skipping");
-        await consumer.commitOffsets([{ offset: (Number(message.offset) + 1).toString(), partition, topic }]);
+        await consumer.commitOffsets([
+          { offset: (Number(message.offset) + 1).toString(), partition, topic },
+        ]);
         return;
       }
 
@@ -561,12 +669,14 @@ async function main() {
 
       if (isProcessed) {
         console.log("Event Already Processed", event.eventId);
-        await consumer.commitOffsets([{ offset: (Number(message.offset) + 1).toString(), partition, topic }]);
+        await consumer.commitOffsets([
+          { offset: (Number(message.offset) + 1).toString(), partition, topic },
+        ]);
         return;
       }
 
       try {
-        console.log('Received message:', event);
+        console.log("Received message:", event);
         switch (event.event) {
           case "TRADE_EXECUTED":
             await settleExectuedTrades(event);
@@ -585,24 +695,26 @@ async function main() {
             break;
         }
 
-        await redisclient.set(key, "1", "EX", 60 * 60 * 24) // 24 hours
+        await redisclient.set(key, "1", "EX", 60 * 60 * 24); // 24 hours
 
-        await consumer.commitOffsets([{
-          offset: (Number(message.offset) + 1).toString(),
-          partition,
-          topic
-        }])
-
+        await consumer.commitOffsets([
+          {
+            offset: (Number(message.offset) + 1).toString(),
+            partition,
+            topic,
+          },
+        ]);
       } catch (error) {
-        console.error(`Failed to settle event ${event.event} (${event.eventId}):`, error);
+        console.error(
+          `Failed to settle event ${event.event} (${event.eventId}):`,
+          error,
+        );
       }
     },
   });
-
 }
 
 main().catch((error) => {
   console.error(error);
   process.exit(1);
 });
-

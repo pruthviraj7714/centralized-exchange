@@ -299,6 +299,12 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     }
   };
 
+  const handleCancelOrder = async (orderId: string) => {
+    if (window.confirm("Are you sure you want to cancel this order?")) {
+      await cancelOrderMutation(orderId);
+    }
+  };
+
   useEffect(() => {
     if (error) {
       toast.error(error, { position: "top-center" });
@@ -421,7 +427,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             setBottomTab={setBottomTab}
             baseAsset={baseAsset}
             quoteAsset={quoteAsset}
-            cancelOrderMutation={cancelOrderMutation}
+            cancelOrderMutation={handleCancelOrder}
             userOrdersData={userOrdersData || []}
             userOrdersHistoryData={userOrdersHistoryData || []}
             userTradesData={userTradesData || []}

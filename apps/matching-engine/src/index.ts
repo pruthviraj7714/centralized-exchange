@@ -143,7 +143,11 @@ const startSnapshotLoop = () => {
 
       await redisclient.set(
         `snapshot:rendered:${pair}`,
-        JSON.stringify({ bids: orderbook.bids, asks: orderbook.asks }),
+        JSON.stringify({
+          bids: orderbook.bids,
+          asks: orderbook.asks,
+          sequence: nextSequence(pair),
+        }),
         "EX",
         300,
       );
