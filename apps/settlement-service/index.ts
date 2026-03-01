@@ -555,8 +555,7 @@ const settleExpiredOrders = async (order: OrderEvent) => {
         return;
       }
 
-      const orderSide = odr.side === "BUY" ? "SELL" : "BUY";
-      const refundAsset = orderSide === "BUY" ? odr.quoteAsset : odr.baseAsset;
+      const refundAsset = odr.side === "BUY" ? odr.quoteAsset : odr.baseAsset;
 
       const userId = odr.userId;
 
