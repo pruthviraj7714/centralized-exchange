@@ -637,6 +637,73 @@ const settleExpiredOrders = async (order: OrderEvent) => {
   }
 };
 
+const settleUpdatedOrders = async (order: OrderEvent) => {
+  try {
+    console.log("Received order updated event:", order);
+
+    await prisma.$transaction(async (tx) => {
+      const [odr] = await tx.$queryRaw<
+        {
+          id: string;
+          status:
+            | "OPEN"
+            | "CANCELLED"
+            | "FILLED"
+            | "PARTIALLY_FILLED"
+            | "EXPIRED";
+          type: string;
+          side: string;
+        }[]
+      >`
+         SELECT
+    o.id,
+    o."status",
+    o."type",
+    o."side"
+  FROM "Order" o
+  WHERE o.id = ${order.orderId} FOR UPDATE
+      `;
+
+      if (!odr) {
+        throw new Error("Order request not found");
+      }
+
+      if (["CANCELLED", "FILLED", "EXPIRED"].includes(odr.status)) {
+        console.warn(
+          `ORDER_UPDATED skipped — order ${order.orderId} already in state: ${odr.status}`,
+        );
+        return;
+      }
+
+      const updatedData: any = {
+        status: order.status,
+        updatedAt: new Date(order.updatedAt),
+      };
+
+      if (odr.type === "MARKET" && odr.side === "BUY") {
+        if (order.quoteSpent !== null) {
+          updatedData.quoteSpent = new Decimal(order.quoteSpent);
+        }
+
+        if (order.quoteRemaining !== null) {
+          updatedData.quoteRemaining = new Decimal(order.quoteRemaining);
+        }
+      }
+
+      await tx.order.update({
+        where: {
+          id: order.orderId,
+        },
+        data: updatedData,
+      });
+    });
+    console.log("order updated successfully in db");
+  } catch (error) {
+    console.error("Error settling updated order:", error);
+    throw error;
+  }
+};
+
 async function main() {
   console.log("Settlement service is running...");
 
@@ -647,6 +714,7 @@ async function main() {
   await consumer.subscribe({ topic: "orders.cancelled" });
   await consumer.subscribe({ topic: "orders.opened" });
   await consumer.subscribe({ topic: "orders.expired" });
+  await consumer.subscribe({ topic: "orders.updated" });
 
   await consumer.run({
     eachMessage: async ({ message, topic, partition }) => {
@@ -689,6 +757,9 @@ async function main() {
             break;
           case "ORDER_EXPIRED":
             await settleExpiredOrders(event);
+            break;
+          case "ORDER_UPDATED":
+            await settleUpdatedOrders(event);
             break;
           default:
             console.warn(`Unknown event type: ${event.event}`);

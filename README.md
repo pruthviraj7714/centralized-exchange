@@ -30,20 +30,24 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ## 🛠 Tech Stack
 
 ### Monorepo
+
 - Turborepo
 
 ### Backend
+
 - Node.js
 - Express.js
 - Kafka
 - Redis
 
 ### Frontend
+
 - Next.js
 - TanStack Query
 - Tailwind CSS
 
 ### Database
+
 - PostgreSQL
 - Prisma ORM
 
@@ -61,6 +65,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 # 📦 Services Breakdown
 
 ## 1️⃣ Primary Server
+
 - Authentication (OTP based)
 - Deposit handling
 - Market & candle fetching
@@ -69,6 +74,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 2️⃣ Trading API
+
 - Order validation
 - Balance locking
 - Writes order as `PENDING`
@@ -81,6 +87,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 3️⃣ Matching Engine
+
 - Consumes order events from Kafka
 - Maintains in-memory orderbook per market
 - Emits:
@@ -97,6 +104,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 4️⃣ Settlement Service
+
 - Consumes execution events
 - Updates:
   - Order states
@@ -109,12 +117,14 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 5️⃣ Order Lifecycle Worker
+
 - Expires stale `PENDING` orders
 - Emits `ORDER_EXPIRED`
 
 ---
 
 ## 6️⃣ Candle Aggregate Worker
+
 - Listens to `TRADE_EXECUTED`
 - Generates OHLC candles (multiple intervals)
 - Stores in Redis
@@ -123,11 +133,13 @@ This exchange follows an **event-driven microservices architecture** powered by 
 ---
 
 ## 7️⃣ Candle Persist Worker
+
 - Flushes Redis candles to PostgreSQL
 
 ---
 
 ## 8️⃣ WebSocket Gateway
+
 - Listen to Kafka Events for Orderbook Snapshot & Orderbook Updates
 - Listens to Redis PubSub
 - Streams:
@@ -137,6 +149,174 @@ This exchange follows an **event-driven microservices architecture** powered by 
 - Scales horizontally
 
 ---
+
+# Engine Crash Recovery Process
+
+This document explains how the matching engine recovers from a crash without losing any order events, using Kafka replay + snapshot-based deduplication.
+
+---
+
+## The Problem
+
+The engine snapshots orderbook state every **10 seconds**. If a crash happens at **t=15s**, the last snapshot is from **t=10s** — meaning 5 seconds of applied events are missing from the snapshot but exist in both Kafka and Redis.
+
+A naive replay would fail because:
+
+- Redis already has `processed:{eventId} = "1"` for those 5 seconds of events
+- The dedup check would skip them
+- The orderbook would never catch up
+
+---
+
+## The Solution
+
+Store `processedEventIds` **inside the snapshot itself**, not just in Redis.
+On recovery, use the snapshot's ID set as the dedup authority — not Redis.
+
+---
+
+## Recovery Flow
+
+```
+💥 Crash at t=15s
+        │
+        ▼
+┌─────────────────────────────────────────┐
+│         Restore Snapshot (t=10s)        │
+│                                         │
+│  ✅ Orderbook state restored            │
+│  ✅ processedEventIds loaded into       │
+│     in-memory Set from snapshot         │
+│  ✅ catchUpTargets set to last          │
+│     committed Kafka offsets             │
+└─────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────┐
+│     Kafka Replays t=10s → t=15s         │
+│                                         │
+│  🔁 isRecovering = true                 │
+│  🔍 Dedup checks in-memory Set          │
+│     (NOT Redis)                         │
+│  ⏭️  Already-in-snapshot events skipped │
+│  ✅ New events applied to orderbook     │
+└─────────────────────────────────────────┘
+        │
+        ▼
+┌─────────────────────────────────────────┐
+│     Offset reaches catchUpTarget        │
+│                                         │
+│  🟢 isRecovering = false                │
+│  🔍 Dedup switches back to Redis        │
+│  ✅ Live traffic resumes normally       │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Concrete Example
+
+### Normal Operation — t=0s to t=10s
+
+| Offset | Event ID  | Action             | Result            |
+| ------ | --------- | ------------------ | ----------------- |
+| 1      | ORDER-AAA | Buy 1 BTC @ 50000  | ✅ Applied        |
+| 2      | ORDER-BBB | Sell 1 BTC @ 50000 | ✅ Trade executed |
+| 3      | ORDER-CCC | Buy 2 BTC @ 49000  | ✅ Applied        |
+| 4      | ORDER-DDD | Sell 1 BTC @ 49500 | ✅ Partial fill   |
+
+**Orderbook at t=10s:**
+
+```
+BIDS:  49000 -> 1 BTC
+ASKS:  (empty)
+```
+
+---
+
+### Snapshot Saved at t=10s
+
+```json
+{
+  "orderbook": {
+    "bids": [{ "price": 49000, "quantity": 1 }],
+    "asks": []
+  },
+  "lastCommittedOffsets": [
+    { "topic": "orders.create", "partition": 0, "offset": "5" }
+  ],
+  "processedEventIds": ["ORDER-AAA", "ORDER-BBB", "ORDER-CCC", "ORDER-DDD"]
+}
+```
+
+---
+
+### t=10s to t=15s — Events After Snapshot
+
+| Offset | Event ID  | Action             | Result           |
+| ------ | --------- | ------------------ | ---------------- |
+| 5      | ORDER-EEE | Buy 3 BTC @ 51000  | ✅ Applied       |
+| 6      | ORDER-FFF | Sell 2 BTC @ 51000 | ✅ Partial trade |
+| 7      | ORDER-GGG | Buy 1 BTC @ 48000  | ✅ Applied       |
+
+> ⚠️ Engine crashes at t=15s. Offsets 5–7 are in Redis and Kafka but NOT in the snapshot.
+
+---
+
+### On Restart — Replay
+
+```
+Seek Kafka → orders.create:0 at offset 5
+
+offset 5 → ORDER-EEE
+  in snapshot processedEventIds? ❌ NO  →  apply ✅
+
+offset 6 → ORDER-FFF
+  in snapshot processedEventIds? ❌ NO  →  apply ✅
+
+offset 7 → ORDER-GGG
+  in snapshot processedEventIds? ❌ NO  →  apply ✅
+
+offset 8 → no more messages
+  catchUpTarget reached → isRecovering = false
+  switch to Redis dedup → live traffic resumes ✅
+```
+
+**Orderbook after recovery — identical to t=15s state before crash:**
+
+```
+BIDS:  49000 -> 1 BTC  (ORDER-CCC remainder)
+       48000 -> 1 BTC  (ORDER-GGG)
+ASKS:  51000 -> 1 BTC  (ORDER-EEE remainder)
+```
+
+---
+
+## Why Not Just Use Redis for Dedup on Replay?
+
+| Scenario                           | Redis has it? | Snapshot has it? | Correct action      |
+| ---------------------------------- | ------------- | ---------------- | ------------------- |
+| Event baked into snapshot          | ✅ Yes        | ✅ Yes           | Skip (in orderbook) |
+| Event after snapshot, before crash | ✅ Yes        | ❌ No            | **Must replay**     |
+| Genuinely new event (live)         | ❌ No         | ❌ No            | Apply               |
+
+Redis alone cannot distinguish between rows 1 and 2. The snapshot's `processedEventIds` can.
+
+---
+
+## Key Invariants
+
+- **Kafka** is the source of truth for all events
+- **Snapshots** are a performance optimization — they avoid replaying the entire Kafka log from the beginning
+- **Redis** is a fast-path dedup cache for live traffic only
+- **`processedEventIds` in the snapshot** is the authoritative dedup store for recovery
+- The engine is fully recoverable as long as Kafka retains messages past the snapshot offset
+
+---
+
+## One-Line Summary
+
+> The snapshot bakes in which eventIds are already applied. On recovery we replay from Kafka but use the snapshot's eventId set as the dedup authority — not Redis — because Redis contains IDs from after the snapshot too. Once we consume past the snapshot's offset, we flip back to Redis for live traffic.
 
 # 🔄 Order Flow (Detailed)
 

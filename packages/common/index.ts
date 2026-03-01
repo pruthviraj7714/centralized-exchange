@@ -4,9 +4,18 @@ import z from "zod";
 export const OrderSchema = z.object({
   pair: z.string(),
   side: z.enum(["BUY", "SELL"]),
-  price: z.string().transform((val) => new Decimal(val)).optional(),
-  quantity: z.string().transform((val) => new Decimal(val)).optional(),
-  quoteAmount : z.string().transform((val) => new Decimal(val)).optional(),
+  price: z
+    .string()
+    .transform((val) => new Decimal(val))
+    .optional(),
+  quantity: z
+    .string()
+    .transform((val) => new Decimal(val))
+    .optional(),
+  quoteAmount: z
+    .string()
+    .transform((val) => new Decimal(val))
+    .optional(),
   type: z.enum(["LIMIT", "MARKET"]),
 });
 
@@ -33,17 +42,17 @@ export const SUPPORTED_MARKETS = [
 ] as const;
 
 export const SUPPORTED_TOKENS = [
-  {symbol: "BTC", name: "Bitcoin"},
-  {symbol: "ETH", name: "Ethereum"},
-  {symbol: "SOL", name: "Solana"},
-  {symbol: "USDC", name: "USD Coin"},
-  {symbol: "BNB", name: "BNB"},
-  {symbol: "XRP", name: "XRP"},
-  {symbol: "ADA", name: "Cardano"},
-  {symbol: "AVAX", name: "Avalanche"},
-  {symbol: "DOGE", name: "Dogecoin"},
-  {symbol: "MATIC", name: "Polygon"},
-  {symbol: "DOT", name: "Polkadot"},
+  { symbol: "BTC", name: "Bitcoin" },
+  { symbol: "ETH", name: "Ethereum" },
+  { symbol: "SOL", name: "Solana" },
+  { symbol: "USDC", name: "USD Coin" },
+  { symbol: "BNB", name: "BNB" },
+  { symbol: "XRP", name: "XRP" },
+  { symbol: "ADA", name: "Cardano" },
+  { symbol: "AVAX", name: "Avalanche" },
+  { symbol: "DOGE", name: "Dogecoin" },
+  { symbol: "MATIC", name: "Polygon" },
+  { symbol: "DOT", name: "Polkadot" },
 ] as const;
 
 export const TOKEN_METADATA = {
@@ -53,7 +62,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
     decimals: 8,
     color: "#F7931A",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   ETH: {
     name: "Ethereum",
@@ -61,7 +70,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
     decimals: 18,
     color: "#627EEA",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   SOL: {
     name: "Solana",
@@ -69,7 +78,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
     decimals: 9,
     color: "#14F195",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   USDC: {
     name: "USD Coin",
@@ -77,7 +86,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
     decimals: 6,
     color: "#2775CA",
-    displayDecimals : 2,
+    displayDecimals: 2,
   },
   BNB: {
     name: "BNB",
@@ -85,7 +94,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/bnb-bnb-logo.png",
     decimals: 18,
     color: "#F3BA2F",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   XRP: {
     name: "Ripple",
@@ -93,7 +102,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/xrp-xrp-logo.png",
     decimals: 6,
     color: "#23292F",
-    displayDecimals : 2,
+    displayDecimals: 2,
   },
   ADA: {
     name: "Cardano",
@@ -101,7 +110,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/cardano-ada-logo.png",
     decimals: 6,
     color: "#0033AD",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   AVAX: {
     name: "Avalanche",
@@ -109,7 +118,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
     decimals: 18,
     color: "#E84142",
-    displayDecimals : 4,
+    displayDecimals: 4,
   },
   DOGE: {
     name: "Dogecoin",
@@ -117,7 +126,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/dogecoin-doge-logo.png",
     decimals: 8,
     color: "#C2A633",
-    displayDecimals : 2,
+    displayDecimals: 2,
   },
   MATIC: {
     name: "Polygon",
@@ -125,7 +134,7 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/polygon-matic-logo.png",
     decimals: 18,
     color: "#8247E5",
-    displayDecimals : 2,
+    displayDecimals: 2,
   },
   DOT: {
     name: "Polkadot",
@@ -133,12 +142,15 @@ export const TOKEN_METADATA = {
     logo: "https://cryptologos.cc/logos/polkadot-new-dot-logo.png",
     decimals: 10,
     color: "#E6007A",
-    displayDecimals : 2,
+    displayDecimals: 2,
   },
 } as const;
 
 export const TOKEN_LOGOS = Object.fromEntries(
-  Object.entries(TOKEN_METADATA).map(([symbol, metadata]) => [symbol, metadata.logo])
+  Object.entries(TOKEN_METADATA).map(([symbol, metadata]) => [
+    symbol,
+    metadata.logo,
+  ]),
 );
 
 export const SEED_MARKETS = [
@@ -274,7 +286,7 @@ export const getTokenMetadata = (symbol: string) => {
 
 export const getMarketsForToken = (token: string) => {
   return SEED_MARKETS.filter(
-    (market) => market.baseAsset === token || market.quoteAsset === token
+    (market) => market.baseAsset === token || market.quoteAsset === token,
   );
 };
 
@@ -283,8 +295,8 @@ export const isMarketSupported = (ticker: string) => {
 };
 
 export const FEE_CONFIG = {
-  maker: 0.001, 
-  taker: 0.001, 
+  maker: 0.001,
+  taker: 0.001,
   withdrawal: {
     BTC: 0.0005,
     ETH: 0.005,
@@ -301,11 +313,12 @@ export const FEE_CONFIG = {
 } as const;
 
 export const ORDER_LIMITS = {
-  minNotional: 10, 
-  maxNotional: 1000000, 
+  minNotional: 10,
+  maxNotional: 1000000,
 } as const;
 
-export type SupportedMarket = typeof SUPPORTED_MARKETS[number];
-export type SupportedToken = typeof SUPPORTED_TOKENS[number];
-export type MarketData = typeof SEED_MARKETS[number];
-export type TokenMetadata = typeof TOKEN_METADATA[keyof typeof TOKEN_METADATA];
+export type SupportedMarket = (typeof SUPPORTED_MARKETS)[number];
+export type SupportedToken = (typeof SUPPORTED_TOKENS)[number];
+export type MarketData = (typeof SEED_MARKETS)[number];
+export type TokenMetadata =
+  (typeof TOKEN_METADATA)[keyof typeof TOKEN_METADATA];

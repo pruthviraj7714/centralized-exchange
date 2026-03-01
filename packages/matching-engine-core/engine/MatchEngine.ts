@@ -96,32 +96,103 @@ export class MatchEngine extends EventEmitter {
     }
   }
 
+  // private matchBuyOrder(buyOrder: EngineOrder): void {
+  //   while (
+  //     buyOrder.type === "MARKET"
+  //       ? buyOrder.quoteRemaining!.gt(0)
+  //       : buyOrder.filled.lt(buyOrder.quantity)
+  //   ) {
+  //     if (buyOrder.type === "MARKET") {
+  //       if (!buyOrder.quoteRemaining || buyOrder.quoteRemaining.lte(0)) {
+  //         this.finalizeOrder(buyOrder);
+  //         return;
+  //       }
+  //     } else {
+  //       if (buyOrder.filled.gte(buyOrder.quantity)) {
+  //         this.finalizeOrder(buyOrder);
+  //         return;
+  //       }
+  //     }
+
+  //     const bestAsk = this.orderbook.getBestAsk();
+  //     if (!bestAsk) {
+  //       if (buyOrder.type === "MARKET") {
+  //         this.finalizeOrder(buyOrder);
+  //       } else {
+  //         this.orderbook.addOrder(buyOrder);
+  //         this.finalizeOrder(buyOrder);
+  //       }
+  //       return;
+  //     }
+
+  //     const sellOrder = bestAsk.queue.peek();
+  //     if (!sellOrder) {
+  //       this.orderbook.removePriceLevel("SELL", bestAsk.price);
+  //       continue;
+  //     }
+
+  //     if (buyOrder.userId === sellOrder.userId) {
+  //       this.orderbook.removeOrder(sellOrder.id);
+  //       sellOrder.status = "CANCELLED";
+  //       this.emit("order_removed", sellOrder);
+  //       continue;
+  //     }
+
+  //     const price = bestAsk.price;
+  //     const availableBase = sellOrder.quantity.minus(sellOrder.filled);
+
+  //     let tradeBase: Decimal;
+
+  //     if (buyOrder.type === "MARKET") {
+  //       const affordableBase = buyOrder.quoteRemaining!.div(price);
+  //       tradeBase = Decimal.min(availableBase, affordableBase);
+  //     } else {
+  //       if (price.gt(buyOrder.price!)) {
+  //         this.orderbook.addOrder(buyOrder);
+  //         this.finalizeOrder(buyOrder);
+  //         return;
+  //       }
+
+  //       const remainingBase = buyOrder.quantity.minus(buyOrder.filled);
+  //       tradeBase = Decimal.min(availableBase, remainingBase);
+  //     }
+
+  //     if (tradeBase.lte(0)) {
+  //       if (
+  //         buyOrder.type === "LIMIT" &&
+  //         buyOrder.filled.lt(buyOrder.quantity)
+  //       ) {
+  //         this.orderbook.addOrder(buyOrder);
+  //         this.finalizeOrder(buyOrder);
+  //       }
+  //       return;
+  //     }
+
+  //     this.executeTrade(buyOrder, sellOrder, price, tradeBase);
+
+  //     if (sellOrder.filled.eq(sellOrder.quantity)) {
+  //       this.orderbook.removeOrder(sellOrder.id);
+  //       sellOrder.status = "FILLED";
+  //       this.emit("order_updated", sellOrder);
+  //     }
+  //   }
+  // }
+
   private matchBuyOrder(buyOrder: EngineOrder): void {
+    const MIN_TRADE = new Decimal("1e-12");
+
     while (
       buyOrder.type === "MARKET"
-        ? buyOrder.quoteRemaining!.gt(0)
+        ? buyOrder.quoteRemaining!.gt(MIN_TRADE)
         : buyOrder.filled.lt(buyOrder.quantity)
     ) {
-      if (buyOrder.type === "MARKET") {
-        if (!buyOrder.quoteRemaining || buyOrder.quoteRemaining.lte(0)) {
-          this.finalizeOrder(buyOrder);
-          return;
-        }
-      } else {
-        if (buyOrder.filled.gte(buyOrder.quantity)) {
-          this.finalizeOrder(buyOrder);
-          return;
-        }
-      }
-
       const bestAsk = this.orderbook.getBestAsk();
+
       if (!bestAsk) {
-        if (buyOrder.type === "MARKET") {
-          this.finalizeOrder(buyOrder);
-        } else {
+        if (buyOrder.type !== "MARKET") {
           this.orderbook.addOrder(buyOrder);
-          this.finalizeOrder(buyOrder);
         }
+        this.finalizeOrder(buyOrder);
         return;
       }
 
@@ -140,7 +211,6 @@ export class MatchEngine extends EventEmitter {
 
       const price = bestAsk.price;
       const availableBase = sellOrder.quantity.minus(sellOrder.filled);
-
       let tradeBase: Decimal;
 
       if (buyOrder.type === "MARKET") {
@@ -152,30 +222,25 @@ export class MatchEngine extends EventEmitter {
           this.finalizeOrder(buyOrder);
           return;
         }
-
         const remainingBase = buyOrder.quantity.minus(buyOrder.filled);
         tradeBase = Decimal.min(availableBase, remainingBase);
       }
 
-      if (tradeBase.lte(0)) {
-        if (
-          buyOrder.type === "LIMIT" &&
-          buyOrder.filled.lt(buyOrder.quantity)
-        ) {
-          this.orderbook.addOrder(buyOrder);
-          this.finalizeOrder(buyOrder);
-        }
+      if (tradeBase.lt(MIN_TRADE)) {
+        this.finalizeOrder(buyOrder);
         return;
       }
 
       this.executeTrade(buyOrder, sellOrder, price, tradeBase);
 
-      if (sellOrder.filled.eq(sellOrder.quantity)) {
+      if (sellOrder.filled.gte(sellOrder.quantity)) {
         this.orderbook.removeOrder(sellOrder.id);
         sellOrder.status = "FILLED";
         this.emit("order_updated", sellOrder);
       }
     }
+
+    this.finalizeOrder(buyOrder);
   }
 
   private matchSellOrder(sellOrder: EngineOrder): void {
@@ -183,17 +248,11 @@ export class MatchEngine extends EventEmitter {
       const bestBid = this.orderbook.getBestBid();
 
       if (!bestBid) {
-        if (sellOrder.type === "MARKET") {
-          this.finalizeOrder(sellOrder);
-          console.log(
-            `Market SELL order ${sellOrder.id} cancelled due to no liquidity`,
-          );
-          return;
-        } else {
+        if (sellOrder.type !== "MARKET") {
           this.orderbook.addOrder(sellOrder);
-          this.finalizeOrder(sellOrder);
-          break;
         }
+        this.finalizeOrder(sellOrder);
+        return;
       }
 
       if (
@@ -202,7 +261,7 @@ export class MatchEngine extends EventEmitter {
       ) {
         this.orderbook.addOrder(sellOrder);
         this.finalizeOrder(sellOrder);
-        break;
+        return;
       }
 
       const buyOrder = bestBid.queue.peek();
@@ -221,25 +280,82 @@ export class MatchEngine extends EventEmitter {
       const tradePrice = bestBid.price;
       const availableQuantity = buyOrder.quantity.minus(buyOrder.filled);
       const neededQuantity = sellOrder.quantity.minus(sellOrder.filled);
-      const tradeQuantity = availableQuantity.lessThan(neededQuantity)
-        ? availableQuantity
-        : neededQuantity;
+      const tradeQuantity = Decimal.min(availableQuantity, neededQuantity);
 
       this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
 
-      if (buyOrder.filled.equals(buyOrder.quantity)) {
+      if (buyOrder.filled.gte(buyOrder.quantity)) {
         this.orderbook.removeOrder(buyOrder.id);
         buyOrder.status = "FILLED";
         this.emit("order_updated", buyOrder);
-        continue;
-      }
-
-      if (sellOrder.filled.equals(sellOrder.quantity)) {
-        this.finalizeOrder(sellOrder);
-        break;
       }
     }
+
+    this.finalizeOrder(sellOrder);
   }
+
+  // private matchSellOrder(sellOrder: EngineOrder): void {
+  //   while (sellOrder.filled.lessThan(sellOrder.quantity)) {
+  //     const bestBid = this.orderbook.getBestBid();
+
+  //     if (!bestBid) {
+  //       if (sellOrder.type === "MARKET") {
+  //         this.finalizeOrder(sellOrder);
+  //         console.log(
+  //           `Market SELL order ${sellOrder.id} cancelled due to no liquidity`,
+  //         );
+  //         return;
+  //       } else {
+  //         this.orderbook.addOrder(sellOrder);
+  //         this.finalizeOrder(sellOrder);
+  //         break;
+  //       }
+  //     }
+
+  //     if (
+  //       sellOrder.type !== "MARKET" &&
+  //       bestBid.price.lessThan(sellOrder.price!)
+  //     ) {
+  //       this.orderbook.addOrder(sellOrder);
+  //       this.finalizeOrder(sellOrder);
+  //       break;
+  //     }
+
+  //     const buyOrder = bestBid.queue.peek();
+  //     if (!buyOrder) {
+  //       this.orderbook.removePriceLevel("BUY", bestBid.price);
+  //       continue;
+  //     }
+
+  //     if (buyOrder.userId === sellOrder.userId) {
+  //       this.orderbook.removeOrder(buyOrder.id);
+  //       buyOrder.status = "CANCELLED";
+  //       this.emit("order_removed", buyOrder);
+  //       continue;
+  //     }
+
+  //     const tradePrice = bestBid.price;
+  //     const availableQuantity = buyOrder.quantity.minus(buyOrder.filled);
+  //     const neededQuantity = sellOrder.quantity.minus(sellOrder.filled);
+  //     const tradeQuantity = availableQuantity.lessThan(neededQuantity)
+  //       ? availableQuantity
+  //       : neededQuantity;
+
+  //     this.executeTrade(buyOrder, sellOrder, tradePrice, tradeQuantity);
+
+  //     if (buyOrder.filled.equals(buyOrder.quantity)) {
+  //       this.orderbook.removeOrder(buyOrder.id);
+  //       buyOrder.status = "FILLED";
+  //       this.emit("order_updated", buyOrder);
+  //       continue;
+  //     }
+
+  //     if (sellOrder.filled.equals(sellOrder.quantity)) {
+  //       this.finalizeOrder(sellOrder);
+  //       break;
+  //     }
+  //   }
+  // }
 
   private executeTrade(
     buyOrder: EngineOrder,

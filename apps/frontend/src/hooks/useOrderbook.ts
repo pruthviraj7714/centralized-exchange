@@ -94,6 +94,7 @@ const useOrderbook = (pair: string, chartInterval: string) => {
                 pair: data.pair,
                 timestamp: data.timestamp,
               };
+              setRecentTrades(data.lastTrades || []);
               applyToDisplay(snapshotData);
               break;
 

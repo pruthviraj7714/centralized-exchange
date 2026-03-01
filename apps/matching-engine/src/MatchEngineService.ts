@@ -15,31 +15,26 @@ const orderbookMap: Map<string, OrderbookData> = new Map();
 
 const parseOrderEvent = (data: OrderEvent): EngineOrder | null => {
   if (data.event === "CREATE_ORDER") {
+    const isMarket = data.type === "MARKET";
+    const isMarketBuy = isMarket && data.side === "BUY";
+
     return {
       id: data.id,
       userId: data.userId,
       side: data.side,
       marketId: data.marketId,
       type: data.type,
-      remainingQuantity:
-        data.type === "LIMIT"
-          ? new Decimal(data.originalQuantity || 0)
-          : new Decimal(0),
-      price: data.type === "MARKET" ? null : new Decimal(data.price),
-      quantity:
-        data.type === "LIMIT"
-          ? new Decimal(data.originalQuantity || 0)
-          : new Decimal(data.originalQuantity || 0),
-      quoteSpent:
-        data.type === "MARKET" ? new Decimal(data.quoteSpent || 0) : null,
-      quoteAmount:
-        data.type === "MARKET" ? new Decimal(data.quoteAmount || 0) : null,
-      quoteRemaining:
-        data.type === "MARKET" ? new Decimal(data.quoteRemaining || 0) : null,
       pair: data.pair,
       filled: new Decimal(0),
-      createdAt: data.timestamp,
       status: data.status as ORDER_STATUS,
+      createdAt: data.timestamp,
+      quantity: isMarketBuy
+        ? new Decimal(0)
+        : new Decimal(data.originalQuantity || 0),
+      price: isMarket ? null : new Decimal(data.price),
+      quoteAmount: isMarketBuy ? new Decimal(data.quoteAmount || 0) : null,
+      quoteSpent: isMarketBuy ? new Decimal(0) : null,
+      quoteRemaining: isMarketBuy ? new Decimal(data.quoteAmount || 0) : null,
     };
   }
   return null;
@@ -66,36 +61,41 @@ const sendTradeToKafka = async (trade: Trade) => {
   });
 };
 
-// const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
-//   const event = {
-//     event: "ORDER_UPDATED",
-//     orderId: order.id,
-//     eventId: crypto.randomUUID(),
-//     pair: order.pair,
-//     type: order.type,
-//     userId: order.userId,
-//     price: order.price?.toString() || null,
-//     quoteSpent: order.quoteSpent?.toString() || null,
-//     quoteRemaining: order.quoteRemaining?.toString() || null,
-//     side: order.side,
-//     status: order.status,
-//     filledQuantity: order.filled.toString(),
-//     remainingQuantity: order.quantity.sub(order.filled).toString(),
-//     updatedAt: Date.now()
-//   };
+const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
+  const isMarketBuy = order.type === "MARKET" && order.side === "BUY";
+  const event = {
+    event: "ORDER_UPDATED",
+    orderId: order.id,
+    eventId: crypto.randomUUID(),
+    pair: order.pair,
+    type: order.type,
+    userId: order.userId,
+    price: order.price?.toString() || null,
+    side: order.side,
+    status: order.status,
+    updatedAt: Date.now(),
+    quoteSpent: isMarketBuy ? order.quoteSpent?.toString() : null,
+    quoteRemaining: isMarketBuy ? order.quoteRemaining?.toString() : null,
+    filledQuantity: order.filled.toString(),
+    remainingQuantity: isMarketBuy
+      ? null
+      : order.quantity.sub(order.filled).toString(),
+  };
 
-//   await producer.send({
-//     topic: EVENT_TOPICS.ORDER_UPDATED,
-//     messages: [
-//       {
-//         key: order.marketId,
-//         value: JSON.stringify(event)
-//       }
-//     ]
-//   })
-// };
+  await producer.send({
+    topic: EVENT_TOPICS.ORDER_UPDATED,
+    messages: [
+      {
+        key: order.marketId,
+        value: JSON.stringify(event),
+      },
+    ],
+  });
+};
 
 const sendCanceledOrderToKafka = async (order: EngineOrder) => {
+  const isMarketBuy = order.type === "MARKET" && order.side === "BUY";
+
   const event = {
     event: "ORDER_CANCELED",
     orderId: order.id,
@@ -104,12 +104,14 @@ const sendCanceledOrderToKafka = async (order: EngineOrder) => {
     type: order.type,
     userId: order.userId,
     price: order.price?.toString() || null,
-    quoteSpent: order.quoteSpent?.toString() || null,
-    quoteRemaining: order.quoteRemaining?.toString() || null,
+    filledQuantity: order.filled.toString(),
+    remainingQuantity: isMarketBuy
+      ? null
+      : order.quantity.sub(order.filled).toString(),
+    quoteSpent: isMarketBuy ? order.quoteSpent?.toString() : null,
+    quoteRemaining: isMarketBuy ? order.quoteRemaining?.toString() : null,
     side: order.side,
     status: order.status,
-    filledQuantity: order.filled.toString(),
-    remainingQuantity: order.quantity.sub(order.filled).toString(),
     updatedAt: Date.now(),
   };
 
@@ -207,6 +209,7 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
     ) {
       orderIndex.delete(order.id);
     }
+    sendUpdatedOrderToKafka(order);
     sendOrderbookUpdateToKafka(pair);
   });
 

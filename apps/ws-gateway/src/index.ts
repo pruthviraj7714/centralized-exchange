@@ -315,6 +315,7 @@ wss.on("connection", async (ws, req) => {
             asks: snapshot?.asks || [],
             timestamp: Date.now(),
             sequence: snapshot?.sequence,
+            lastTrades: snapshot?.lastTrades || [],
           }),
         );
         ws.send(
