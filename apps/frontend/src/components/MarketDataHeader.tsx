@@ -36,7 +36,7 @@ export default function MarketDataHeader({
           <div className="flex items-center space-x-8">
             <div className="flex items-center gap-3">
               <img
-                src={marketData?.logo}
+                src={`/logos/${marketData?.logo}`}
                 alt="SOL"
                 className="h-8 w-8 object-contain rounded-full border border-slate-700"
               />
@@ -59,7 +59,9 @@ export default function MarketDataHeader({
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">Last Price</span>
                 <div className="flex items-center gap-1">
-                  <span className={`text-lg font-bold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                  <span
+                    className={`text-lg font-bold ${isPositive ? "text-emerald-400" : "text-red-400"}`}
+                  >
                     ${live.lastPrice}
                   </span>
                   <TrendingUp
@@ -92,7 +94,8 @@ export default function MarketDataHeader({
               <div className="flex flex-col">
                 <span className="text-xs text-slate-400">24h Volume</span>
                 <span className="text-white font-semibold">
-                  {new Decimal(live.volume || 0).toFixed(2)} {marketData.baseAsset}
+                  {new Decimal(live.volume || 0).toFixed(2)}{" "}
+                  {marketData.baseAsset}
                 </span>
               </div>
             </div>

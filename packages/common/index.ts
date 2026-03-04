@@ -59,7 +59,7 @@ export const TOKEN_METADATA = {
   BTC: {
     name: "Bitcoin",
     symbol: "BTC",
-    logo: "https://cryptologos.cc/logos/bitcoin-btc-logo.png",
+    logo: "btc.png",
     decimals: 8,
     color: "#F7931A",
     displayDecimals: 4,
@@ -67,7 +67,7 @@ export const TOKEN_METADATA = {
   ETH: {
     name: "Ethereum",
     symbol: "ETH",
-    logo: "https://cryptologos.cc/logos/ethereum-eth-logo.png",
+    logo: "eth.png",
     decimals: 18,
     color: "#627EEA",
     displayDecimals: 4,
@@ -75,7 +75,7 @@ export const TOKEN_METADATA = {
   SOL: {
     name: "Solana",
     symbol: "SOL",
-    logo: "https://cryptologos.cc/logos/solana-sol-logo.png",
+    logo: "sol.png",
     decimals: 9,
     color: "#14F195",
     displayDecimals: 4,
@@ -83,7 +83,7 @@ export const TOKEN_METADATA = {
   USDC: {
     name: "USD Coin",
     symbol: "USDC",
-    logo: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png",
+    logo: "usdc.png",
     decimals: 6,
     color: "#2775CA",
     displayDecimals: 2,
@@ -91,7 +91,7 @@ export const TOKEN_METADATA = {
   BNB: {
     name: "BNB",
     symbol: "BNB",
-    logo: "https://cryptologos.cc/logos/bnb-bnb-logo.png",
+    logo: "bnb.png",
     decimals: 18,
     color: "#F3BA2F",
     displayDecimals: 4,
@@ -99,7 +99,7 @@ export const TOKEN_METADATA = {
   XRP: {
     name: "Ripple",
     symbol: "XRP",
-    logo: "https://cryptologos.cc/logos/xrp-xrp-logo.png",
+    logo: "xrp.png",
     decimals: 6,
     color: "#23292F",
     displayDecimals: 2,
@@ -107,7 +107,7 @@ export const TOKEN_METADATA = {
   ADA: {
     name: "Cardano",
     symbol: "ADA",
-    logo: "https://cryptologos.cc/logos/cardano-ada-logo.png",
+    logo: "ada.png",
     decimals: 6,
     color: "#0033AD",
     displayDecimals: 4,
@@ -115,7 +115,7 @@ export const TOKEN_METADATA = {
   AVAX: {
     name: "Avalanche",
     symbol: "AVAX",
-    logo: "https://cryptologos.cc/logos/avalanche-avax-logo.png",
+    logo: "avax.png",
     decimals: 18,
     color: "#E84142",
     displayDecimals: 4,
@@ -123,7 +123,7 @@ export const TOKEN_METADATA = {
   DOGE: {
     name: "Dogecoin",
     symbol: "DOGE",
-    logo: "https://cryptologos.cc/logos/dogecoin-doge-logo.png",
+    logo: "doge.png",
     decimals: 8,
     color: "#C2A633",
     displayDecimals: 2,
@@ -131,7 +131,7 @@ export const TOKEN_METADATA = {
   MATIC: {
     name: "Polygon",
     symbol: "MATIC",
-    logo: "https://cryptologos.cc/logos/polygon-matic-logo.png",
+    logo: "matic.png",
     decimals: 18,
     color: "#8247E5",
     displayDecimals: 2,
@@ -139,7 +139,7 @@ export const TOKEN_METADATA = {
   DOT: {
     name: "Polkadot",
     symbol: "DOT",
-    logo: "https://cryptologos.cc/logos/polkadot-new-dot-logo.png",
+    logo: "dot.png",
     decimals: 10,
     color: "#E6007A",
     displayDecimals: 2,

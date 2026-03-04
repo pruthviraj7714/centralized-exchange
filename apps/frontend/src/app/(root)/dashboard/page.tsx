@@ -192,7 +192,7 @@ export default function MarketDashboard() {
       <div className="flex items-center space-x-3 flex-1 min-w-0">
         <div className="relative">
           <img
-            src={coin.logo}
+            src={`/logos/${coin.logo}`}
             alt={coin.baseAsset}
             className="w-9 h-9 rounded-full border border-slate-700/50 object-contain bg-white p-1 group-hover:border-emerald-500/50 transition-colors"
           />
@@ -452,7 +452,7 @@ export default function MarketDashboard() {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
                         <img
-                          src={coin.logo}
+                          src={`/logos/${coin.logo}`}
                           alt={coin.baseAsset}
                           className="w-10 h-10 rounded-full border border-slate-700/50 object-contain bg-white p-1 group-hover:border-emerald-500/50 transition-colors"
                         />
@@ -529,7 +529,7 @@ export default function MarketDashboard() {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <img
-                      src={coin.logo}
+                      src={`/logos/${coin.logo}`}
                       alt={coin.baseAsset}
                       className="w-12 h-12 rounded-full border border-slate-700/50 object-contain bg-white p-1"
                     />

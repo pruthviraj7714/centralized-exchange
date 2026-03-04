@@ -25,7 +25,6 @@ import { LoadingSkeleton } from "@/components/LoadingSkeleton";
 import { ErrorState } from "@/components/ErrorState";
 import { useRouter } from "next/navigation";
 
-
 export default function PortfolioPage() {
   const [selectedAsset, setSelectedAsset] = useState("BTC");
   const [amount, setAmount] = useState<Decimal>(new Decimal(0));
@@ -44,16 +43,16 @@ export default function PortfolioPage() {
     enabled: isReady,
   });
   const { mutateAsync } = useMutation({
-    mutationFn : () => depositAsset(selectedAsset, amount, data?.accessToken!),
-    mutationKey : ["deposit"],
-    onError : () => {
-      toast.error("Error while depositing", {position : "top-center"});
+    mutationFn: () => depositAsset(selectedAsset, amount, data?.accessToken!),
+    mutationKey: ["deposit"],
+    onError: () => {
+      toast.error("Error while depositing", { position: "top-center" });
     },
-    onSuccess : () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey : ["portfolio"],
-      })
-    }
+        queryKey: ["portfolio"],
+      });
+    },
   });
   const queryClient = useQueryClient();
 
@@ -68,12 +67,14 @@ export default function PortfolioPage() {
 
   const handleDeposit = async () => {
     if (!data?.accessToken) {
-      toast.warning("Please login to deposit", { position : "top-center"});
+      toast.warning("Please login to deposit", { position: "top-center" });
       return;
     }
 
-    if(!amount || new Decimal(amount).lte(0)) {
-      toast.warning("Amount should be minimum 0.01", { position : "top-center"});
+    if (!amount || new Decimal(amount).lte(0)) {
+      toast.warning("Amount should be minimum 0.01", {
+        position: "top-center",
+      });
       return;
     }
 
@@ -84,8 +85,10 @@ export default function PortfolioPage() {
   };
 
   const handleWithdraw = () => {
-     if(!amount || new Decimal(amount).lte(0)) {
-      toast.warning("Amount should be minimum 0.01", { position : "top-center"});
+    if (!amount || new Decimal(amount).lte(0)) {
+      toast.warning("Amount should be minimum 0.01", {
+        position: "top-center",
+      });
       return;
     }
     toast.success(`Withdrawing ${amount} ${selectedAsset}`, {
@@ -97,10 +100,15 @@ export default function PortfolioPage() {
     return <LoadingSkeleton pageType="portfolio" />;
   }
 
-  if(portfolioError) {
-    return <ErrorState pageType="portfolio" onRetry={() => {
-      router.refresh();
-    }} />;
+  if (portfolioError) {
+    return (
+      <ErrorState
+        pageType="portfolio"
+        onRetry={() => {
+          router.refresh();
+        }}
+      />
+    );
   }
 
   const balances = normalizeBalances(portfolioData?.portfolio || []);
@@ -114,7 +122,9 @@ export default function PortfolioPage() {
     new Decimal(0),
   );
 
-  const totalChangePercent = totalUSDValue.isZero() ? new Decimal(0) : totalChange24h.div(totalUSDValue).mul(100);
+  const totalChangePercent = totalUSDValue.isZero()
+    ? new Decimal(0)
+    : totalChange24h.div(totalUSDValue).mul(100);
 
   const totalAvailableBalanceInUSD = balances.reduce(
     (sum, asset) =>
@@ -365,9 +375,7 @@ export default function PortfolioPage() {
                   </div>
                   <div className="relative">
                     <input
-                      onChange={(e) =>
-                        setAmount(new Decimal(e.target.value))
-                      }
+                      onChange={(e) => setAmount(new Decimal(e.target.value))}
                       type="number"
                       step="0.0001"
                       placeholder="0.00"
@@ -448,7 +456,9 @@ export default function PortfolioPage() {
                       TOKEN_METADATA[
                         balance.asset as keyof typeof TOKEN_METADATA
                       ];
-                    const totalAmount = balance.available.plus(balance.locked).toFixed(metadata.displayDecimals);
+                    const totalAmount = balance.available
+                      .plus(balance.locked)
+                      .toFixed(metadata.displayDecimals);
                     const availablePercent = balance.available
                       .div(totalAmount)
                       .mul(100);
@@ -461,7 +471,7 @@ export default function PortfolioPage() {
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center gap-4">
                             <img
-                              src={metadata.logo}
+                              src={`/logos/${metadata.logo}`}
                               alt={balance.asset}
                               className="w-12 h-12 rounded-full border border-slate-700/50 object-contain bg-white p-1.5 group-hover:border-emerald-500/50 transition-colors"
                             />
@@ -480,7 +490,9 @@ export default function PortfolioPage() {
                               {hideBalances ? "••••" : totalAmount.toString()}
                             </p>
                             <p className="text-sm text-slate-400">
-                              {hideBalances ? "••••" : `≈ $${balance.usdValue.toFixed(metadata.displayDecimals)}`}
+                              {hideBalances
+                                ? "••••"
+                                : `≈ $${balance.usdValue.toFixed(metadata.displayDecimals)}`}
                             </p>
                           </div>
                         </div>
@@ -493,7 +505,9 @@ export default function PortfolioPage() {
                             <p className="text-sm font-semibold text-emerald-400">
                               {hideBalances
                                 ? "••••"
-                                : balance.available.toFixed(metadata.displayDecimals)}
+                                : balance.available.toFixed(
+                                    metadata.displayDecimals,
+                                  )}
                             </p>
                           </div>
 
@@ -504,7 +518,9 @@ export default function PortfolioPage() {
                             <p className="text-sm font-semibold text-orange-400">
                               {hideBalances
                                 ? "••••"
-                                : balance.locked.toFixed(metadata.displayDecimals)}
+                                : balance.locked.toFixed(
+                                    metadata.displayDecimals,
+                                  )}
                             </p>
                           </div>
 

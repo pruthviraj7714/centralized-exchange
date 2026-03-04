@@ -1,6 +1,10 @@
 import { TOKEN_METADATA } from "@repo/common";
 
-export function LoadingSkeleton({pageType}:{pageType: "dashboard" | "market" | "portfolio"}) {
+export function LoadingSkeleton({
+  pageType,
+}: {
+  pageType: "dashboard" | "market" | "portfolio";
+}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center overflow-hidden">
       <div className="relative">
@@ -31,7 +35,7 @@ export function LoadingSkeleton({pageType}:{pageType: "dashboard" | "market" | "
                 }}
               >
                 <img
-                  src={crypto.logo}
+                  src={`/logos/${crypto.logo}`}
                   alt={crypto.name}
                   className="w-full h-full object-contain"
                 />

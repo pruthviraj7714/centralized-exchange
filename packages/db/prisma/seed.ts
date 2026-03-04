@@ -4,11 +4,19 @@ import { SEED_MARKETS } from "@repo/common";
 
 const smallNumber = () => {
   return Math.floor(Math.random() * 100);
-}
+};
 
 const largeNumber = () => {
   return Math.floor(Math.random() * 10000);
-}
+};
+
+const generateSparkline = () => {
+  const sparkline = [];
+  for (let i = 0; i < 7; i++) {
+    sparkline.push(largeNumber());
+  }
+  return sparkline;
+};
 
 async function main() {
   console.log("🌱 Seeding Market data...");
@@ -38,12 +46,11 @@ async function main() {
       maxOrderSize: new Decimal(largeNumber()),
       tickSize: new Decimal(smallNumber()),
       lotSize: new Decimal(smallNumber()),
-      sparkline7d: [],
+      sparkline7d: generateSparkline(),
       isActive: true,
       isFeatured: false,
-    }
-    ))
-  })
+    })),
+  });
 
   console.log("✅ Market seed completed");
 }
