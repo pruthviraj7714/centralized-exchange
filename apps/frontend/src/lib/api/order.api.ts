@@ -1,31 +1,36 @@
-import Decimal from "decimal.js";
 import { api } from "./axios";
+import { PlaceOrderPayload } from "@/types/order";
 
-const placeOrder = async (ticker: string, side: "BUY" | "SELL", type: "LIMIT" | "MARKET", token: string, quantity?: Decimal, quoteAmount?: Decimal, price?: Decimal) => {
-    const { data } = await api.post('/orders', {
-        pair: ticker,
-        side,
-        price,
-        quantity,
-        type,
-        quoteAmount
-    }, {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    })
+const placeOrder = async (orderPayload: PlaceOrderPayload) => {
+  const { data } = await api.post(
+    "/orders",
+    {
+      pair: orderPayload.ticker,
+      side: orderPayload.side,
+      price: orderPayload.price,
+      quantity: orderPayload.quantity,
+      type: orderPayload.type,
+      quoteAmount: orderPayload.quoteAmount,
+      clientOrderId: orderPayload.clientOrderId,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${orderPayload.token}`,
+      },
+    },
+  );
 
-    return data;
-}
+  return data;
+};
 
-const cancelOrder = async (orderId : string, token : string) => {
-    const { data } = await api.delete(`/orders/${orderId}/cancel`, {
-        headers: {
-            Authorization: `Bearer ${token}`
-        }
-    })
+const cancelOrder = async (orderId: string, token: string) => {
+  const { data } = await api.delete(`/orders/${orderId}/cancel`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
 
-    return data;
-}
+  return data;
+};
 
-export { placeOrder, cancelOrder }
+export { placeOrder, cancelOrder };

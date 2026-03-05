@@ -14,7 +14,7 @@ import {
   fetchUserTrades,
 } from "@/lib/api/user.api";
 import { cancelOrder, placeOrder } from "@/lib/api/order.api";
-import { IOrder, BottomTab } from "@/types/order";
+import { IOrder, BottomTab, PlaceOrderPayload } from "@/types/order";
 import { ITrade } from "@/types/trade";
 import BottomOrdersComponent from "./BottomOrdersComponent";
 import MarketDataHeader from "./MarketDataHeader";
@@ -41,6 +41,9 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   const [bottomTab, setBottomTab] = useState<BottomTab>("OPEN_ORDERS");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [mergedCandles, setMergedCandles] = useState<ICandle[]>([]);
+  const [clientOrderId, setClientOrderId] = useState<string>(() =>
+    crypto.randomUUID(),
+  );
   const router = useRouter();
 
   const [baseAsset, quoteAsset] = ticker.split("-");
@@ -106,36 +109,32 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     refetchInterval: 10000,
   });
 
-  const { mutateAsync: placeOrderMutation } = useMutation({
-    mutationFn: () =>
-      placeOrder(
-        ticker,
-        activeTab,
-        orderType,
-        data?.accessToken!,
-        new Decimal(quantity || 0),
-        new Decimal(spendAmount || 0),
-        new Decimal(price || 0),
-      ),
-    mutationKey: ["place-order", ticker, activeTab, price, quantity, orderType],
-    onSuccess: (data) => {
-      toast.success(data.message ? data.message : "Order placed successfully", {
-        position: "top-center",
-      });
-    },
-    onError: (error: any) => {
-      toast.error(
-        error.response?.data?.message
-          ? error.response?.data?.message
-          : "Failed to place order",
-        { position: "top-center" },
-      );
-    },
-  });
+  const { mutateAsync: placeOrderMutation, isPending: placeOrderPending } =
+    useMutation({
+      mutationFn: (orderPayload: PlaceOrderPayload) => placeOrder(orderPayload),
+      mutationKey: ["place-order"],
+      onSuccess: (data) => {
+        toast.success(
+          data.message ? data.message : "Order placed successfully",
+          {
+            position: "top-center",
+          },
+        );
+        setClientOrderId(crypto.randomUUID());
+      },
+      onError: (error: any) => {
+        toast.error(
+          error.response?.data?.message
+            ? error.response?.data?.message
+            : "Failed to place order",
+          { position: "top-center" },
+        );
+      },
+    });
 
   const { mutateAsync: cancelOrderMutation } = useMutation({
     mutationFn: (orderId: string) => cancelOrder(orderId, data?.accessToken!),
-    mutationKey: ["cancel-order", ticker],
+    mutationKey: ["cancel-order"],
     onSuccess: (data: { message?: string }) => {
       toast.success(
         data.message ? data.message : "Order cancelled successfully",
@@ -206,11 +205,17 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
     });
   }, [liveCandles]);
 
+  useEffect(() => {
+    if (!ticker || !isReady) return;
+    setClientOrderId(crypto.randomUUID());
+  }, [ticker, isReady]);
+
   const handlePriceClick = (priceValue: string) => {
     setPrice(priceValue);
   };
 
   const handlePlaceOrder = async () => {
+    if (placeOrderPending || !data?.accessToken) return;
     if (!isReady) {
       toast.error("Please login to place an order", { position: "top-center" });
       return;
@@ -232,7 +237,21 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
       return;
     }
 
-    await placeOrderMutation();
+    try {
+      await placeOrderMutation({
+        side: activeTab,
+        type: orderType,
+        quantity: new Decimal(quantity || 0),
+        price: new Decimal(price || 0),
+        ticker,
+        token: data.accessToken,
+        clientOrderId,
+        quoteAmount: new Decimal(spendAmount || 0),
+      });
+      setClientOrderId(crypto.randomUUID());
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handlePlaceOrderDisabled = () => {

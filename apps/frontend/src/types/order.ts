@@ -17,4 +17,15 @@ export interface IOrder {
   userId: string;
 }
 
+export interface PlaceOrderPayload {
+  side: "BUY" | "SELL";
+  type: "LIMIT" | "MARKET";
+  quantity: Decimal;
+  price?: Decimal;
+  ticker: string;
+  token: string;
+  clientOrderId: string;
+  quoteAmount?: Decimal;
+}
+
 export type BottomTab = "OPEN_ORDERS" | "ORDER_HISTORY" | "TRADE_HISTORY";

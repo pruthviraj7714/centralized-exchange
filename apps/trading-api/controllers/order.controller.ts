@@ -5,6 +5,7 @@ import prisma from "@repo/db";
 import { producer } from "@repo/kafka/src/producer";
 import { COMMAND_TOPICS } from "@repo/kafka/src/topics";
 import { Decimal } from "decimal.js";
+import type { IOrder } from "../types/types";
 
 await producer.connect();
 
@@ -12,7 +13,6 @@ const placeOrderController = async (req: Request, res: Response) => {
   try {
     const userId = req.body.userId!;
     const validationResult = OrderSchema.safeParse(req.body);
-
     if (!userId) {
       res.status(400).json({
         message: "user ID not passed",
@@ -28,7 +28,7 @@ const placeOrderController = async (req: Request, res: Response) => {
       return;
     }
 
-    const { pair, price, quantity, side, type, quoteAmount } =
+    const { pair, price, quantity, side, type, quoteAmount, clientOrderId } =
       validationResult.data;
 
     if (type === "LIMIT" && (!price || price === undefined || price.lte(0))) {
@@ -64,10 +64,10 @@ const placeOrderController = async (req: Request, res: Response) => {
       return;
     }
 
-    const [baseAsset, quoteAsset] = pair.split("-");
+    let isNewOrder = true;
 
     const order = await prisma.$transaction(async (tx) => {
-      const market = await tx.market.findFirst({
+      const market = await tx.market.findUnique({
         where: {
           symbol: pair,
         },
@@ -77,206 +77,120 @@ const placeOrderController = async (req: Request, res: Response) => {
         throw new Error("Invalid Market");
       }
 
-      let order;
-      const assetToLock = side === "BUY" ? quoteAsset : baseAsset;
+      const baseAsset = market.baseAsset;
+      const quoteAsset = market.quoteAsset;
 
-      const [wallet] = await tx.$queryRaw<{ id: string }[]>`
-        SELECT * FROM "Wallet" 
-        WHERE "userId" = ${userId} AND "asset" = ${assetToLock}
-        FOR UPDATE
-      `;
+      const insertedOrder = await tx.$queryRaw<IOrder[]>`INSERT INTO "Order" (
+        "id",
+        "clientOrderId",
+        "originalQuantity",
+        "remainingQuantity",
+        "quoteAmount",
+        "quoteRemaining",
+        "quoteSpent",
+        "price",
+        "side",
+        "type",
+        "userId",
+        "marketId",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${crypto.randomUUID()},
+        ${clientOrderId},
+        ${type === "LIMIT" ? quantity : new Decimal(0)},
+        ${type === "LIMIT" ? quantity : new Decimal(0)},
+        ${type === "MARKET" && side === "BUY" ? quoteAmount : new Decimal(0)},
+        ${type === "MARKET" && side === "BUY" ? quoteAmount : new Decimal(0)},
+        ${type === "MARKET" ? new Decimal(0) : new Decimal(0)},
+        ${type === "MARKET" ? null : price},
+        ${side},
+        ${type},
+        ${userId},
+        ${market.id},
+        ${new Date()},
+        ${new Date()}
+      ) ON CONFLICT ("clientOrderId", "userId") DO NOTHING RETURNING *`;
 
-      if (!wallet) {
-        throw new Error("Wallet not found");
+      if (insertedOrder.length === 0) {
+        isNewOrder = false;
+        const existingOrder = await tx.order.findFirst({
+          where: {
+            clientOrderId,
+            userId,
+          },
+        });
+        return [existingOrder];
       }
 
-      if (type === "LIMIT") {
-        const qty = quantity!;
-        if (side === "BUY") {
-          const totalAmount = price!.mul(qty);
-          const updated = await tx.wallet.updateMany({
-            where: {
-              id: wallet.id,
-              available: {
-                gte: totalAmount,
-              },
-            },
-            data: {
-              available: {
-                decrement: totalAmount,
-              },
-              locked: {
-                increment: totalAmount,
-              },
-            },
-          });
+      const createdOrder = insertedOrder[0];
 
-          if (updated.count === 0) {
-            throw new Error("Insufficient Balance");
-          }
+      const assetAmount =
+        type === "LIMIT"
+          ? side === "BUY"
+            ? price!.mul(quantity!)
+            : quantity!
+          : side === "BUY"
+            ? quoteAmount!
+            : quantity!;
 
-          order = await tx.order.create({
-            data: {
-              originalQuantity: qty,
-              remainingQuantity: qty,
-              side,
-              type,
-              userId,
-              marketId: market.id,
-              price,
-            },
-          });
-        } else {
-          const qtyToSell = quantity!;
+      const updated = await tx.wallet.updateMany({
+        where: {
+          asset: side === "BUY" ? quoteAsset : baseAsset,
+          userId,
+          available: {
+            gte: assetAmount,
+          },
+        },
+        data: {
+          available: {
+            decrement: assetAmount,
+          },
+          locked: {
+            increment: assetAmount,
+          },
+        },
+      });
 
-          const updated = await tx.wallet.updateMany({
-            where: {
-              id: wallet.id,
-              available: {
-                gte: qtyToSell,
-              },
-            },
-            data: {
-              available: {
-                decrement: qtyToSell,
-              },
-              locked: {
-                increment: qtyToSell,
-              },
-            },
-          });
-
-          if (updated.count === 0) {
-            throw new Error("Insufficient Balance");
-          }
-
-          order = await tx.order.create({
-            data: {
-              originalQuantity: qtyToSell,
-              remainingQuantity: qtyToSell,
-              side,
-              type,
-              marketId: market.id,
-              userId,
-              price,
-            },
-          });
-        }
-      } else {
-        if (side === "BUY") {
-          const spendAmount = quoteAmount!;
-
-          const updated = await tx.wallet.updateMany({
-            where: {
-              id: wallet.id,
-              available: {
-                gte: spendAmount,
-              },
-            },
-            data: {
-              available: {
-                decrement: spendAmount,
-              },
-              locked: {
-                increment: spendAmount,
-              },
-            },
-          });
-
-          if (updated.count === 0) {
-            throw new Error("Insufficient Balance");
-          }
-
-          order = await tx.order.create({
-            data: {
-              originalQuantity: new Decimal(0),
-              remainingQuantity: new Decimal(0),
-              quoteAmount: spendAmount,
-              quoteRemaining: spendAmount,
-              quoteSpent: new Decimal(0),
-              price: null,
-              side,
-              type,
-              userId,
-              marketId: market.id,
-            },
-          });
-        } else {
-          const qtyToSell = quantity!;
-
-          const updated = await tx.wallet.updateMany({
-            where: {
-              id: wallet.id,
-              available: {
-                gte: qtyToSell,
-              },
-            },
-            data: {
-              available: {
-                decrement: qtyToSell,
-              },
-              locked: {
-                increment: qtyToSell,
-              },
-            },
-          });
-
-          if (updated.count === 0) {
-            throw new Error("Insufficient Balance");
-          }
-
-          order = await tx.order.create({
-            data: {
-              originalQuantity: new Decimal(qtyToSell),
-              remainingQuantity: new Decimal(qtyToSell),
-              price: null,
-              side: side,
-              type: type,
-              userId: userId,
-              marketId: market.id,
-            },
-          });
-        }
+      if (updated.count === 0) {
+        throw new Error("Insufficient Balance");
       }
 
-      return order;
+      return [createdOrder];
     });
 
-    if (!order) {
-      return res.status(500).json({
-        message: "Failed to create order",
-      });
+    const createdOrder = order[0];
+
+    if (!createdOrder) {
+      throw new Error("Failed to create order");
     }
 
-    const result = await producer.send({
-      topic: COMMAND_TOPICS.ORDER_CREATE,
-      messages: [
-        {
-          key: order.marketId,
-          value: JSON.stringify({
-            ...order,
-            pair: pair,
-            event: "CREATE_ORDER",
-            eventId: crypto.randomUUID(),
-          }),
-        },
-      ],
-    });
-
-    console.log(result);
+    if (isNewOrder) {
+      const result = await producer.send({
+        topic: COMMAND_TOPICS.ORDER_CREATE,
+        messages: [
+          {
+            key: createdOrder.marketId,
+            value: JSON.stringify({
+              ...createdOrder,
+              pair: pair,
+              event: "CREATE_ORDER",
+              eventId: crypto.randomUUID(),
+            }),
+          },
+        ],
+      });
+      console.log(result);
+    }
 
     res.status(202).json({
       message: "Order request accepted",
     });
   } catch (error: any) {
+    console.log(error);
     if (error.message?.includes("Insufficient Balance")) {
       return res.status(409).json({
         message: "Insufficient Balance",
-      });
-    }
-    if (error.message?.includes("Wallet not found")) {
-      return res.status(404).json({
-        message: "Wallet not found",
       });
     }
     if (error.message?.includes("deadlock detected")) {
@@ -299,27 +213,31 @@ const placeOrderController = async (req: Request, res: Response) => {
 const cancelOrderController = async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id as string;
-    const userId = req.userId!;
+    const userId = req.body.userId!;
 
-    const order = await prisma.order.findFirst({
+    const order = await prisma.order.findUnique({
       where: {
         id: orderId,
-        userId,
+      },
+      include: {
+        market: {
+          select: {
+            symbol: true,
+          },
+        },
       },
     });
 
-    if (!order) {
-      res.status(400).json({
-        message: "Invalid Order ID",
+    if (!order || order.userId !== userId) {
+      return res.status(404).json({
+        message: "Order not found",
       });
-      return;
     }
 
     if (order.status === "FILLED" || order.status === "CANCELLED") {
-      res.status(400).json({
+      return res.status(400).json({
         message: "Order is already filled or cancelled",
       });
-      return;
     }
 
     const result = await producer.send({
@@ -329,6 +247,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
           key: order.marketId,
           value: JSON.stringify({
             orderId: order.id,
+            pair: order.market.symbol,
             event: "CANCEL_ORDER",
             eventId: crypto.randomUUID(),
           }),
@@ -336,7 +255,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
       ],
     });
 
-    console.log(result);
+    console.log("cancel_event_sent", { orderId, result });
 
     res.status(202).json({
       message: "Cancel request accepted",
