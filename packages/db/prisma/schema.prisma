@@ -76,13 +76,14 @@ model Wallet {
 }
 
 model Order {
-  id       String @id @default(uuid())
-  userId   String
-  marketId String
+  id            String @id @default(uuid())
+  userId        String
+  marketId      String
+  clientOrderId String
 
   side   SIDE
   type   ORDER_TYPE
-  status ORDER_STATUS @default(PENDING)
+  status ORDER_STATUS @default(NEW)
 
   price             Decimal? @db.Decimal(36, 18) // null for MARKET
   originalQuantity  Decimal  @db.Decimal(36, 18)
@@ -100,12 +101,13 @@ model Order {
   buyTrades  Trade[] @relation("BuyTrades")
   sellTrades Trade[] @relation("SellTrades")
 
+  @@unique([clientOrderId, userId])
   @@index([marketId, price])
   @@index([marketId, createdAt])
 }
 
 model Trade {
-  id       String @id @default(uuid())
+  id       String @id @unique
   marketId String
 
   buyOrderId  String
@@ -166,6 +168,8 @@ model Market {
 
   orders Order[]
   trades Trade[]
+
+  @@index([symbol])
 }
 
 model Candle {
@@ -202,7 +206,7 @@ enum ORDER_TYPE {
 }
 
 enum ORDER_STATUS {
-  PENDING
+  NEW
   EXPIRED
   OPEN
   PARTIALLY_FILLED
