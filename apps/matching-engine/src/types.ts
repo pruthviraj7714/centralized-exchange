@@ -7,7 +7,7 @@ export type ORDER_STATUS =
   | "FILLED"
   | "CANCELLED"
   | "EXPIRED"
-  | "PENDING";
+  | "NEW";
 
 export type Side = "BUY" | "SELL";
 
@@ -31,6 +31,9 @@ export type EngineOrder = {
 };
 
 export type Trade = {
+  tradeId: string;
+  buyerId: string;
+  sellerId: string;
   buyOrderId: string;
   sellOrderId: string;
   price: Decimal;
@@ -71,7 +74,7 @@ export interface ITrade {
 export type OrderEvent =
   | {
       marketId: string;
-      status: "OPEN" | "PENDING";
+      status: "OPEN" | "NEW";
       originalQuantity?: string;
       remainingQuantity?: string;
       quoteSpent?: string;

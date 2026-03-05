@@ -7,8 +7,12 @@ import redisclient from "@repo/redisclient";
 const settleExectuedTrades = async (trade: TradeEvent) => {
   try {
     const {
+      tradeId,
       buyOrderId,
       sellOrderId,
+      buyerId,
+      sellerId,
+      marketId,
       executedAt,
       quantity,
       price,
@@ -17,6 +21,22 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
     } = trade;
 
     const tradeResult = await prisma.$transaction(async (tx) => {
+      const result = await tx.$queryRaw<
+        { id: string }[]
+      >`INSERT INTO "Trade" ("id", "makerFee", "price", "quantity", "takerFee", "marketId", "buyOrderId", "sellOrderId", "makerId", "takerId", "executedAt")
+       VALUES (${tradeId}, ${new Decimal(0)}, ${new Decimal(price)}, ${new Decimal(quantity)}, 
+       ${new Decimal(0)}, ${marketId}, ${buyOrderId}, ${sellOrderId}, ${buyerId}, 
+       ${sellerId}, ${new Date(executedAt)})
+       ON CONFLICT ("id") DO NOTHING
+       RETURNING *`;
+
+      if (result.length === 0) {
+        console.log("Trade already processed");
+        return null;
+      }
+
+      console.log("result from trade", result);
+
       const orders = await tx.$queryRaw<
         {
           id: string;
@@ -26,7 +46,7 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
           quoteAsset: string;
           type: "LIMIT" | "MARKET";
           status:
-            | "PENDING"
+            | "NEW"
             | "FILLED"
             | "PARTIALLY_FILLED"
             | "CANCELED"
@@ -300,25 +320,13 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         },
       });
 
-      const trade = await tx.trade.create({
-        data: {
-          makerFee: new Decimal(0),
-          price: new Decimal(price),
-          quantity: new Decimal(quantity),
-          takerFee: new Decimal(0),
-          marketId: buyOrder.marketId,
-          buyOrderId: buyOrder.id,
-          sellOrderId: sellOrder.id,
-          makerId: buyOrder.userId,
-          takerId: sellOrder.userId,
-          executedAt: new Date(executedAt),
-        },
-      });
-
-      return trade;
+      return result[0];
     });
 
-    console.log("executed trade in db", tradeResult);
+    console.log(
+      "executed trade in db",
+      tradeResult === null ? "trade already processed" : tradeResult,
+    );
   } catch (error) {
     console.error("Error settling executed trade:", error);
     throw error;

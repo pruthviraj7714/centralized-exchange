@@ -77,7 +77,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 
 - Order validation
 - Balance locking
-- Writes order as `PENDING`
+- Writes order as `NEW`
 - Publishes:
   - `ORDER_CREATE`
   - `ORDER_CANCEL`
@@ -118,7 +118,7 @@ This exchange follows an **event-driven microservices architecture** powered by 
 
 ## 5️⃣ Order Lifecycle Worker
 
-- Expires stale `PENDING` orders
+- Expires stale `NEW` orders
 - Emits `ORDER_EXPIRED`
 
 ---
@@ -322,7 +322,7 @@ Redis alone cannot distinguish between rows 1 and 2. The snapshot's `processedEv
 
 1. Client places order
 2. Trading API validates & locks funds
-3. Order written as `PENDING`
+3. Order written as `NEW`
 4. `ORDER_CREATE` event published to Kafka
 5. Matching engine processes event
 6. If matched → emits `TRADE_EXECUTED`

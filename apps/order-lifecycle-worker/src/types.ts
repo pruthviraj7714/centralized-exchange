@@ -1,15 +1,24 @@
 import { Decimal } from "decimal.js";
 
 export interface IOrder {
-    id : string;
-    price : Decimal | null;
-    originalQuantity : Decimal;
-    remainingQuantity : Decimal;
-    side : "BUY" | "SELL";
-    type : "LIMIT" | "MARKET";
-    status : "PENDING" | "OPEN" | "PARTIALLY_FILLED" | "FILLED" | "CANCELLED";
-    createdAt : Date;
-    updatedAt : Date;
-    userId : string;
-    marketId : string;
+  id: string;
+  price: Decimal | null;
+  originalQuantity: Decimal;
+  remainingQuantity: Decimal;
+  side: "BUY" | "SELL";
+  type: "LIMIT" | "MARKET";
+  status:
+    | "NEW"
+    | "OPEN"
+    | "PARTIALLY_FILLED"
+    | "FILLED"
+    | "CANCELLED"
+    | "EXPIRED";
+  createdAt: Date;
+  updatedAt: Date;
+  market: {
+    symbol: string;
+  };
+  userId: string;
+  marketId: string;
 }

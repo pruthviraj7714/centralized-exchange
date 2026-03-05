@@ -1,8 +1,11 @@
 import type Decimal from "decimal.js";
 
 export interface TradeEvent {
+  tradeId: string;
   event: "TRADE_EXECUTED";
   marketId: string;
+  buyerId: string;
+  sellerId: string;
   buyOrderId: string;
   quoteSpent: Decimal | null;
   quoteRemaining: Decimal | null;

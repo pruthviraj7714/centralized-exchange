@@ -4,6 +4,7 @@ import { EventEmitter } from "events";
 import { Decimal } from "decimal.js";
 import BTree from "sorted-btree";
 import type { OrderQueue } from "./OrderQueue";
+import crypto from "crypto";
 
 export interface OrderbookLevel {
   price: string;
@@ -375,8 +376,11 @@ export class MatchEngine extends EventEmitter {
     sellOrder.filled = sellOrder.filled.plus(quantity);
 
     const trade: Trade = {
+      tradeId: crypto.randomUUID(),
       buyOrderId: buyOrder.id,
       sellOrderId: sellOrder.id,
+      buyerId: buyOrder.userId,
+      sellerId: sellOrder.userId,
       price,
       quantity,
       quoteSpent: buyOrder.quoteSpent,
@@ -413,7 +417,7 @@ export class MatchEngine extends EventEmitter {
 
     if (!order) return false;
 
-    if (order.status === "PENDING" || order.status === "FILLED") {
+    if (order.status === "NEW" || order.status === "FILLED") {
       return false;
     }
 

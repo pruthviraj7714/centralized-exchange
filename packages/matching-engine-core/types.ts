@@ -6,7 +6,7 @@ export type ORDER_STATUS =
   | "FILLED"
   | "CANCELLED"
   | "EXPIRED"
-  | "PENDING";
+  | "NEW";
 
 export type Side = "BUY" | "SELL";
 
@@ -30,8 +30,11 @@ export type EngineOrder = {
 };
 
 export type Trade = {
+  tradeId: string;
   buyOrderId: string;
   sellOrderId: string;
+  buyerId: string;
+  sellerId: string;
   price: Decimal;
   quoteSpent: Decimal | null;
   quoteRemaining: Decimal | null;

@@ -4,6 +4,7 @@ import z from "zod";
 export const OrderSchema = z.object({
   pair: z.string(),
   side: z.enum(["BUY", "SELL"]),
+  clientOrderId: z.string(),
   price: z
     .string()
     .transform((val) => new Decimal(val))

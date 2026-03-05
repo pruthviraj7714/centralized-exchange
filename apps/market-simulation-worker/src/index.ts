@@ -41,6 +41,10 @@ interface UserProfile {
 
 const userProfiles = new Map<string, UserProfile>();
 
+const generateRandomClientOrderId = () => {
+  return crypto.randomUUID();
+};
+
 const createUsers = async () => {
   const users = await Promise.all(
     Users.map(async (user) => {
@@ -129,6 +133,7 @@ const placeOrder = async (
         pair: `${TEST_BASE_ASSET}-${TEST_QUOTE_ASSET}`,
         side,
         type,
+        clientOrderId: generateRandomClientOrderId(),
         price:
           type === "LIMIT" ? price.toDecimalPlaces(2).toString() : undefined,
         quantity: quantity.toDecimalPlaces(4).toString(),
