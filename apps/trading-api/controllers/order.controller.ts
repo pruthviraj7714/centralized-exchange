@@ -11,14 +11,16 @@ await producer.connect();
 
 const placeOrderController = async (req: Request, res: Response) => {
   try {
-    const userId = req.body.userId!;
-    const validationResult = OrderSchema.safeParse(req.body);
+    const userId = req.headers["x-user-id"] as string;
+
     if (!userId) {
       res.status(400).json({
         message: "user ID not passed",
       });
       return;
     }
+
+    const validationResult = OrderSchema.safeParse(req.body);
 
     if (!validationResult.success) {
       res.status(400).json({
@@ -175,7 +177,7 @@ const placeOrderController = async (req: Request, res: Response) => {
               ...createdOrder,
               pair: pair,
               event: "CREATE_ORDER",
-              eventId: crypto.randomUUID(),
+              eventId: `order-${createdOrder.id}`,
             }),
           },
         ],
@@ -213,7 +215,14 @@ const placeOrderController = async (req: Request, res: Response) => {
 const cancelOrderController = async (req: Request, res: Response) => {
   try {
     const orderId = req.params.id as string;
-    const userId = req.body.userId!;
+    const userId = req.headers["x-user-id"] as string;
+
+    if (!userId) {
+      res.status(400).json({
+        message: "user ID not passed",
+      });
+      return;
+    }
 
     const order = await prisma.order.findUnique({
       where: {
@@ -234,10 +243,23 @@ const cancelOrderController = async (req: Request, res: Response) => {
       });
     }
 
-    if (order.status === "FILLED" || order.status === "CANCELLED") {
-      return res.status(400).json({
-        message: "Order is already filled or cancelled",
-      });
+    const updated = await prisma.order.updateMany({
+      where: {
+        id: orderId,
+        userId,
+        status: {
+          notIn: ["FILLED", "CANCELLED", "EXPIRED"],
+        },
+      },
+      data: {
+        status: "CANCEL_REQUESTED",
+      },
+    });
+
+    if (updated.count === 0) {
+      return res
+        .status(400)
+        .json({ message: "Order might already be filled or cancelled" });
     }
 
     const result = await producer.send({
@@ -249,7 +271,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
             orderId: order.id,
             pair: order.market.symbol,
             event: "CANCEL_ORDER",
-            eventId: crypto.randomUUID(),
+            eventId: `cancel-${order.id}`,
           }),
         },
       ],

@@ -1,7 +1,7 @@
 import type Decimal from "decimal.js";
 
 export interface TradeEvent {
-  event: "TRADE_EXECUTED",
+  event: "TRADE_EXECUTED";
   eventId: string;
   marketId: string;
   buyOrderId: string;
@@ -10,16 +10,22 @@ export interface TradeEvent {
   pair: string;
   price: Decimal;
   executedAt: number;
-  quoteSpent: Decimal | null,
-  quoteRemaining: Decimal | null,
-  timestamp: number,
+  quoteSpent: Decimal | null;
+  quoteRemaining: Decimal | null;
+  timestamp: number;
 }
 
 export interface OrderEvent {
-  event: "ORDER_UPDATED" | "ORDER_CANCELED",
+  event: "ORDER_UPDATED" | "ORDER_CANCELED";
   orderId: string;
   side: "BUY" | "SELL";
-  status: "FILLED" | "CANCELLED" | "PARTIALLY_FILLED" | "OPEN";
+  status:
+    | "FILLED"
+    | "CANCELLED"
+    | "PARTIALLY_FILLED"
+    | "OPEN"
+    | "NEW"
+    | "CANCEL_REQUESTED";
   remainingQuantity: string;
   updatedAt: Date;
   pair: string;

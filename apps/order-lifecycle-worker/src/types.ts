@@ -11,6 +11,7 @@ export interface IOrder {
     | "NEW"
     | "OPEN"
     | "PARTIALLY_FILLED"
+    | "CANCEL_REQUESTED"
     | "FILLED"
     | "CANCELLED"
     | "EXPIRED";

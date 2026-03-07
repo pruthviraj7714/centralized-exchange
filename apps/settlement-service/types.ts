@@ -25,7 +25,13 @@ export interface OrderEvent {
   type: "LIMIT" | "MARKET";
   quoteRemaining: string;
   side: "BUY" | "SELL";
-  status: "FILLED" | "CANCELLED" | "PARTIALLY_FILLED" | "OPEN";
+  status:
+    | "FILLED"
+    | "CANCELLED"
+    | "PARTIALLY_FILLED"
+    | "OPEN"
+    | "NEW"
+    | "CANCEL_REQUESTED";
   remainingQuantity: string;
   updatedAt: Date;
   pair: string;

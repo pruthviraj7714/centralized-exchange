@@ -49,6 +49,7 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
             | "NEW"
             | "FILLED"
             | "PARTIALLY_FILLED"
+            | "CANCEL_REQUESTED"
             | "CANCELED"
             | "EXPIRED";
           remainingQuantity: Decimal;
@@ -481,6 +482,7 @@ const settleOpenedOrders = async (order: OrderEvent) => {
             | "CANCELLED"
             | "FILLED"
             | "PARTIALLY_FILLED"
+            | "CANCEL_REQUESTED"
             | "EXPIRED";
         }[]
       >`
@@ -657,6 +659,7 @@ const settleUpdatedOrders = async (order: OrderEvent) => {
             | "CANCELLED"
             | "FILLED"
             | "PARTIALLY_FILLED"
+            | "CANCEL_REQUESTED"
             | "EXPIRED";
           type: string;
           side: string;
