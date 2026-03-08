@@ -248,7 +248,7 @@ const cancelOrderController = async (req: Request, res: Response) => {
         id: orderId,
         userId,
         status: {
-          notIn: ["FILLED", "CANCELLED", "EXPIRED"],
+          notIn: ["FILLED", "CANCELLED", "EXPIRED", "CANCEL_REQUESTED"],
         },
       },
       data: {

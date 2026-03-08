@@ -9,11 +9,9 @@ const proxyToTradingAPIServer = async (req: Request, res: Response) => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "x-user-id": req.userId!,
       },
-      body: JSON.stringify({
-        userId: req.userId!,
-        ...req.body,
-      }),
+      body: JSON.stringify(req.body),
     });
 
     const data = await response.json();
@@ -42,11 +40,9 @@ const proxyOrderCancelAPI = async (req: Request, res: Response) => {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
+          "x-user-id": req.userId!,
         },
-        body: JSON.stringify({
-          userId: req.userId!,
-          ...req.body,
-        }),
+        body: JSON.stringify(req.body),
       },
     );
 
