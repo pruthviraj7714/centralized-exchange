@@ -14,9 +14,15 @@ const useOrderbook = (pair: string, chartInterval: string) => {
   const [error, setError] = useState<null | string>(null);
   const [bids, setBids] = useState<IOrderBookOrder[]>([]);
   const [asks, setAsks] = useState<IOrderBookOrder[]>([]);
+  const reconnectAttemptsRef = useRef<number>(0);
 
   const lastSequenceRef = useRef<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
+
+  const getReconnectDelay = () => {
+    const delay = 1000 * Math.pow(2, reconnectAttemptsRef.current);
+    return Math.min(delay, 30000); // cap at 30s
+  };
 
   const applyToDisplay = useCallback((data: OrderbookData) => {
     let cumulativeBid = new Decimal(0);
@@ -62,6 +68,7 @@ const useOrderbook = (pair: string, chartInterval: string) => {
         setIsConnected(true);
         setError(null);
         lastSequenceRef.current = 0;
+        reconnectAttemptsRef.current = 0;
 
         ws.send(
           JSON.stringify({
@@ -181,7 +188,12 @@ const useOrderbook = (pair: string, chartInterval: string) => {
         wsRef.current = null;
 
         if (event.code !== 1000) {
-          reconnectTimeout = setTimeout(connect, 2000);
+          const delay = getReconnectDelay();
+          console.log(
+            `reconnecting in ${delay}ms (attempt: ${reconnectAttemptsRef.current + 1})`,
+          );
+          reconnectAttemptsRef.current++;
+          reconnectTimeout = setTimeout(connect, delay);
         }
       };
     };
