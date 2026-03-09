@@ -6,6 +6,7 @@ export type ORDER_STATUS =
   | "FILLED"
   | "CANCELLED"
   | "EXPIRED"
+  | "CANCEL_REQUESTED"
   | "NEW";
 
 export type Side = "BUY" | "SELL";

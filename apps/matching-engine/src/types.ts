@@ -4,6 +4,7 @@ import type Orderbook from "../../../packages/matching-engine-core/engine/Orderb
 export type ORDER_STATUS =
   | "OPEN"
   | "PARTIALLY_FILLED"
+  | "CANCEL_REQUESTED"
   | "FILLED"
   | "CANCELLED"
   | "EXPIRED"

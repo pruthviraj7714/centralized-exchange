@@ -3,7 +3,7 @@ import type { EngineOrder, ORDER_STATUS, OrderEvent, Trade } from "./types";
 import { EVENT_TOPICS } from "@repo/kafka/src/topics";
 import { producer } from "@repo/kafka/src/producer";
 import { MatchEngine } from "@repo/matching-engine-core";
-import { nextSequence } from ".";
+import { nextSequence } from "./state/sequence";
 
 interface OrderbookData {
   engine: MatchEngine;
@@ -337,15 +337,6 @@ export class MatchingEngineService {
   static getActivePairs(): string[] {
     return Array.from(orderbookMap.keys());
   }
-
-  // static subscribeToTrades(
-  //   pair: string,
-  //   callback: (trade: Trade) => void,
-  // ): () => void {
-  //   const { engine } = getOrCreateOrderbookData(pair);
-  //   engine.on("trade", callback);
-  //   return () => engine.off("trade", callback);
-  // }
 
   static addOrder(pair: string, order: EngineOrder): void {
     const orderbookData = getOrCreateOrderbookData(pair);
