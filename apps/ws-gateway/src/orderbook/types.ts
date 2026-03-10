@@ -16,7 +16,7 @@ export interface TradeEvent {
 }
 
 export interface OrderEvent {
-  event: "ORDER_UPDATED" | "ORDER_CANCELED";
+  event: "ORDER_UPDATED" | "ORDER_CANCELLED";
   orderId: string;
   side: "BUY" | "SELL";
   status:

@@ -93,11 +93,11 @@ const sendUpdatedOrderToKafka = async (order: EngineOrder) => {
   });
 };
 
-const sendCanceledOrderToKafka = async (order: EngineOrder) => {
+const sendCancelledOrderToKafka = async (order: EngineOrder) => {
   const isMarketBuy = order.type === "MARKET" && order.side === "BUY";
 
   const event = {
-    event: "ORDER_CANCELED",
+    event: "ORDER_CANCELLED",
     orderId: order.id,
     eventId: crypto.randomUUID(),
     pair: order.pair,
@@ -220,13 +220,13 @@ const getOrCreateOrderbookData = (pair: string): OrderbookData => {
 
   engine.on("order_cancelled", (order: EngineOrder) => {
     orderIndex.delete(order.id);
-    sendCanceledOrderToKafka(order);
+    sendCancelledOrderToKafka(order);
     sendOrderbookUpdateToKafka(pair);
   });
 
   engine.on("order_removed", (order: EngineOrder) => {
     orderIndex.delete(order.id);
-    sendCanceledOrderToKafka(order);
+    sendCancelledOrderToKafka(order);
     sendOrderbookUpdateToKafka(pair);
   });
 

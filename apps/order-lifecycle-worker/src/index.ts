@@ -40,7 +40,7 @@ const expireOrders = async () => {
             FROM "Order"
             WHERE "status" = 'NEW'
             AND "createdAt" < ${expiryTime}
-            FOR UPDATE SKIP LOCKED
+            FOR UPDATE
             `;
 
       const expiredOrders = await tx.order.updateManyAndReturn({

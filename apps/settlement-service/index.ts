@@ -50,7 +50,7 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
             | "FILLED"
             | "PARTIALLY_FILLED"
             | "CANCEL_REQUESTED"
-            | "CANCELED"
+            | "CANCELLED"
             | "EXPIRED";
           remainingQuantity: Decimal;
           originalQuantity: Decimal;
@@ -558,7 +558,11 @@ const settleExpiredOrders = async (order: OrderEvent) => {
         throw new Error("Order request not found");
       }
 
-      if (odr.status === "CANCELLED" || odr.status === "FILLED") {
+      if (
+        odr.status === "CANCELLED" ||
+        odr.status === "FILLED" ||
+        odr.status === "PARTIALLY_FILLED"
+      ) {
         console.warn(
           `ORDER_EXPIRED skipped — order ${order.orderId} already in state: ${odr.status}`,
         );
@@ -759,7 +763,7 @@ async function main() {
           case "TRADE_EXECUTED":
             await settleExectuedTrades(event);
             break;
-          case "ORDER_CANCELED":
+          case "ORDER_CANCELLED":
             await settleCancelledOrders(event);
             break;
           case "ORDER_OPENED":
