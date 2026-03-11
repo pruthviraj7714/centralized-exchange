@@ -104,7 +104,7 @@ const placeOrderController = async (req: Request, res: Response) => {
         ${type === "LIMIT" ? quantity : new Decimal(0)},
         ${type === "MARKET" && side === "BUY" ? quoteAmount : new Decimal(0)},
         ${type === "MARKET" && side === "BUY" ? quoteAmount : new Decimal(0)},
-        ${type === "MARKET" ? new Decimal(0) : new Decimal(0)},
+        ${new Decimal(0)},
         ${type === "MARKET" ? null : price},
         ${side},
         ${type},
@@ -165,6 +165,14 @@ const placeOrderController = async (req: Request, res: Response) => {
 
     if (!createdOrder) {
       throw new Error("Failed to create order");
+    }
+
+    if (!isNewOrder) {
+      return res.status(200).json({
+        message: "Duplicate order",
+        orderId: createdOrder.id,
+        clientOrderId: createdOrder.clientOrderId,
+      });
     }
 
     if (isNewOrder) {
