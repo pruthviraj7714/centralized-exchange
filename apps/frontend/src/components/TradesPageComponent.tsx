@@ -129,6 +129,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
             : "Failed to place order",
           { position: "top-center" },
         );
+        setClientOrderId(crypto.randomUUID());
       },
     });
 
@@ -208,7 +209,7 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
   useEffect(() => {
     if (!ticker || !isReady) return;
     setClientOrderId(crypto.randomUUID());
-  }, [ticker, isReady]);
+  }, [ticker, isReady, activeTab, orderType]);
 
   const handlePriceClick = (priceValue: string) => {
     setPrice(priceValue);
@@ -248,7 +249,6 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
         clientOrderId,
         quoteAmount: new Decimal(spendAmount || 0),
       });
-      setClientOrderId(crypto.randomUUID());
     } catch (error) {
       console.error(error);
     }
@@ -285,36 +285,36 @@ export default function TradesPageComponent({ ticker }: { ticker: string }) {
 
     if (orderType === "LIMIT" && activeTab === "BUY") {
       if (percent === "max") {
-        setPrice(quoteAssetBalance);
+        setPrice(quoteAssetBalance.toString());
         return;
       }
       const percentage = new Decimal(percent.replace("%", ""));
       const total = quoteAssetBalance.mul(percentage).div(100);
-      setPrice(total);
+      setPrice(total.toString());
     } else if (orderType === "LIMIT" && activeTab === "SELL") {
       if (percent === "max") {
-        setQuantity(baseAssetBalance);
+        setQuantity(baseAssetBalance.toString());
         return;
       }
       const percentage = new Decimal(percent.replace("%", ""));
       const total = baseAssetBalance.mul(percentage).div(100);
-      setQuantity(total);
+      setQuantity(total.toString());
     } else if (orderType === "MARKET" && activeTab === "BUY") {
       if (percent === "max") {
-        setSpendAmount(quoteAssetBalance);
+        setSpendAmount(quoteAssetBalance.toString());
         return;
       }
       const percentage = new Decimal(percent.replace("%", ""));
       const total = quoteAssetBalance.mul(percentage).div(100);
-      setSpendAmount(total);
+      setSpendAmount(total.toString());
     } else if (orderType === "MARKET" && activeTab === "SELL") {
       if (percent === "max") {
-        setQuantity(baseAssetBalance);
+        setQuantity(baseAssetBalance.toString());
         return;
       }
       const percentage = new Decimal(percent.replace("%", ""));
       const total = baseAssetBalance.mul(percentage).div(100);
-      setQuantity(total);
+      setQuantity(total.toString());
     }
   };
 

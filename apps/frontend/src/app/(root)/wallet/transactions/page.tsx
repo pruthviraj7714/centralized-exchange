@@ -418,7 +418,7 @@ export default function WalletTransactions() {
                           <div className="flex items-center gap-2">
                             {TOKEN_LOGOS[transaction.asset] && (
                               <img
-                                src={TOKEN_LOGOS[transaction.asset]}
+                                src={`/logos/${TOKEN_LOGOS[transaction.asset]}`}
                                 alt={transaction.asset}
                                 className="w-5 h-5 rounded-full border border-slate-700/50 bg-white p-0.5"
                               />
@@ -447,19 +447,26 @@ export default function WalletTransactions() {
                           className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-400" : "text-red-400"}`}
                         >
                           {isCredit ? "+" : "-"}
-                          {Decimal(transaction.amount || 0).toFixed(2)} {transaction.asset}
+                          {Decimal(transaction.amount || 0).toFixed(2)}{" "}
+                          {transaction.asset}
                         </div>
                         <div className="text-xs text-slate-500 space-y-1">
                           <div>
                             Before:{" "}
                             <span className="text-slate-400 font-medium">
-                              {Decimal(transaction.balanceBefore || 0).toFixed(2)} {transaction.asset}
+                              {Decimal(transaction.balanceBefore || 0).toFixed(
+                                2,
+                              )}{" "}
+                              {transaction.asset}
                             </span>
                           </div>
                           <div>
                             After:{" "}
-                            <span className="text-slate-400 font-medium"> 
-                              {Decimal(transaction.balanceAfter || 0).toFixed(2)} {transaction.asset}
+                            <span className="text-slate-400 font-medium">
+                              {Decimal(transaction.balanceAfter || 0).toFixed(
+                                2,
+                              )}{" "}
+                              {transaction.asset}
                             </span>
                           </div>
                         </div>

@@ -136,27 +136,93 @@ const placeOrderController = async (req: Request, res: Response) => {
             ? quoteAmount!
             : quantity!;
 
-      const updated = await tx.wallet.updateMany({
-        where: {
+      // const updated = await tx.wallet.updateMany({
+      //   where: {
+      //     asset: side === "BUY" ? quoteAsset : baseAsset,
+      //     userId,
+      //     available: {
+      //       gte: assetAmount,
+      //     },
+      //   },
+      //   data: {
+      //     available: {
+      //       decrement: assetAmount,
+      //     },
+      //     locked: {
+      //       increment: assetAmount,
+      //     },
+      //   },
+      // });
+
+      const wallets = await tx.$queryRaw<
+        {
+          available: Decimal;
+          locked: Decimal;
+          id: string;
+        }[]
+      >`UPDATE "Wallet" SET "available" = "available" - ${assetAmount}, 
+        "locked" = "locked" + ${assetAmount} 
+      WHERE "asset" = ${side === "BUY" ? quoteAsset : baseAsset} AND 
+      "userId" = ${userId} AND "available" >= ${assetAmount} RETURNING "id", "available", "locked"`;
+
+      if (!wallets || wallets.length === 0) {
+        throw new Error("Insufficient Balance");
+      }
+
+      const balanceBefore = wallets[0]?.available.add(assetAmount)!;
+      const balanceAfter = wallets[0]?.available!;
+      const lockedAfter = wallets[0]?.locked.add(assetAmount)!;
+      const lockedBefore = wallets[0]?.locked!;
+
+      await tx.walletLedger.create({
+        data: {
+          amount: assetAmount,
           asset: side === "BUY" ? quoteAsset : baseAsset,
           userId,
-          available: {
-            gte: assetAmount,
+          balanceBefore,
+          balanceAfter,
+          balanceType: "AVAILABLE",
+          direction: "DEBIT",
+          entryType: "TRADE_LOCK",
+          referenceType: "ORDER",
+          referenceId: createdOrder?.id,
+          metadata: {
+            clientOrderId: createdOrder?.clientOrderId,
+            pair: pair,
+            side: side,
+            type: type,
+            price: price,
+            quantity: quantity,
+            quoteAmount: quoteAmount,
           },
-        },
-        data: {
-          available: {
-            decrement: assetAmount,
-          },
-          locked: {
-            increment: assetAmount,
-          },
+          walletId: wallets[0]?.id!,
         },
       });
 
-      if (updated.count === 0) {
-        throw new Error("Insufficient Balance");
-      }
+      await tx.walletLedger.create({
+        data: {
+          amount: assetAmount,
+          asset: side === "BUY" ? quoteAsset : baseAsset,
+          userId,
+          balanceBefore: lockedBefore,
+          balanceAfter: lockedAfter,
+          balanceType: "LOCKED",
+          direction: "CREDIT",
+          entryType: "TRADE_LOCK",
+          referenceType: "ORDER",
+          referenceId: createdOrder?.id,
+          metadata: {
+            clientOrderId: createdOrder?.clientOrderId,
+            pair: pair,
+            side: side,
+            type: type,
+            price: price,
+            quantity: quantity,
+            quoteAmount: quoteAmount,
+          },
+          walletId: wallets[0]?.id!,
+        },
+      });
 
       return [createdOrder];
     });
