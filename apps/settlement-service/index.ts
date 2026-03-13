@@ -173,6 +173,18 @@ const settleExectuedTrades = async (trade: TradeEvent) => {
         remainingBuyOrderQty = buyOrder.remainingQuantity.minus(tradeQty);
       }
 
+      if (remainingBuyOrderQty.lt(0)) {
+        throw new Error(
+          buyOrder.type === "MARKET"
+            ? `Market buy order quote remaining underflow: ${remainingBuyOrderQty}`
+            : `Buy order remaining quantity underflow: ${remainingBuyOrderQty}`,
+        );
+      }
+
+      if (remainingSellOrderQty.lt(0)) {
+        throw new Error("Sell order remaining quantity underflow");
+      }
+
       await tx.wallet.update({
         where: {
           id: baseAssetBuyerWallet.id,
@@ -452,6 +464,23 @@ const settleCancelledOrders = async (order: OrderEvent) => {
         },
       });
 
+      await tx.walletLedger.create({
+        data: {
+          walletId: wallet.id,
+          asset: refundAsset,
+          userId: odr.userId,
+          entryType: "TRADE_UNLOCK",
+          direction: "DEBIT",
+          balanceType: "LOCKED",
+          amount: refundAmount,
+          balanceBefore: wallet.locked,
+          balanceAfter: wallet.locked.minus(refundAmount),
+          referenceType: "ORDER",
+          referenceId: order.orderId,
+          metadata: { reason: "ORDER_CANCELLED" },
+        },
+      });
+
       await tx.order.update({
         where: {
           id: order.orderId,
@@ -626,6 +655,23 @@ const settleExpiredOrders = async (order: OrderEvent) => {
           amount: refundAmount,
           balanceBefore: wallet.available,
           balanceAfter: wallet.available.plus(refundAmount),
+          referenceType: "ORDER",
+          referenceId: order.orderId,
+          metadata: { reason: "ORDER_EXPIRED" },
+        },
+      });
+
+      await tx.walletLedger.create({
+        data: {
+          walletId: wallet.id,
+          asset: refundAsset,
+          userId: odr.userId,
+          entryType: "TRADE_UNLOCK",
+          direction: "DEBIT",
+          balanceType: "LOCKED",
+          amount: refundAmount,
+          balanceBefore: wallet.locked,
+          balanceAfter: wallet.locked.minus(refundAmount),
           referenceType: "ORDER",
           referenceId: order.orderId,
           metadata: { reason: "ORDER_EXPIRED" },

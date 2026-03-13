@@ -38,7 +38,6 @@ const processTrade = async (event: TradeEvent) => {
   let volume: Decimal;
   let quoteVolume: Decimal;
 
-
   if (!existing.o) {
     open = high = low = close = p;
     volume = q;
@@ -75,8 +74,7 @@ const processTrade = async (event: TradeEvent) => {
   if (shouldFlushToDB(marketId)) {
     await updateMarketData(ticker as ITickerData);
   }
-
-}
+};
 
 const recompute24h = async (marketId: string) => {
   const nowBucket = minuteBucket(Date.now());
@@ -88,7 +86,7 @@ const recompute24h = async (marketId: string) => {
   const buckets = await redisclient.zrangebyscore(
     indexKey,
     fromBucket,
-    nowBucket
+    nowBucket,
   );
 
   if (!buckets.length) return;
@@ -123,9 +121,7 @@ const recompute24h = async (marketId: string) => {
   if (!open || !close) return;
 
   const change = close.sub(open);
-  const changePct = open.gt(0)
-    ? change.div(open).mul(100)
-    : new Decimal(0);
+  const changePct = open.gt(0) ? change.div(open).mul(100) : new Decimal(0);
 
   await redisclient.hmset(tickerKey, {
     price: close.toString(),
@@ -139,7 +135,7 @@ const recompute24h = async (marketId: string) => {
   });
 
   await redisclient.expire(tickerKey, DAY_SECONDS);
-}
+};
 
 const shouldFlushToDB = (marketId: string): boolean => {
   const last = lastDbFlush.get(marketId) || 0;
@@ -216,7 +212,9 @@ const updateMarketData = async (ticker: ITickerData) => {
         },
       });
 
-      console.log(`Market ${marketId} updated: price=${price}, volume24h=${volume24h}`);
+      console.log(
+        `Market ${marketId} updated: price=${price}, volume24h=${volume24h}`,
+      );
     });
   } catch (error) {
     console.error("Error processing trade event:", error);
@@ -246,17 +244,23 @@ const getTickerFromRedis = async (marketId: string) => {
     console.error("Error while getting ticker from redis");
     return null;
   }
-}
+};
 
-const publishUpdatedMarketDataToWS = async (pair: string, data: ITickerData) => {
+const publishUpdatedMarketDataToWS = async (
+  pair: string,
+  data: ITickerData,
+) => {
   if (!data) return;
 
-  await redisclient.publish(`market-metrics:${pair}`, JSON.stringify({
-    type: "MARKET_UPDATE",
-    data,
-    timestamp: Date.now()
-  }))
-}
+  await redisclient.publish(
+    `market-metrics:${pair}`,
+    JSON.stringify({
+      type: "MARKET_UPDATE",
+      data,
+      timestamp: Date.now(),
+    }),
+  );
+};
 
 async function initializeKafka() {
   const consumer = createConsumer("market-metrics-worker");

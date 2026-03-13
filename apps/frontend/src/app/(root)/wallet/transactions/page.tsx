@@ -244,52 +244,6 @@ export default function WalletTransactions() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-slate-400">Total Deposits</p>
-              <ArrowDownLeft className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-2xl font-bold text-white">
-              {stats?.totalDeposits?.toFixed(4)}
-            </p>
-            <p className="text-xs text-emerald-400 mt-1">Multi-asset</p>
-          </div>
-
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-slate-400">Total Withdrawals</p>
-              <ArrowUpRight className="w-4 h-4 text-red-400" />
-            </div>
-            <p className="text-2xl font-bold text-white">
-              {stats?.totalWithdrawals?.toFixed(4)}
-            </p>
-            <p className="text-xs text-red-400 mt-1">Multi-asset</p>
-          </div>
-
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-slate-400">Total Fees</p>
-              <Receipt className="w-4 h-4 text-purple-400" />
-            </div>
-            <p className="text-2xl font-bold text-white">
-              {stats?.totalFees?.toFixed(4)}
-            </p>
-            <p className="text-xs text-purple-400 mt-1">Multi-asset</p>
-          </div>
-
-          <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm text-slate-400">Transactions</p>
-              <Clock className="w-4 h-4 text-blue-400" />
-            </div>
-            <p className="text-2xl font-bold text-white">
-              {stats?.totalTransactions}
-            </p>
-            <p className="text-xs text-blue-400 mt-1">All time</p>
-          </div>
-        </div> */}
-
         <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/50 rounded-xl p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-4">
             <div className="flex-1 relative">
